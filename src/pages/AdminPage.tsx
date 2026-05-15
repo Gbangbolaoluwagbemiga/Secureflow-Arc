@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useWriteContract } from "wagmi";
 import { Link } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,6 +59,7 @@ function DisputeEntryCard() {
 
 export default function AdminPage() {
   const { wallet } = useWeb3();
+  const { writeContractAsync } = useWriteContract();
   const {
     isAdmin,
     isOwner,
@@ -82,9 +84,6 @@ export default function AdminPage() {
   const [arbiterAddress, setArbiterAddress] = useState("");
   const [tokenToWhitelist, setTokenToWhitelist] = useState("");
   const [whitelistedTokenList, setWhitelistedTokenList] = useState<string[]>([]);
-  const [withdrawToken, setWithdrawToken] = useState("");
-  const [withdrawTo, setWithdrawTo] = useState("");
-  const [withdrawAmount, setWithdrawAmount] = useState("");
   const [contractStats, setContractStats] = useState({
     platformFeeBP: 0,
     totalEscrows: 0,
@@ -104,7 +103,7 @@ export default function AdminPage() {
 
   const fetchContractOwner = async () => {
     try {
-      // Get owner from Soroban instance storage
+      // Get contract owner from on-chain state
       const owner = await contractService.getOwner();
       setContractOwner(owner);
     } catch (error) {
@@ -282,7 +281,7 @@ export default function AdminPage() {
             setDialogOpen(false);
             return;
           }
-          await contractService.removeArbiter(arbiterToRemove);
+          await contractService.removeArbiter(arbiterToRemove, writeContractAsync);
           toast({
             title: "Arbiter Removed",
             description: `${arbiterToRemove.slice(0, 8)}… has been revoked.`,
@@ -555,7 +554,7 @@ export default function AdminPage() {
                           className="font-mono"
                         />
                         <p className="text-xs text-muted-foreground">
-                          Enter a Stellar address (starts with G) to authorize
+                          Enter an Arc EVM address (0x…) to authorize
                           as an arbiter
                         </p>
                       </div>
@@ -680,7 +679,7 @@ export default function AdminPage() {
                     <div className="flex-1">
                       <h3 className="text-xl font-bold mb-2">Token Whitelist</h3>
                       <p className="text-sm text-muted-foreground leading-relaxed">
-                        Whitelist a Soroban token contract address (C...) for escrow payments.
+                        Whitelist an ERC-20 token contract address (0x…) for escrow payments.
                       </p>
                     </div>
                   </div>
@@ -701,7 +700,7 @@ export default function AdminPage() {
                         if (!tokenToWhitelist.trim()) return;
                         setActionLoading(true);
                         try {
-                          await contractService.whitelistToken(tokenToWhitelist.trim());
+                          await contractService.whitelistToken(tokenToWhitelist.trim(), writeContractAsync);
                           toast({
                             title: "Token whitelisted",
                             description: short(tokenToWhitelist.trim()),
@@ -751,110 +750,6 @@ export default function AdminPage() {
                 </Card>
               </div>
 
-              <Card className="glass border-primary/20 p-6 sm:p-7 mb-8">
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="flex items-center justify-center w-12 h-12 rounded-full bg-destructive/10">
-                    <Scale className="h-6 w-6 text-destructive" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold mb-2">Withdraw Stuck Funds</h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      Emergency recovery if someone accidentally transfers tokens to the contract.
-                      This can only withdraw the <span className="text-foreground font-medium">excess</span>{" "}
-                      above what’s currently escrowed, so it cannot drain active escrows.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="withdraw-token">Token Contract (C...)</Label>
-                    <Input
-                      id="withdraw-token"
-                      value={withdrawToken}
-                      onChange={(e) => setWithdrawToken(e.target.value)}
-                      placeholder="C..."
-                      className="font-mono"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="withdraw-to">Recipient (G...)</Label>
-                    <Input
-                      id="withdraw-to"
-                      value={withdrawTo}
-                      onChange={(e) => setWithdrawTo(e.target.value)}
-                      placeholder="G..."
-                      className="font-mono"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="withdraw-amount">Amount (i128 stroops)</Label>
-                    <Input
-                      id="withdraw-amount"
-                      value={withdrawAmount}
-                      onChange={(e) => setWithdrawAmount(e.target.value)}
-                      placeholder="10000000"
-                      className="font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-5">
-                  <Button
-                    className="w-full gap-2"
-                    variant="destructive"
-                    disabled={
-                      actionLoading ||
-                      !withdrawToken.trim() ||
-                      !withdrawTo.trim() ||
-                      !withdrawAmount.trim()
-                    }
-                    onClick={async () => {
-                      setActionLoading(true);
-                      try {
-                        await contractService.withdrawStuckFunds({
-                          token: withdrawToken.trim(),
-                          to: withdrawTo.trim(),
-                          amount: withdrawAmount.trim(),
-                        });
-                        toast({
-                          title: "Withdraw submitted",
-                          description: "Transaction sent. Funds will transfer after confirmation.",
-                        });
-                        setWithdrawAmount("");
-                      } catch (e: any) {
-                        toast({
-                          title: "Withdraw failed",
-                          description: e?.message || "Transaction failed",
-                          variant: "destructive",
-                        });
-                      } finally {
-                        setActionLoading(false);
-                      }
-                    }}
-                  >
-                    <Scale className="h-4 w-4" />
-                    Withdraw Excess
-                  </Button>
-                  <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-muted-foreground">
-                    <div className="bg-muted/30 border border-border/40 rounded-lg p-3">
-                      <p className="font-medium text-foreground mb-1">Step 1</p>
-                      <p>Paste the token contract (C...). For USDC testnet: use the whitelisted USDC contract.</p>
-                    </div>
-                    <div className="bg-muted/30 border border-border/40 rounded-lg p-3">
-                      <p className="font-medium text-foreground mb-1">Step 2</p>
-                      <p>Set the recipient (your treasury / owner wallet G...).</p>
-                    </div>
-                    <div className="bg-muted/30 border border-border/40 rounded-lg p-3">
-                      <p className="font-medium text-foreground mb-1">Step 3</p>
-                      <p>
-                        Amount is base units. For 7-decimal tokens: <span className="font-mono">1.00</span>{" "}
-                        = <span className="font-mono">10000000</span>.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </Card>
             </>
           )}
 
@@ -910,7 +805,7 @@ export default function AdminPage() {
                   Network
                 </Label>
                 <p className="text-sm bg-muted/50 p-3 rounded-lg">
-                  Stellar {(import.meta.env.VITE_STELLAR_NETWORK || "testnet").toString()}
+                  Arc Testnet
                 </p>
               </div>
               <div>
@@ -1020,7 +915,7 @@ export default function AdminPage() {
                   className="font-mono"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Enter a Stellar address (starts with G) to authorize as an
+                  Enter an Arc EVM address (0x…) to authorize as an
                   arbiter
                 </p>
               </div>

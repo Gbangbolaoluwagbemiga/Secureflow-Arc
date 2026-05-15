@@ -245,7 +245,7 @@ export function ProjectDetailsStep({
               <p className="text-xs text-muted-foreground mt-1">
                 {formData.isOpenJob
                   ? "Leave empty for open job applications"
-                  : "Valid Stellar address required for direct escrow"}
+                  : "Valid Arc EVM address (0x…) required for direct escrow"}
               </p>
             )}
           </div>
@@ -261,7 +261,7 @@ export function ProjectDetailsStep({
               className="rounded w-4 h-4"
             />
             <Label htmlFor="useNativeToken" className="cursor-pointer ml-1">
-              Use Native Token (XLM)
+              Use Native Token (ETH)
             </Label>
           </div>
 

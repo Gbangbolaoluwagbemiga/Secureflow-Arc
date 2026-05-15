@@ -1,152 +1,96 @@
 #!/bin/bash
-
-# SecureFlow Contract Deployment Script
-# This script deploys the updated contract with rating and badge system
-
+# SecureFlow — Foundry deployment script for Arc EVM Testnet
 set -e
 
-echo "🚀 SecureFlow Contract Deployment"
-echo "================================"
-echo ""
-
-# Colors for output
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Check if WASM file exists (Cargo often puts it under release/deps/)
-WASM_FILE="target/wasm32-unknown-unknown/release/secureflow.wasm"
-WASM_FILE_DEPS="target/wasm32-unknown-unknown/release/deps/secureflow.wasm"
-
-if [ ! -f "$WASM_FILE" ] && [ ! -f "$WASM_FILE_DEPS" ]; then
-    echo -e "${RED}❌ WASM file not found. Building contract...${NC}"
-    cargo build -p secureflow --target wasm32-unknown-unknown --release
-fi
-
-# Prefer the deps wasm if present (it is the real cdylib artifact)
-if [ -f "$WASM_FILE_DEPS" ]; then
-    WASM_FILE="$WASM_FILE_DEPS"
-fi
-
-echo -e "${GREEN}✅ Contract built successfully${NC}"
+echo "SecureFlow — Arc EVM Deployment"
+echo "================================"
 echo ""
 
-# Check for CLI (prefer `stellar`, fall back to `soroban`)
-HAS_STELLAR=0
-HAS_SOROBAN=0
-if command -v stellar &> /dev/null; then
-    HAS_STELLAR=1
-fi
-if command -v soroban &> /dev/null; then
-    HAS_SOROBAN=1
+# --- Load environment ---
+if [ -f .env ]; then
+  # shellcheck disable=SC1091
+  set -o allexport; source .env; set +o allexport
 fi
 
-if [ "$HAS_STELLAR" -eq 0 ] && [ "$HAS_SOROBAN" -eq 0 ]; then
-    echo -e "${RED}❌ Neither 'stellar' nor 'soroban' CLI was found.${NC}"
-    echo "Install from: https://developers.stellar.org/docs/tools/cli"
-    exit 1
+CONTRACT_DIR="contracts/solidity"
+
+# --- Validate prerequisites ---
+if ! command -v forge &>/dev/null; then
+  echo -e "${RED}❌  'forge' not found. Install Foundry: https://getfoundry.sh${NC}"
+  exit 1
 fi
 
-# Get network (default to testnet)
-NETWORK=${1:-testnet}
-echo -e "${YELLOW}📡 Deploying to: ${NETWORK}${NC}"
+if [ -z "$PRIVATE_KEY" ]; then
+  echo -e "${RED}❌  PRIVATE_KEY is not set. Export it or add it to .env${NC}"
+  exit 1
+fi
+
+if [ -z "$ARC_RPC_URL" ]; then
+  ARC_RPC_URL="https://rpc.drpc.testnet.arc.network"
+  echo -e "${YELLOW}⚠️  ARC_RPC_URL not set — using default Arc Testnet RPC${NC}"
+fi
+
+# --- Optional: fee collector address (defaults to deployer) ---
+FEE_COLLECTOR="${FEE_COLLECTOR_ADDRESS:-}"
+PLATFORM_FEE_BP="${PLATFORM_FEE_BP:-250}"  # 2.5%
+
+echo -e "${YELLOW}📡 Target RPC : ${ARC_RPC_URL}${NC}"
+echo -e "${YELLOW}💸 Platform fee: ${PLATFORM_FEE_BP} bp ($(echo "scale=1; $PLATFORM_FEE_BP/100" | bc)%)${NC}"
 echo ""
 
-# Check if source account is provided
-if [ -z "$2" ]; then
-    echo -e "${YELLOW}⚠️  No source account provided.${NC}"
-    echo "Usage: ./deploy.sh [network] [source-account]"
-    echo "Example: ./deploy.sh testnet GABCDEF..."
-    echo ""
-    echo "Please provide your Stellar account public key:"
-    read -p "Source Account: " SOURCE_ACCOUNT
-else
-    SOURCE_ACCOUNT=$2
-fi
-
-echo ""
-echo -e "${YELLOW}📦 Deploying contract...${NC}"
+# --- Build contracts ---
+echo -e "${YELLOW}🔨 Building contracts…${NC}"
+(cd "$CONTRACT_DIR" && forge build)
+echo -e "${GREEN}✅ Build successful${NC}"
 echo ""
 
-# Deploy contract (capture output even on failure)
-set +e
-if [ "$HAS_STELLAR" -eq 1 ]; then
-    DEPLOY_OUTPUT=$(stellar contract deploy \
-        --wasm "$WASM_FILE" \
-        --source-account "$SOURCE_ACCOUNT" \
-        --network "$NETWORK" 2>&1)
-    DEPLOY_EXIT_CODE=$?
-else
-    DEPLOY_OUTPUT=$(soroban contract deploy \
-        --wasm "$WASM_FILE" \
-        --source "$SOURCE_ACCOUNT" \
-        --network "$NETWORK" 2>&1)
-    DEPLOY_EXIT_CODE=$?
-fi
-set -e
-
-if [ "$DEPLOY_EXIT_CODE" -ne 0 ]; then
-    echo -e "${RED}❌ Deployment command failed (exit code: ${DEPLOY_EXIT_CODE})${NC}"
-    echo "Output:"
-    echo "$DEPLOY_OUTPUT"
-    exit "$DEPLOY_EXIT_CODE"
-fi
-
-# Extract contract ID from output (portable across macOS/Linux)
-# Stellar/Soroban contract IDs are StrKey and start with "C" (56 chars).
-CONTRACT_ID=$(
-  echo "$DEPLOY_OUTPUT" | awk '
-    {
-      # If the line itself is a contract id, keep it
-      if ($0 ~ /^C[A-Z2-7]+$/ && length($0) == 56) id=$0
-
-      # If the line contains a lab URL, extract after /contract/
-      if (index($0, "/contract/") > 0) {
-        s=$0
-        sub(/.*\/contract\//, "", s)
-        sub(/[^A-Z2-7].*/, "", s)
-        if (s ~ /^C[A-Z2-7]+$/ && length(s) == 56) id=s
-      }
-    }
-    END { print id }
-  '
+# --- Deploy ---
+echo -e "${YELLOW}🚀 Deploying SecureFlow to Arc Testnet…${NC}"
+DEPLOY_OUTPUT=$(
+  cd "$CONTRACT_DIR" && forge script script/Deploy.s.sol:DeployScript \
+    --rpc-url "$ARC_RPC_URL" \
+    --private-key "$PRIVATE_KEY" \
+    --broadcast \
+    --legacy \
+    2>&1
 )
 
-if [ -z "$CONTRACT_ID" ]; then
-    echo -e "${RED}❌ Deployment failed or contract ID not found${NC}"
-    echo "Output:"
-    echo "$DEPLOY_OUTPUT"
-    exit 1
+echo "$DEPLOY_OUTPUT"
+
+# --- Extract deployed address ---
+CONTRACT_ADDRESS=$(echo "$DEPLOY_OUTPUT" | grep -oP '(?<=SecureFlow deployed to: )0x[0-9a-fA-F]{40}')
+
+if [ -z "$CONTRACT_ADDRESS" ]; then
+  echo -e "${RED}❌  Could not extract deployed contract address from output.${NC}"
+  echo "Check the output above for errors."
+  exit 1
 fi
 
-echo -e "${GREEN}✅ Contract deployed successfully!${NC}"
 echo ""
-echo -e "${GREEN}📝 Contract ID: ${CONTRACT_ID}${NC}"
+echo -e "${GREEN}✅ SecureFlow deployed!${NC}"
+echo -e "${GREEN}📝 Contract address: ${CONTRACT_ADDRESS}${NC}"
 echo ""
 
-# Save contract ID to file
-echo "$CONTRACT_ID" > .contract-id
-echo "Contract ID saved to .contract-id"
+# Save address to file
+echo "$CONTRACT_ADDRESS" > .contract-address
+echo "Address saved to .contract-address"
 
 echo ""
-echo -e "${YELLOW}📋 Next Steps:${NC}"
-echo "1. Initialize contract storage once (owner + fee collector + fee in basis points, max 1000 = 10%):"
+echo -e "${YELLOW}📋 Next steps:${NC}"
+echo "1. Add to your frontend .env:"
+echo "   VITE_SECUREFLOW_CONTRACT_ADDRESS=${CONTRACT_ADDRESS}"
 echo ""
-echo "   stellar contract invoke \\"
-echo "     --network $NETWORK \\"
-echo "     --source-account $SOURCE_ACCOUNT \\"
-echo "     --id $CONTRACT_ID \\"
-echo "     -- initialize \\"
-echo "     --owner <OWNER_PUBLIC_KEY> \\"
-echo "     --fee_collector <FEE_COLLECTOR_PUBLIC_KEY> \\"
-echo "     --platform_fee_bp 100 \\"
-echo "     --default_whitelisted_tokens [<USDC_TOKEN_CONTRACT_ADDRESS>]"
+echo "2. Whitelist tokens via AdminPage or directly:"
+echo "   forge script ... -- whitelistToken <TOKEN_ADDRESS>"
 echo ""
-echo "2. Update your .env file with:"
-echo "   VITE_SECUREFLOW_CONTRACT_ID=$CONTRACT_ID"
+echo "3. (Optional) Authorize arbiters via AdminPage"
 echo ""
-echo "3. Rebuild frontend:"
+echo "4. Rebuild frontend:"
 echo "   npm run build"
 echo ""
 echo -e "${GREEN}✨ Deployment complete!${NC}"

@@ -31,7 +31,7 @@ export function JobCard({
     if (!job.payer) return;
     const svc = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
     svc.getAverageClientRating(job.payer)
-      .then((r) => { if (r.count > 0) setClientRating(r); })
+      .then((r: any) => { if (r.count > 0) setClientRating({ average: r.averageX100 / 100, count: r.count }); })
       .catch(() => {});
   }, [job.payer]);
 

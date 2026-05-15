@@ -40,8 +40,8 @@ export function useFreelancerStatus() {
 
           // Check if current user is the beneficiary (freelancer)
           const isBeneficiary =
-            escrow.freelancer &&
-            escrow.freelancer.toLowerCase().trim() ===
+            escrow.beneficiary &&
+            escrow.beneficiary.toLowerCase().trim() ===
               wallet.address.toLowerCase().trim();
 
 

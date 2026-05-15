@@ -1,0 +1,33 @@
+type Escrow @entity {
+  id: ID!
+  escrowId: BigInt!
+  depositor: Bytes!
+  beneficiary: Bytes!
+  totalAmount: BigInt!
+  token: Bytes!
+  status: Int!
+  deadline: BigInt!
+  arbiters: [Bytes!]!
+  requiredConfirmations: BigInt!
+  isOpenJob: Boolean!
+  createdAt: BigInt!
+  updatedAt: BigInt!
+}
+
+type Evidence @entity {
+  id: ID!
+  escrowId: BigInt!
+  milestoneIndex: BigInt!
+  submitter: Bytes!
+  cid: String!
+  timestamp: BigInt!
+}
+
+type Application @entity {
+  id: ID!
+  escrowId: BigInt!
+  freelancer: Bytes!
+  coverLetter: String!
+  proposedTimeline: BigInt!
+  timestamp: BigInt!
+}

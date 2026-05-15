@@ -157,11 +157,12 @@ export default function FreelancersPage() {
               svc.getReputation(address).catch(() => 0),
             ]);
 
+            const rData = ratingData as any;
             return {
               address,
-              badge,
-              avgRating: Math.round((ratingData.average ?? 0) * 10) / 10,
-              ratingCount: Number(ratingData.count ?? 0),
+              badge: badge ?? "Beginner",
+              avgRating: Math.round(((rData.averageX100 ?? 0) / 100) * 10) / 10,
+              ratingCount: Number(rData.count ?? 0),
               completedProjects: completedCount,
               reputation: Number(rep),
             };
@@ -222,7 +223,7 @@ export default function FreelancersPage() {
           <p className="text-muted-foreground max-w-xl mx-auto">
             Discover verified on-chain freelancers. Every profile shows real
             completed projects and ratings — no fake reviews, all verifiable on
-            the Stellar blockchain.
+            the Arc blockchain.
           </p>
         </motion.div>
 

@@ -4,7 +4,7 @@ import { CONTRACTS } from "@/lib/web3/config";
 import { ContractService } from "@/lib/web3/contract-service";
 
 export function useJobCreatorStatus() {
-  const { wallet, getContract } = useWeb3();
+  const { wallet } = useWeb3();
   const [isJobCreator, setIsJobCreator] = useState(false);
   const [loading, setLoading] = useState(true); // Start with true to show loading initially
 
@@ -17,15 +17,6 @@ export function useJobCreatorStatus() {
 
     setLoading(true);
     try {
-      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW);
-      if (!contract) {
-        setIsJobCreator(false);
-        setLoading(false);
-        return;
-      }
-
-      // Check escrows directly using ContractService
-      // Don't rely on getNextEscrowId() - it might fail or timeout
       const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
 
       // Check up to 20 escrows (reasonable limit)
@@ -46,7 +37,7 @@ export function useJobCreatorStatus() {
 
           // Extract creator address from escrow
           // EscrowData has a 'creator' field
-          const depositorAddress = escrow.creator;
+          const depositorAddress = escrow.depositor;
 
           // Check if current user is the creator (job creator)
           const isMyJob =

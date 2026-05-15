@@ -53,10 +53,10 @@ export default function HomePage() {
 
           // Get status and total amount
           const status = escrowData.status || 0;
-          const totalAmount = Number(escrowData.amount || "0");
+          const totalAmount = Number(escrowData.totalAmount || "0");
 
-          // Add to total volume (convert from stroops to XLM - 7 decimals)
-          totalVolume += totalAmount / 1e7;
+          // Add to total volume (convert from wei to ETH - 18 decimals)
+          totalVolume += totalAmount / 1e18;
 
           // EscrowStatus enum: Pending=0, InProgress=1, Released=2, Refunded=3, Disputed=4, Expired=5
           if (status === 1) {
@@ -106,7 +106,7 @@ export default function HomePage() {
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass border border-primary/20 mb-6">
               <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
               <span className="text-sm font-medium">
-                Powered by Stellar Testnet
+                Powered by Arc Testnet
               </span>
             </div>
 
@@ -303,7 +303,7 @@ export default function HomePage() {
                     <p className="text-muted-foreground leading-relaxed">
                       Browse on-chain profiles with real ratings, completed
                       projects, and badge levels — no fake portfolios, every
-                      stat is verified directly on the Stellar blockchain.
+                      stat is verified directly on the Arc blockchain.
                     </p>
                   </div>
 

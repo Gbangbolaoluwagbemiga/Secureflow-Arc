@@ -61,7 +61,7 @@ export function EscrowCard({
     if (!isCompleted || !escrow.payer) return;
     const svc = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
     svc.getClientRating(Number(escrow.id))
-      .then((r) => setHasClientRating(!!r))
+      .then((r: any) => setHasClientRating(!!(r && r.score)))
       .catch(() => {});
   }, [escrow.id, isCompleted, escrow.payer]);
 

@@ -27,7 +27,7 @@ export interface Escrow {
   status: "pending" | "active" | "completed" | "disputed";
   createdAt: number;
   duration: number;
-  /** Deadline as Unix timestamp (ms), derived from on-chain ledger sequence */
+  /** Deadline as Unix timestamp (ms) from the on-chain deadline field */
   deadlineAt?: number;
   milestones: Milestone[];
   projectTitle?: string;
@@ -48,10 +48,10 @@ export interface EscrowStats {
 }
 
 export interface WalletState {
-  address: string | null; // Stellar public key (G...)
-  chainId: number | null; // Deprecated: Stellar doesn't use chain IDs
+  address: string | null;
+  chainId: number | null;
   isConnected: boolean;
-  balance: string; // XLM balance (7 decimals)
+  balance: string; // ETH balance (18 decimals)
 }
 
 export interface Application {

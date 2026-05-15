@@ -14,8 +14,8 @@ notificationsRouter.get("/", async (req, res) => {
   }
 
   const wallet = String(req.query.wallet ?? "").trim();
-  if (!wallet || !wallet.startsWith("G")) {
-    res.status(400).json({ error: "wallet query must be a Stellar G-address" });
+  if (!wallet || !/^0x[0-9a-fA-F]{40}$/.test(wallet)) {
+    res.status(400).json({ error: "wallet must be a valid Arc EVM address (0x…)" });
     return;
   }
 
@@ -61,8 +61,8 @@ notificationsRouter.patch("/:id/read", async (req, res) => {
   }
 
   const wallet = String(req.query.wallet ?? "").trim();
-  if (!wallet || !wallet.startsWith("G")) {
-    res.status(400).json({ error: "wallet query must be a Stellar G-address" });
+  if (!wallet || !/^0x[0-9a-fA-F]{40}$/.test(wallet)) {
+    res.status(400).json({ error: "wallet must be a valid Arc EVM address (0x…)" });
     return;
   }
 
@@ -97,8 +97,8 @@ notificationsRouter.post("/", async (req, res) => {
   } = req.body ?? {};
 
   const wallet = String(wallet_address ?? "").trim();
-  if (!wallet || !wallet.startsWith("G")) {
-    res.status(400).json({ error: "wallet_address must be a Stellar G-address" });
+  if (!wallet || !/^0x[0-9a-fA-F]{40}$/.test(wallet)) {
+    res.status(400).json({ error: "wallet_address must be a valid Arc EVM address (0x…)" });
     return;
   }
 

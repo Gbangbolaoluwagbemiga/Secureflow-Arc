@@ -76,18 +76,14 @@ export function EscrowCard({
   useEffect(() => {
     if (escrow.status === "completed" && escrow.isClient) {
       contractService
-        .getRating(Number.parseInt(escrow.id, 10))
-        .then((rating) => {
-          if (rating) {
+        .getRating(Number.parseInt(escrow.id, 10), wallet.address || undefined)
+        .then((r: any) => {
+          if (r && r.score) {
             setHasRating(true);
-            setExistingRating({
-              rating: rating.rating,
-              review: rating.review,
-            });
+            setExistingRating({ rating: r.score, review: r.review || "" });
           }
         })
-        .catch((error) => {
-        });
+        .catch(() => {});
     }
   }, [escrow.id, escrow.status, escrow.isClient]);
 
@@ -499,14 +495,12 @@ export function EscrowCard({
             setHasRating(true);
             // Refresh rating data for this escrow only
             try {
-              const rating = await contractService.getRating(
-                Number.parseInt(escrow.id, 10)
+              const r: any = await contractService.getRating(
+                Number.parseInt(escrow.id, 10),
+                wallet.address || undefined
               );
-              if (rating) {
-                setExistingRating({
-                  rating: rating.rating,
-                  review: rating.review,
-                });
+              if (r && r.score) {
+                setExistingRating({ rating: r.score, review: r.review || "" });
               }
             } catch (error) {
             }

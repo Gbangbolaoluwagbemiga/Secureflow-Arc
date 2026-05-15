@@ -1,0 +1,32 @@
+specVersion: 0.0.5
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: SecureFlow
+    network: arc-testnet
+    source:
+      address: "0xdee8489FFfdB8Ce1643ecD508Ce1ca48575D4f31"
+      abi: SecureFlow
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Escrow
+        - Evidence
+        - Application
+      abis:
+        - name: SecureFlow
+          file: ../contracts/solidity/out/SecureFlow.sol/SecureFlow.json
+      eventHandlers:
+        - event: EscrowCreated(indexed uint256,indexed address,indexed address,address[],uint256,uint256,address,uint256,bool)
+          handler: handleEscrowCreated
+        - event: EvidenceSubmitted(indexed uint256,indexed uint256,indexed address,string)
+          handler: handleEvidenceSubmitted
+        - event: ApplicationSubmitted(indexed uint256,indexed address,string,uint256)
+          handler: handleApplicationSubmitted
+        - event: EscrowUpdated(indexed uint256,uint8,uint256)
+          handler: handleEscrowUpdated
+      file: ./src/mapping.ts

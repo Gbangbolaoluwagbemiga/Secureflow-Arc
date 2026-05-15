@@ -1,11 +1,10 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useWeb3 } from "@/contexts/web3-context";
-// Unused import removed: useSmartAccount
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF } from "@/lib/web3/config";
+import { ARC_TESTNET } from "@/lib/web3/config";
 
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ProjectDetailsStep } from "@/components/create/project-details-step";
@@ -14,32 +13,27 @@ import { ReviewStep } from "@/components/create/review-step";
 import { useCreateEscrow } from "@/hooks/use-escrows";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
+import { parseEther } from "viem";
 
 interface Milestone {
   description: string;
   amount: string;
 }
 
+const ARC_CHAIN_ID = ARC_TESTNET.chainId;
+
 export default function CreateEscrowPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { wallet } = useWeb3();
-  // Stellar doesn't use smart accounts
-  // const { executeTransaction, isSmartAccountReady } = useSmartAccount();
   const { toast } = useToast();
   const createEscrow = useCreateEscrow();
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAIWriter, setShowAIWriter] = useState(false);
-  const [currentMilestoneIndex, setCurrentMilestoneIndex] = useState<
-    number | null
-  >(null);
-  const [_useNativeToken, _setUseNativeToken] = useState(false);
-  const [_isOpenJob, _setIsOpenJob] = useState(false);
+  const [currentMilestoneIndex, setCurrentMilestoneIndex] = useState<number | null>(null);
   const [isContractPaused, setIsContractPaused] = useState(false);
-  const [contractConfigError, setContractConfigError] = useState<string | null>(
-    null
-  );
+  const [contractConfigError, setContractConfigError] = useState<string | null>(null);
   const [isOnCorrectNetwork, setIsOnCorrectNetwork] = useState(true);
   const [errors, setErrors] = useState<{
     projectTitle?: string;
@@ -59,13 +53,7 @@ export default function CreateEscrowPage() {
 
   const checkNetworkStatus = async () => {
     if (!wallet.isConnected) return;
-
-    try {
-      // Stellar doesn't use chain IDs - just check if wallet is connected
-      setIsOnCorrectNetwork(true);
-    } catch (error) {
-      setIsOnCorrectNetwork(false);
-    }
+    setIsOnCorrectNetwork(!wallet.chainId || wallet.chainId === ARC_CHAIN_ID);
   };
 
   const checkContractPauseStatus = async () => {
@@ -80,8 +68,7 @@ export default function CreateEscrowPage() {
       setContractConfigError(null);
       setIsContractPaused(health.jobCreationPaused);
     } catch (error) {
-      const msg =
-        error instanceof Error ? error.message : "Contract check failed.";
+      const msg = error instanceof Error ? error.message : "Contract check failed.";
       setContractConfigError(msg);
       setIsContractPaused(true);
     }
@@ -95,8 +82,8 @@ export default function CreateEscrowPage() {
     duration: "",
     totalBudget: "",
     beneficiary: prefillFreelancer,
-    token: "", // Stellar: use empty string for native XLM, or contract address for tokens
-    useNativeToken: false,
+    token: "", // empty string = native ETH; otherwise ERC-20 token address
+    useNativeToken: true,
     isOpenJob: false,
     milestones: [
       { description: "", amount: "" },
@@ -104,63 +91,36 @@ export default function CreateEscrowPage() {
     ] as Milestone[],
   });
 
-  // Removed unused functions: _commonTokens, _addMilestone, _removeMilestone
-
-  // Removed unused functions: updateMilestone, _openAIWriter, _handleAISelect
-
-  const calculateTotalMilestones = () => {
-    return formData.milestones.reduce(
-      (sum, m) => sum + (Number.parseFloat(m.amount) || 0),
-      0
-    );
-  };
+  const calculateTotalMilestones = () =>
+    formData.milestones.reduce((sum, m) => sum + (Number.parseFloat(m.amount) || 0), 0);
 
   const validateStep = () => {
     const newErrors: typeof errors = {};
     let hasErrors = false;
 
     if (step === 1) {
-      // Validate all required fields for step 1
       if (!formData.projectTitle || formData.projectTitle.length < 3) {
         newErrors.projectTitle = "Project title must be at least 3 characters";
         hasErrors = true;
       }
-
-      if (
-        !formData.projectDescription ||
-        formData.projectDescription.length < 50
-      ) {
-        newErrors.projectDescription =
-          "Project description must be at least 50 characters";
+      if (!formData.projectDescription || formData.projectDescription.length < 50) {
+        newErrors.projectDescription = "Project description must be at least 50 characters";
         hasErrors = true;
       }
-
-      if (
-        !formData.duration ||
-        Number(formData.duration) < 1 ||
-        Number(formData.duration) > 365
-      ) {
+      if (!formData.duration || Number(formData.duration) < 1 || Number(formData.duration) > 365) {
         newErrors.duration = "Duration must be between 1 and 365 days";
         hasErrors = true;
       }
-
-      if (!formData.totalBudget || Number(formData.totalBudget) < 0.01) {
-        newErrors.totalBudget = "Total budget must be at least 0.01 tokens";
+      if (!formData.totalBudget || Number(formData.totalBudget) < 0.0001) {
+        newErrors.totalBudget = "Total budget must be at least 0.0001 ETH";
         hasErrors = true;
       }
-
-      if (
-        !formData.isOpenJob &&
-        (!formData.beneficiary ||
-          !/^0x[a-fA-F0-9]{40}$/.test(formData.beneficiary))
-      ) {
-        newErrors.beneficiary =
-          "Valid beneficiary address is required for direct escrow";
+      if (!formData.isOpenJob && (!formData.beneficiary || !/^0x[a-fA-F0-9]{40}$/.test(formData.beneficiary))) {
+        newErrors.beneficiary = "Valid Arc EVM address (0x…) required for direct escrow";
         hasErrors = true;
       }
-
       if (!formData.useNativeToken && !formData.token) {
-        newErrors.tokenAddress = "Please select a token from the whitelisted stablecoins";
+        newErrors.tokenAddress = "Please select a whitelisted token or use native ETH";
         hasErrors = true;
       }
     } else if (step === 2) {
@@ -171,9 +131,8 @@ export default function CreateEscrowPage() {
         newErrors.milestones = "Please fill in all milestone details";
         hasErrors = true;
       }
-
-      if (Math.abs(total - targetTotal) > 0.01) {
-        newErrors.totalMismatch = `Milestone amounts (${total}) must equal total amount (${targetTotal})`;
+      if (Math.abs(total - targetTotal) > 0.0001) {
+        newErrors.totalMismatch = `Milestone amounts (${total.toFixed(6)}) must equal total (${targetTotal.toFixed(6)})`;
         hasErrors = true;
       }
     }
@@ -182,219 +141,114 @@ export default function CreateEscrowPage() {
     return !hasErrors;
   };
 
-  const clearErrors = () => {
-    setErrors({});
-  };
+  const clearErrors = () => setErrors({});
 
   const nextStep = () => {
-    if (validateStep()) {
-      setStep(step + 1);
-    }
+    if (validateStep()) setStep(step + 1);
   };
 
-  const prevStep = () => {
-    setStep(step - 1);
-  };
+  const prevStep = () => setStep(step - 1);
 
-  const validateForm = () => {
-    const errors: string[] = [];
+  const validateForm = (): string[] => {
+    const errs: string[] = [];
 
-    // Validate project title
-    if (!formData.projectTitle || formData.projectTitle.length < 3) {
-      errors.push("Project title must be at least 3 characters long");
-    }
-
-    // Validate project description
-    if (
-      !formData.projectDescription ||
-      formData.projectDescription.length < 50
-    ) {
-      errors.push("Project description must be at least 50 characters long");
-    }
-
-    // Validate duration
-    if (
-      !formData.duration ||
-      Number(formData.duration) < 1 ||
-      Number(formData.duration) > 365
-    ) {
-      errors.push("Duration must be between 1 and 365 days");
-    }
-
-    // Validate total budget
-    if (!formData.totalBudget || Number(formData.totalBudget) < 0.01) {
-      errors.push("Total budget must be at least 0.01 tokens");
-    }
-
-    // Validate tokens
-    if (!formData.useNativeToken && !formData.token) {
-      errors.push("Please select a whitelisted token");
-    }
-
-    // Validate beneficiary (only if not open job)
+    if (!formData.projectTitle || formData.projectTitle.length < 3)
+      errs.push("Project title must be at least 3 characters long");
+    if (!formData.projectDescription || formData.projectDescription.length < 50)
+      errs.push("Project description must be at least 50 characters long");
+    if (!formData.duration || Number(formData.duration) < 1 || Number(formData.duration) > 365)
+      errs.push("Duration must be between 1 and 365 days");
+    if (!formData.totalBudget || Number(formData.totalBudget) < 0.0001)
+      errs.push("Total budget must be at least 0.0001 ETH");
+    if (!formData.useNativeToken && !formData.token)
+      errs.push("Please select a whitelisted token");
     if (!formData.isOpenJob) {
-      if (!formData.beneficiary) {
-        errors.push("Beneficiary address is required for direct escrow");
-      } else if (!/^G[A-Z0-9]{55}$/.test(formData.beneficiary)) {
-        errors.push(
-          "Beneficiary address must be a valid Stellar address (starts with G)"
-        );
-      }
+      if (!formData.beneficiary)
+        errs.push("Beneficiary address is required for direct escrow");
+      else if (!/^0x[a-fA-F0-9]{40}$/.test(formData.beneficiary))
+        errs.push("Beneficiary must be a valid Arc EVM address (0x…)");
     }
-
-    // Validate milestones
-    if (formData.milestones.length === 0) {
-      errors.push("At least one milestone is required");
-    }
+    if (formData.milestones.length === 0)
+      errs.push("At least one milestone is required");
 
     for (let i = 0; i < formData.milestones.length; i++) {
-      const milestone = formData.milestones[i];
-      if (!milestone.description || milestone.description.length < 10) {
-        errors.push(
-          `Milestone ${i + 1} description must be at least 10 characters long`
-        );
-      }
-      if (!milestone.amount || Number(milestone.amount) < 0.01) {
-        errors.push(`Milestone ${i + 1} amount must be at least 0.01 tokens`);
-      }
+      const m = formData.milestones[i];
+      if (!m.description || m.description.length < 10)
+        errs.push(`Milestone ${i + 1} description must be at least 10 characters`);
+      if (!m.amount || Number(m.amount) < 0.0001)
+        errs.push(`Milestone ${i + 1} amount must be at least 0.0001 ETH`);
     }
 
-    // Validate milestone amounts sum
-    const totalMilestoneAmount = formData.milestones.reduce(
-      (sum, milestone) => sum + Number(milestone.amount || 0),
-      0
-    );
-    if (Math.abs(totalMilestoneAmount - Number(formData.totalBudget)) > 0.01) {
-      errors.push("Total milestone amounts must equal the total budget");
-    }
+    const milestoneTotal = formData.milestones.reduce((s, m) => s + Number(m.amount || 0), 0);
+    if (Math.abs(milestoneTotal - Number(formData.totalBudget)) > 0.0001)
+      errs.push("Total milestone amounts must equal the total budget");
 
-    return errors;
+    return errs;
   };
 
   const handleSubmit = async () => {
-
     if (!wallet.isConnected) {
-      toast({
-        title: "Wallet not connected",
-        description: "Please connect your wallet to create an escrow",
-        variant: "destructive",
-      });
+      toast({ title: "Wallet not connected", description: "Please connect your wallet", variant: "destructive" });
       return;
     }
 
-    // Validate form
     const validationErrors = validateForm();
     if (validationErrors.length > 0) {
-      toast({
-        title: "Form validation failed",
-        description: validationErrors.join(", "),
-        variant: "destructive",
-      });
+      toast({ title: "Validation failed", description: validationErrors.join(", "), variant: "destructive" });
       return;
     }
-
-    // For native XLM, token can be empty string or null
-    // For custom tokens, token should be set
-    // This check is not needed - the contract handles both cases
 
     setIsSubmitting(true);
 
     try {
+      const milestoneDescriptions = formData.milestones.map((m) => m.description);
 
-      // Stellar: Handle token approval if using a custom token (not native XLM)
-      if (
-        formData.token &&
-        formData.token !== "" &&
-        formData.token !==
-          GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF
-      ) {
-        // For Stellar, token approval is handled differently
-        // The contract will handle token transfers internally
-        // We just need to verify the token contract exists
-        // Token approval is handled by the contract for Stellar
-        // No need to check token contract here
-      }
-
-      const milestoneDescriptions = formData.milestones.map(
-        (m) => m.description
-      );
-
-      // Stellar: Use null for open jobs (Option<Address>)
       const beneficiaryAddress = formData.isOpenJob
-        ? null // null for open jobs
-        : formData.beneficiary || null;
+        ? undefined
+        : (formData.beneficiary as `0x${string}`) || undefined;
 
-      // Stellar: Convert XLM to stroops (1 XLM = 10,000,000 stroops)
-      // For Stellar, we use stroops instead of wei
-      const STROOPS_PER_XLM = 10_000_000;
-      const totalAmountInStroops = BigInt(
-        Math.floor(Number.parseFloat(formData.totalBudget) * STROOPS_PER_XLM)
+      // Convert ETH amounts to wei (1 ETH = 10^18 wei)
+      const totalAmountWei = parseEther(formData.totalBudget);
+      const milestoneAmountsWei = formData.milestones.map((m) =>
+        parseEther(m.amount || "0")
       );
 
-      // Check native XLM balance using wallet balance
-      // For native XLM (useNativeToken = true), token will be empty or null
-      if (formData.useNativeToken || !formData.token || formData.token === "") {
+      // Check native ETH balance
+      if (formData.useNativeToken || !formData.token) {
         const walletBalance = Number.parseFloat(wallet.balance || "0");
         const requiredBalance = Number.parseFloat(formData.totalBudget);
         if (walletBalance < requiredBalance) {
           throw new Error(
-            `Insufficient XLM balance. You have ${walletBalance.toFixed(4)} XLM but need ${formData.totalBudget} XLM.`
+            `Insufficient ETH balance. You have ${walletBalance.toFixed(6)} ETH but need ${formData.totalBudget} ETH (plus a small platform fee).`
           );
         }
       }
 
-      // Convert milestone amounts to stroops (Stellar uses stroops, not wei)
-      const milestoneAmountsInStroops = formData.milestones.map((m) =>
-        BigInt(Math.floor(Number.parseFloat(m.amount) * STROOPS_PER_XLM))
+      const milestones = milestoneAmountsWei.map(
+        (amount, idx) => [amount.toString(), milestoneDescriptions[idx] || ""] as [string, string]
       );
 
-      // Default arbiter - use a Stellar address (you should replace this with a real arbiter address)
-      // For now, use a default arbiter address - in production, this should come from formData or be configurable
-      const arbiters = [
-        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
-      ]; // Default arbiter - replace with real arbiter address
-      const requiredConfirmations = 1;
-
-      // Convert duration from days to seconds
-      const durationInSeconds = Number(formData.duration) * 24 * 60 * 60;
-
-      // Convert milestones to [amount, description] format for the hook
-      const milestones = milestoneAmountsInStroops.map(
-        (amount, idx) =>
-          [amount.toString(), milestoneDescriptions[idx] || ""] as [
-            string,
-            string,
-          ]
-      );
-
-      // Use the useCreateEscrow hook
-      if (!wallet.address) {
-        throw new Error("Wallet not connected");
-      }
+      if (!wallet.address) throw new Error("Wallet not connected");
 
       const escrowId = await createEscrow.mutateAsync({
         depositor: wallet.address,
-        beneficiary: beneficiaryAddress || undefined,
-        arbiters,
-        required_confirmations: requiredConfirmations,
+        beneficiary: beneficiaryAddress,
+        arbiters: [],
+        required_confirmations: 1,
         milestones,
-        token:
-          formData.useNativeToken || !formData.token || formData.token === ""
-            ? undefined
-            : formData.token,
-        total_amount: totalAmountInStroops.toString(),
-        duration: durationInSeconds,
+        token: formData.useNativeToken || !formData.token ? undefined : formData.token,
+        total_amount: totalAmountWei.toString(),
+        duration: Number(formData.duration) * 86400,
         project_title: formData.projectTitle,
         project_description: formData.projectDescription,
       });
 
+      toast({ title: "Escrow created!", description: `Escrow #${escrowId} created successfully.` });
 
-      // Navigate after successful creation
       setTimeout(() => {
         navigate(formData.isOpenJob ? "/jobs" : "/dashboard");
       }, 2000);
     } catch (error: any) {
-      // Show a toast for any error not already handled by the mutation's onError
       if (!createEscrow.isError) {
         toast({
           title: "Action failed",
@@ -409,7 +263,6 @@ export default function CreateEscrowPage() {
 
   return (
     <div className="min-h-screen py-12 gradient-mesh">
-      {/* Network Switch Banner */}
       {!isOnCorrectNetwork && wallet.isConnected && (
         <div className="container mx-auto px-4 max-w-4xl mb-6">
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
@@ -417,20 +270,14 @@ export default function CreateEscrowPage() {
               <div className="flex items-center gap-3">
                 <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
                 <div>
-                  <h3 className="font-semibold text-destructive">
-                    Wrong Network
-                  </h3>
+                  <h3 className="font-semibold text-destructive">Wrong Network</h3>
                   <p className="text-sm text-muted-foreground">
-                    Please connect to Stellar Testnet to create escrows
+                    Please switch your wallet to Arc Testnet (chain ID {ARC_CHAIN_ID})
                   </p>
                 </div>
               </div>
-              <Button
-                onClick={() => window.location.reload()}
-                variant="destructive"
-                size="sm"
-              >
-                Refresh Connection
+              <Button onClick={() => window.location.reload()} variant="destructive" size="sm">
+                Refresh
               </Button>
             </div>
           </div>
@@ -438,11 +285,7 @@ export default function CreateEscrowPage() {
       )}
 
       <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
           {contractConfigError && (
             <Alert variant="destructive" className="mb-8">
               <AlertCircle className="h-4 w-4" />
@@ -450,9 +293,8 @@ export default function CreateEscrowPage() {
               <AlertDescription>{contractConfigError}</AlertDescription>
             </Alert>
           )}
-          <h1 className="text-4xl md:text-5xl font-bold mb-3 text-center">
-            Create New Escrow
-          </h1>
+
+          <h1 className="text-4xl md:text-5xl font-bold mb-3 text-center">Create New Escrow</h1>
           <p className="text-xl text-muted-foreground text-center mb-10">
             Set up a secure escrow with milestone-based payments
           </p>
@@ -473,11 +315,7 @@ export default function CreateEscrowPage() {
                     {s < step ? <CheckCircle2 className="h-5 w-5" /> : s}
                   </div>
                   {s < 3 && (
-                    <div
-                      className={`w-16 h-0.5 ${
-                        s < step ? "bg-primary" : "bg-muted-foreground/30"
-                      }`}
-                    />
+                    <div className={`w-16 h-0.5 ${s < step ? "bg-primary" : "bg-muted-foreground/30"}`} />
                   )}
                 </div>
               ))}
@@ -536,10 +374,7 @@ export default function CreateEscrowPage() {
                   projectTitle={formData.projectTitle}
                   projectDescription={formData.projectDescription}
                   durationDays={formData.duration}
-                  errors={{
-                    milestones: errors.milestones,
-                    totalMismatch: errors.totalMismatch,
-                  }}
+                  errors={{ milestones: errors.milestones, totalMismatch: errors.totalMismatch }}
                 />
               </motion.div>
             )}

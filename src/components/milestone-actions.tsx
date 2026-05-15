@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useWriteContract } from "wagmi";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -55,7 +56,8 @@ export function MilestoneActions({
   escrowReleasedAmount,
   escrowTotalAmount,
 }: MilestoneActionsProps) {
-  const { wallet, getContract } = useWeb3();
+  const { wallet } = useWeb3();
+  const { writeContractAsync } = useWriteContract();
   const { addNotification } = useNotifications();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -100,28 +102,28 @@ export function MilestoneActions({
     if (!actionType) return;
 
     setIsLoading(true);
-    const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW);
 
     try {
       let txHash: string | undefined;
 
       switch (actionType) {
-        case "start":
-          txHash = await contract.send(
-            "start_work",
-            Number(escrowId),
-            wallet.address
-          );
+        case "start": {
+          const { ContractService: StartCS } = await import("@/lib/web3/contract-service");
+          const startSvc = new StartCS(CONTRACTS.SECUREFLOW_ESCROW);
+          txHash = await startSvc.startWork(Number(escrowId), wallet.address || "", writeContractAsync);
           break;
-        case "submit":
-          txHash = await contract.send(
-            "submit_milestone",
-            Number(escrowId),
-            milestoneIndex,
-            milestone.description,
-            wallet.address
-          );
+        }
+        case "submit": {
+          const { ContractService: SubCS } = await import("@/lib/web3/contract-service");
+          const subSvc = new SubCS(CONTRACTS.SECUREFLOW_ESCROW);
+          txHash = await subSvc.submitMilestone({
+            escrow_id: Number(escrowId),
+            milestone_index: milestoneIndex,
+            description: milestone.description,
+            beneficiary: wallet.address || "",
+          }, writeContractAsync);
           break;
+        }
         case "approve":
           // Use ContractService instead of contract.send - it handles the correct format
           const { ContractService } = await import(
@@ -134,7 +136,7 @@ export function MilestoneActions({
             escrow_id: Number(escrowId),
             milestone_index: milestoneIndex,
             depositor: wallet.address || "",
-          });
+          }, writeContractAsync);
           break;
         case "reject":
           // Use ContractService instead of contract.send - it handles the correct format
@@ -149,7 +151,7 @@ export function MilestoneActions({
             milestone_index: milestoneIndex,
             reason: disputeReason,
             depositor: wallet.address || "",
-          });
+          }, writeContractAsync);
           break;
         case "dispute":
           // Use ContractService instead of contract.send - it handles the correct format
@@ -169,17 +171,19 @@ export function MilestoneActions({
             milestone_index: milestoneIndex,
             reason: disputeReason,
             disputer: disputerAddress,
-          });
+          }, writeContractAsync);
           break;
-        case "resubmit":
-          txHash = await contract.send(
-            "submit_milestone",
-            Number(escrowId),
-            milestoneIndex,
-            resubmitMessage || milestone.description,
-            wallet.address
-          );
+        case "resubmit": {
+          const { ContractService: ResubmitCS } = await import("@/lib/web3/contract-service");
+          const resubmitCS = new ResubmitCS(CONTRACTS.SECUREFLOW_ESCROW);
+          txHash = await resubmitCS.submitMilestone({
+            escrow_id: Number(escrowId),
+            milestone_index: milestoneIndex,
+            description: resubmitMessage || milestone.description,
+            beneficiary: wallet.address || "",
+          }, writeContractAsync);
           break;
+        }
       }
 
       if (txHash) {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useWriteContract } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +41,7 @@ export function OverdueDisputeResolution({ onResolved }: Props) {
   const { wallet } = useWeb3();
   const { toast } = useToast();
   const { addNotification } = useNotifications();
+  const { writeContractAsync } = useWriteContract();
   const [cases, setCases] = useState<OverdueCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<OverdueCase | null>(null);
@@ -60,24 +62,25 @@ export function OverdueDisputeResolution({ onResolved }: Props) {
 
       for (let i = 1; i < nextId; i++) {
         try {
-          const req = await svc.getOverdueRequest(i);
-          if (!req) continue;
           const escrow = await svc.getEscrow(i);
-          if (!escrow) continue;
+          // Only show Disputed (4) escrows where deadline has passed
+          if (!escrow || escrow.status !== 4) continue;
+          const nowSecs = Math.floor(Date.now() / 1000);
+          if (Number(escrow.deadline) > nowSecs) continue;
 
-          const totalNum = Number(escrow.amount ?? 0);
-          const paidNum = Number(escrow.paid_amount ?? 0);
+          const totalNum = Number(escrow.totalAmount ?? 0);
+          const paidNum = Number(escrow.paidAmount ?? 0);
           found.push({
             escrowId: i.toString(),
-            projectTitle: escrow.project_title || `Project #${i}`,
-            clientAddress: escrow.creator || "",
-            freelancerAddress: escrow.freelancer || "",
-            requesterAddress: req.requester || "",
-            reason: req.reason || "",
-            requestedAt: req.requested_at || 0,
-            totalAmount: totalNum / 1e7,
-            paidAmount: paidNum / 1e7,
-            unreleased: (totalNum - paidNum) / 1e7,
+            projectTitle: escrow.projectTitle || `Project #${i}`,
+            clientAddress: escrow.depositor || "",
+            freelancerAddress: escrow.beneficiary || "",
+            requesterAddress: escrow.depositor || "",
+            reason: "Overdue dispute",
+            requestedAt: nowSecs,
+            totalAmount: totalNum / 1e18,
+            paidAmount: paidNum / 1e18,
+            unreleased: (totalNum - paidNum) / 1e18,
           });
         } catch {
           // escrow may not exist
@@ -107,15 +110,13 @@ export function OverdueDisputeResolution({ onResolved }: Props) {
     try {
       const { ContractService } = await import("@/lib/web3/contract-service");
       const svc = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
-      const unreleasedStroops = BigInt(
-        Math.round(selected.unreleased * 1e7),
-      );
+      const unreleasedWei = BigInt(Math.round(selected.unreleased * 1e18));
 
       if (fullRefundToClient) {
-        await svc.arbiterApproveRefund({
-          escrow_id: Number(selected.escrowId),
-          arbiter: wallet.address,
-        });
+        await svc.arbiterApproveRefund(
+          { escrow_id: Number(selected.escrowId), arbiter: wallet.address || "" },
+          writeContractAsync
+        );
         toast({
           title: "Refund approved",
           description: `Full refund of ${selected.unreleased.toFixed(2)} USDC sent to client`,
@@ -144,15 +145,13 @@ export function OverdueDisputeResolution({ onResolved }: Props) {
         );
       } else {
         const pct = Math.min(Math.max(freelancerPct, 0), 100);
-        const freelancerStroops =
-          (unreleasedStroops * BigInt(pct)) / BigInt(100);
-        await svc.arbiterAwardFreelancer({
-          escrow_id: Number(selected.escrowId),
-          arbiter: wallet.address,
-          freelancer_amount: freelancerStroops,
-        });
-        const freelancerAmt = (Number(freelancerStroops) / 1e7).toFixed(2);
-        const clientAmt = (selected.unreleased - Number(freelancerStroops) / 1e7).toFixed(2);
+        const freelancerWei = (unreleasedWei * BigInt(pct)) / BigInt(100);
+        await svc.arbiterAwardFreelancer(
+          { escrow_id: Number(selected.escrowId), arbiter: wallet.address || "", freelancer_amount: freelancerWei },
+          writeContractAsync
+        );
+        const freelancerAmt = (Number(freelancerWei) / 1e18).toFixed(6);
+        const clientAmt = (selected.unreleased - Number(freelancerWei) / 1e18).toFixed(6);
         toast({
           title: "Award applied",
           description: `${freelancerAmt} USDC to freelancer, ${clientAmt} USDC returned to client`,

@@ -32,14 +32,14 @@ export function usePendingApprovals() {
         if (!escrow) continue;
 
         const isMyJob =
-          escrow.creator?.toLowerCase().trim() === wallet.address.toLowerCase().trim();
+          escrow.depositor?.toLowerCase().trim() === wallet.address.toLowerCase().trim();
         if (!isMyJob) continue;
 
+        const zeroAddress = "0x0000000000000000000000000000000000000000";
         const isOpenJob =
-          !escrow.freelancer ||
-          escrow.freelancer ===
-            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF" ||
-          escrow.freelancer === "";
+          escrow.isOpenJob ||
+          !escrow.beneficiary ||
+          escrow.beneficiary === zeroAddress;
         if (!isOpenJob) continue;
 
         const applications = await contractService.getApplications(id);

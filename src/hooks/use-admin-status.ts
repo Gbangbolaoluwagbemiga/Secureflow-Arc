@@ -34,7 +34,7 @@ export function useAdminStatus() {
         return;
       }
 
-      // Get the contract owner from Soroban instance storage
+      // Get the contract owner from on-chain state
       let owner: string | null = null;
       try {
         owner = await contractService.getOwner();

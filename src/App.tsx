@@ -13,7 +13,7 @@ import DisputesPage from "./pages/DisputesPage";
 import ApprovalsPage from "./pages/ApprovalsPage";
 import FreelancersPage from "./pages/FreelancersPage";
 import MessagesPage from "./pages/MessagesPage";
-import Debugger from "./pages/Debugger";
+
 
 const AppLayout = () => (
   <>
@@ -41,8 +41,7 @@ function App() {
         <Route path="/disputes" element={<DisputesPage />} />
         <Route path="/approvals" element={<ApprovalsPage />} />
         <Route path="/messages" element={<MessagesPage />} />
-        <Route path="/debug" element={<Debugger />} />
-        <Route path="/debug/:contractName" element={<Debugger />} />
+
       </Route>
     </Routes>
   );

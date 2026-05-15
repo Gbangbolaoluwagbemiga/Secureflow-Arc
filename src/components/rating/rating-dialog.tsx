@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useWriteContract } from "wagmi";
 import {
   Dialog,
   DialogContent,
@@ -42,6 +43,7 @@ export function RatingDialog({
   const [submitting, setSubmitting] = useState(false);
   const { toast } = useToast();
   const { wallet } = useWeb3();
+  const { writeContractAsync } = useWriteContract();
   const { addNotification } = useNotifications();
 
   const handleSubmit = async () => {
@@ -78,7 +80,7 @@ export function RatingDialog({
         escrowId,
         rating,
         review,
-        wallet.address || undefined
+        writeContractAsync
       );
       toast({
         title: "Rating Submitted",

@@ -1,171 +1,188 @@
-/**
- * Admin hooks for contract administration
- */
-
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { contractService } from "@/lib/web3/contract-service";
+import { useWriteContract } from "wagmi";
+import { CONTRACTS } from "@/lib/web3/config";
+import SecureFlowABI from "../../contracts/solidity/out/SecureFlow.sol/SecureFlow.json";
 import { toast } from "@/hooks/use-toast";
 import { useWeb3 } from "@/contexts/web3-context";
 
-/**
- * Hook to pause job creation
- */
+function contractAddr() {
+  const addr = CONTRACTS.SECUREFLOW_ESCROW;
+  if (!addr) throw new Error("VITE_SECUREFLOW_CONTRACT_ADDRESS is not set");
+  return addr as `0x${string}`;
+}
+
 export function usePauseJobCreation() {
   const queryClient = useQueryClient();
   const { wallet } = useWeb3();
+  const { writeContractAsync } = useWriteContract();
 
   return useMutation({
-    mutationFn: () => {
-      if (!wallet.address) {
-        throw new Error("Wallet not connected");
-      }
-      return contractService.pauseJobCreation(wallet.address);
+    mutationFn: async () => {
+      if (!wallet.address) throw new Error("Wallet not connected");
+      return writeContractAsync({
+        address: contractAddr(),
+        abi: SecureFlowABI.abi,
+        functionName: "pause",
+        args: [],
+      });
     },
     onSuccess: (txHash) => {
       queryClient.invalidateQueries({ queryKey: ["admin"] });
-      toast({
-        title: "Job creation paused",
-        description: `Transaction confirmed: ${txHash?.slice(0, 8)}...`,
-      });
+      toast({ title: "Contract paused", description: `Tx: ${String(txHash).slice(0, 10)}…` });
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to pause job creation",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message || "Failed to pause", variant: "destructive" });
     },
   });
 }
 
-/**
- * Hook to unpause job creation
- */
 export function useUnpauseJobCreation() {
   const queryClient = useQueryClient();
   const { wallet } = useWeb3();
+  const { writeContractAsync } = useWriteContract();
 
   return useMutation({
-    mutationFn: () => {
-      if (!wallet.address) {
-        throw new Error("Wallet not connected");
-      }
-      return contractService.unpauseJobCreation(wallet.address);
+    mutationFn: async () => {
+      if (!wallet.address) throw new Error("Wallet not connected");
+      return writeContractAsync({
+        address: contractAddr(),
+        abi: SecureFlowABI.abi,
+        functionName: "unpause",
+        args: [],
+      });
     },
     onSuccess: (txHash) => {
       queryClient.invalidateQueries({ queryKey: ["admin"] });
-      toast({
-        title: "Job creation unpaused",
-        description: `Transaction confirmed: ${txHash?.slice(0, 8)}...`,
-      });
+      toast({ title: "Contract unpaused", description: `Tx: ${String(txHash).slice(0, 10)}…` });
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to unpause job creation",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message || "Failed to unpause", variant: "destructive" });
     },
   });
 }
 
-/**
- * Hook to set platform fee
- */
 export function useSetPlatformFee() {
   const queryClient = useQueryClient();
+  const { wallet } = useWeb3();
+  const { writeContractAsync } = useWriteContract();
 
   return useMutation({
-    mutationFn: (feeBP: number) => contractService.setPlatformFeeBP(feeBP),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin"] });
-      toast({
-        title: "Platform fee updated",
-        description: "Platform fee has been updated successfully",
+    mutationFn: async (feeBP: number) => {
+      if (!wallet.address) throw new Error("Wallet not connected");
+      return writeContractAsync({
+        address: contractAddr(),
+        abi: SecureFlowABI.abi,
+        functionName: "setPlatformFee",
+        args: [BigInt(feeBP)],
       });
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin"] });
+      toast({ title: "Platform fee updated" });
+    },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to set platform fee",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message || "Failed to set fee", variant: "destructive" });
     },
   });
 }
 
-/**
- * Hook to set fee collector
- */
 export function useSetFeeCollector() {
   const queryClient = useQueryClient();
+  const { wallet } = useWeb3();
+  const { writeContractAsync } = useWriteContract();
 
   return useMutation({
-    mutationFn: (feeCollector: string) =>
-      contractService.setFeeCollector(feeCollector),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin"] });
-      toast({
-        title: "Fee collector updated",
-        description: "Fee collector has been updated successfully",
+    mutationFn: async (feeCollector: string) => {
+      if (!wallet.address) throw new Error("Wallet not connected");
+      return writeContractAsync({
+        address: contractAddr(),
+        abi: SecureFlowABI.abi,
+        functionName: "setFeeCollector",
+        args: [feeCollector as `0x${string}`],
       });
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin"] });
+      toast({ title: "Fee collector updated" });
+    },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to set fee collector",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message || "Failed to set fee collector", variant: "destructive" });
     },
   });
 }
 
-/**
- * Hook to whitelist token
- */
 export function useWhitelistToken() {
   const queryClient = useQueryClient();
+  const { wallet } = useWeb3();
+  const { writeContractAsync } = useWriteContract();
 
   return useMutation({
-    mutationFn: (token: string) => contractService.whitelistToken(token),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin"] });
-      toast({
-        title: "Token whitelisted",
-        description: "Token has been whitelisted successfully",
+    mutationFn: async (token: string) => {
+      if (!wallet.address) throw new Error("Wallet not connected");
+      return writeContractAsync({
+        address: contractAddr(),
+        abi: SecureFlowABI.abi,
+        functionName: "whitelistToken",
+        args: [token as `0x${string}`],
       });
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin"] });
+      toast({ title: "Token whitelisted" });
+    },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to whitelist token",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message || "Failed to whitelist token", variant: "destructive" });
     },
   });
 }
 
-/**
- * Hook to authorize arbiter
- */
 export function useAuthorizeArbiter() {
   const queryClient = useQueryClient();
+  const { wallet } = useWeb3();
+  const { writeContractAsync } = useWriteContract();
 
   return useMutation({
-    mutationFn: (arbiter: string) => contractService.authorizeArbiter(arbiter),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin"] });
-      toast({
-        title: "Arbiter authorized",
-        description: "Arbiter has been authorized successfully",
+    mutationFn: async (arbiter: string) => {
+      if (!wallet.address) throw new Error("Wallet not connected");
+      return writeContractAsync({
+        address: contractAddr(),
+        abi: SecureFlowABI.abi,
+        functionName: "authorizeArbiter",
+        args: [arbiter as `0x${string}`],
       });
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin"] });
+      toast({ title: "Arbiter authorized" });
+    },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to authorize arbiter",
-        variant: "destructive",
+      toast({ title: "Error", description: error.message || "Failed to authorize arbiter", variant: "destructive" });
+    },
+  });
+}
+
+export function useWithdrawFees() {
+  const queryClient = useQueryClient();
+  const { wallet } = useWeb3();
+  const { writeContractAsync } = useWriteContract();
+
+  return useMutation({
+    mutationFn: async (token: string) => {
+      if (!wallet.address) throw new Error("Wallet not connected");
+      const zeroAddress = "0x0000000000000000000000000000000000000000";
+      return writeContractAsync({
+        address: contractAddr(),
+        abi: SecureFlowABI.abi,
+        functionName: "withdrawFees",
+        args: [(token || zeroAddress) as `0x${string}`],
       });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin"] });
+      toast({ title: "Fees withdrawn", description: "Platform fees sent to fee collector." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to withdraw fees", variant: "destructive" });
     },
   });
 }

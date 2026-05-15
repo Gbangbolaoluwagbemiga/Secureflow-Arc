@@ -1,160 +1,204 @@
 /**
- * Gasless transaction endpoint.
+ * EIP-2771 Gasless Relayer for Arc EVM
  *
- * The frontend builds and signs the inner Soroban transaction (user pays
- * nothing — their wallet only provides auth / authentication).  This route
- * wraps it in a Stellar fee-bump transaction signed by the admin wallet so
- * that the admin account pays all network fees.
+ * The frontend builds and signs an EIP-712 typed-data payload using the
+ * user's wallet (zero gas cost for the user).  This route verifies the
+ * signature, wraps it into a forwarder `execute()` call, and submits it
+ * to the Arc network using a funded relayer wallet.
  *
  * Required env vars:
- *   ADMIN_SECRET_KEY          – secret key of the fee-sponsor account
- *   STELLAR_RPC_URL           – Soroban RPC endpoint (default: testnet)
- *   STELLAR_NETWORK_PASSPHRASE – network passphrase (default: testnet)
+ *   RELAYER_PRIVATE_KEY      – private key of the gas-paying relayer wallet
+ *   ARC_RPC_URL              – Arc EVM JSON-RPC endpoint
+ *   TRUSTED_FORWARDER_ADDRESS – deployed ERC-2771 forwarder contract address
+ *
+ * EIP-712 domain expected from the frontend:
+ *   name: "SecureFlowForwarder"
+ *   version: "1"
+ *   chainId: <Arc chain ID>
+ *   verifyingContract: <TRUSTED_FORWARDER_ADDRESS>
  */
 
 import { Router } from "express";
-import {
-  Keypair,
-  TransactionBuilder,
-  Networks,
-  Transaction,
-} from "@stellar/stellar-sdk";
-import { Server as RpcServer } from "@stellar/stellar-sdk/rpc";
+import { createWalletClient, createPublicClient, http, parseAbi, recoverTypedDataAddress } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 
 export const gaslessRouter = Router();
 
-const DEFAULT_RPC_URL = "https://soroban-testnet.stellar.org";
-const DEFAULT_PASSPHRASE = Networks.TESTNET;
+// Minimal ABI for the ERC-2771 MinimalForwarder execute function
+const FORWARDER_ABI = parseAbi([
+  "function execute((address from, address to, uint256 value, uint256 gas, uint256 nonce, bytes data) req, bytes signature) payable returns (bool, bytes)",
+  "function getNonce(address from) view returns (uint256)",
+  "function verify((address from, address to, uint256 value, uint256 gas, uint256 nonce, bytes data) req, bytes signature) view returns (bool)",
+]);
+
+// EIP-712 ForwardRequest type
+const FORWARD_REQUEST_TYPES = {
+  ForwardRequest: [
+    { name: "from",  type: "address" },
+    { name: "to",   type: "address" },
+    { name: "value", type: "uint256" },
+    { name: "gas",  type: "uint256" },
+    { name: "nonce", type: "uint256" },
+    { name: "data", type: "bytes" },
+  ],
+} as const;
+
+function getRelayerConfig() {
+  const privateKey = process.env.RELAYER_PRIVATE_KEY?.trim();
+  const rpcUrl = process.env.ARC_RPC_URL?.trim();
+  const forwarderAddress = process.env.TRUSTED_FORWARDER_ADDRESS?.trim() as `0x${string}` | undefined;
+
+  if (!privateKey || !rpcUrl || !forwarderAddress) {
+    throw new Error(
+      "Gasless relayer is not fully configured. Set RELAYER_PRIVATE_KEY, ARC_RPC_URL, and TRUSTED_FORWARDER_ADDRESS in backend/.env",
+    );
+  }
+
+  const pk = (privateKey.startsWith("0x") ? privateKey : `0x${privateKey}`) as `0x${string}`;
+  const account = privateKeyToAccount(pk);
+
+  const transport = http(rpcUrl);
+  const walletClient = createWalletClient({ account, transport });
+  const publicClient = createPublicClient({ transport });
+
+  return { account, walletClient, publicClient, forwarderAddress };
+}
 
 /**
- * Wallets / JSON sometimes deliver XDR with whitespace, PEM-style line breaks,
- * or URL-safe base64. Stellar RPC expects canonical base64.
+ * POST /v1/gasless/apply
+ *
+ * Body (JSON):
+ *   request   – ForwardRequest struct { from, to, value, gas, nonce, data }
+ *   signature – EIP-712 signature (hex string) from the user's wallet
+ *   chainId   – Arc chain ID (number) – used to build the EIP-712 domain
+ *
+ * Response:
+ *   { txHash: string }
  */
-function normalizeSignedTxXdr(raw: string): string {
-  let s = String(raw).trim();
-  s = s.replace(/\s/g, "");
-  s = s.replace(/-/g, "+").replace(/_/g, "/");
-  const pad = s.length % 4;
-  if (pad) s += "=".repeat(4 - pad);
-  return s;
-}
-
-function getAdminKeypair(): Keypair {
-  const secret = process.env.ADMIN_SECRET_KEY?.trim();
-  if (!secret) {
-    throw new Error(
-      "ADMIN_SECRET_KEY is not configured — set it in backend/.env",
-    );
-  }
-  return Keypair.fromSecret(secret);
-}
-
-function getRpcServer(): RpcServer {
-  return new RpcServer(process.env.STELLAR_RPC_URL ?? DEFAULT_RPC_URL);
-}
-
-function getNetworkPassphrase(): string {
-  return (process.env.STELLAR_NETWORK_PASSPHRASE ?? DEFAULT_PASSPHRASE).trim();
-}
-
-/** buildFeeBumpTransaction requires a plain Transaction, not a FeeBumpTransaction. */
-function requireInnerTransaction(
-  parsed: ReturnType<typeof TransactionBuilder.fromXDR>,
-): Transaction {
-  const maybeBump = parsed as Transaction & {
-    innerTransaction?: Transaction;
-  };
-  if (maybeBump.innerTransaction) {
-    return maybeBump.innerTransaction;
-  }
-  return parsed as Transaction;
-}
-
 gaslessRouter.post("/apply", async (req, res) => {
   try {
-    const { signedTxXdr } = req.body ?? {};
+    const { request, signature, chainId } = req.body ?? {};
 
-    if (!signedTxXdr || typeof signedTxXdr !== "string") {
-      res.status(400).json({ error: "signedTxXdr is required" });
+    // --- Input validation ---
+    if (!request || typeof request !== "object") {
+      res.status(400).json({ error: "request object is required" });
+      return;
+    }
+    if (!signature || typeof signature !== "string") {
+      res.status(400).json({ error: "signature (hex string) is required" });
+      return;
+    }
+    if (!chainId || typeof chainId !== "number") {
+      res.status(400).json({ error: "chainId (number) is required" });
       return;
     }
 
-    const normalizedXdr = normalizeSignedTxXdr(signedTxXdr);
-    if (normalizedXdr.length < 48) {
-      res.status(400).json({ error: "signedTxXdr is too short to be valid XDR" });
+    const { from, to, value, gas, nonce, data } = request;
+    if (!from || !to || value === undefined || gas === undefined || nonce === undefined || !data) {
+      res.status(400).json({ error: "request must include: from, to, value, gas, nonce, data" });
       return;
     }
 
-    const adminKeypair = getAdminKeypair();
-    const networkPassphrase = getNetworkPassphrase();
-    const rpcServer = getRpcServer();
+    const { account, walletClient, publicClient, forwarderAddress } = getRelayerConfig();
 
-    const parsed = TransactionBuilder.fromXDR(
-      normalizedXdr,
-      networkPassphrase,
-    );
-    const innerTx = requireInnerTransaction(parsed);
+    // --- Build EIP-712 domain ---
+    const domain = {
+      name: "SecureFlowForwarder",
+      version: "1",
+      chainId: BigInt(chainId),
+      verifyingContract: forwarderAddress,
+    } as const;
 
-    const innerFeeRaw = innerTx.fee ?? "100";
-    const innerFee = Number.parseInt(String(innerFeeRaw), 10);
-    const innerFeeSafe = Number.isFinite(innerFee) ? innerFee : 100;
-    const bumpBaseFee = Math.max(innerFeeSafe, 500_000).toString();
+    // --- Verify the user's signature matches the claimed `from` address ---
+    const typedRequest = {
+      from: from as `0x${string}`,
+      to: to as `0x${string}`,
+      value: BigInt(value),
+      gas: BigInt(gas),
+      nonce: BigInt(nonce),
+      data: data as `0x${string}`,
+    };
 
-    const feeBumpTx = TransactionBuilder.buildFeeBumpTransaction(
-      adminKeypair.publicKey(),
-      bumpBaseFee,
-      innerTx,
-      networkPassphrase,
-    );
+    const recoveredAddress = await recoverTypedDataAddress({
+      domain,
+      types: FORWARD_REQUEST_TYPES,
+      primaryType: "ForwardRequest",
+      message: typedRequest,
+      signature: signature as `0x${string}`,
+    });
 
-    feeBumpTx.sign(adminKeypair);
-
-    const sendResponse = await rpcServer.sendTransaction(feeBumpTx as any);
-
-    if (sendResponse.status === "ERROR") {
-      const errMsg =
-        (sendResponse as any).errorResult?.toString() ?? "Transaction failed";
-      res.status(500).json({ error: errMsg });
+    if (recoveredAddress.toLowerCase() !== String(from).toLowerCase()) {
+      res.status(400).json({ error: "Signature does not match the `from` address" });
       return;
     }
 
-    if (sendResponse.status === "PENDING" && sendResponse.hash) {
-      let attempts = 0;
-      let txStatus: any = sendResponse;
+    // --- Verify the on-chain nonce matches to prevent replay attacks ---
+    const onChainNonce = await publicClient.readContract({
+      address: forwarderAddress,
+      abi: FORWARDER_ABI,
+      functionName: "getNonce",
+      args: [from as `0x${string}`],
+    });
 
-      while (attempts < 30 && txStatus.status === "PENDING") {
-        await new Promise((r) => setTimeout(r, 1000));
-        try {
-          const result = await rpcServer.getTransaction(sendResponse.hash);
-          txStatus = { ...txStatus, status: result.status };
-          if (result.status === "SUCCESS") {
-            res.json({ txHash: sendResponse.hash });
-            return;
-          }
-          if (result.status === "FAILED") {
-            res
-              .status(500)
-              .json({
-                error: "Transaction failed on-chain",
-                txHash: sendResponse.hash,
-              });
-            return;
-          }
-        } catch {
-          /* keep polling */
-        }
-        attempts++;
-      }
-
-      res.json({ txHash: sendResponse.hash, pending: true });
+    if (onChainNonce !== BigInt(nonce)) {
+      res.status(400).json({ error: `Nonce mismatch. Expected ${onChainNonce}, got ${nonce}` });
       return;
     }
 
-    res.json({ txHash: sendResponse.hash ?? "" });
+    // --- On-chain verification via the forwarder contract ---
+    const isValid = await publicClient.readContract({
+      address: forwarderAddress,
+      abi: FORWARDER_ABI,
+      functionName: "verify",
+      args: [typedRequest, signature as `0x${string}`],
+    });
+
+    if (!isValid) {
+      res.status(400).json({ error: "Forwarder rejected the signature" });
+      return;
+    }
+
+    // --- Submit the meta-transaction via the relayer wallet ---
+    const txHash = await walletClient.writeContract({
+      address: forwarderAddress,
+      abi: FORWARDER_ABI,
+      functionName: "execute",
+      args: [typedRequest, signature as `0x${string}`],
+      account,
+      chain: null, // viem infers from the transport
+    });
+
+    console.info(`[gasless] Relayed tx ${txHash} for ${from}`);
+    res.json({ txHash });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Gasless transaction failed";
+    const msg = err instanceof Error ? err.message : "Gasless relay failed";
     console.error("[gasless]", msg);
-    if (err instanceof Error && err.stack) console.error(err.stack);
+    // Don't leak internal config errors to the client
+    if (msg.includes("not fully configured")) {
+      res.status(503).json({ error: "Gasless transactions are not yet enabled on this deployment." });
+    } else {
+      res.status(500).json({ error: msg });
+    }
+  }
+});
+
+/**
+ * GET /v1/gasless/nonce/:address
+ * Returns the current on-chain nonce for a given address from the forwarder.
+ */
+gaslessRouter.get("/nonce/:address", async (req, res) => {
+  try {
+    const { publicClient, forwarderAddress } = getRelayerConfig();
+    const address = req.params.address as `0x${string}`;
+    const nonce = await publicClient.readContract({
+      address: forwarderAddress,
+      abi: FORWARDER_ABI,
+      functionName: "getNonce",
+      args: [address],
+    });
+    res.json({ nonce: nonce.toString() });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Failed to fetch nonce";
     res.status(500).json({ error: msg });
   }
 });

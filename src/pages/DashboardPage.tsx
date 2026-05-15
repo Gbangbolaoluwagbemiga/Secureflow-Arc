@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useWriteContract } from "wagmi";
 import { Card } from "@/components/ui/card";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
@@ -32,6 +33,7 @@ import { RefreshCw } from "lucide-react";
 
 export default function DashboardPage() {
   const { wallet, getContract } = useWeb3();
+  const { writeContractAsync } = useWriteContract();
   const { toast } = useToast();
   const { addNotification } = useNotifications();
   const [escrows, setEscrows] = useState<Escrow[]>([]);
@@ -158,29 +160,14 @@ export default function DashboardPage() {
         return;
       }
 
-      // Use ContractService instead of contract.call - it reads from blockchain
       const { ContractService } = await import("@/lib/web3/contract-service");
       const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
 
-      // Get next escrow ID from blockchain (not hardcoded)
       const nextEscrowId = await contractService.getNextEscrowId();
 
       const userEscrows: Escrow[] = [];
 
-      // Get current ledger sequence once (needed for timestamp conversion)
-      let currentLedger = 0;
-      try {
-        const { rpc } = await import("@stellar/stellar-sdk");
-        const { getCurrentNetwork } = await import("@/lib/web3/stellar-config");
-        const network = getCurrentNetwork();
-        const rpcServer = new rpc.Server(network.rpcUrl);
-        const latestLedger = await rpcServer.getLatestLedger();
-        currentLedger = latestLedger.sequence;
-      } catch (error) {
-        // Fallback: use current time as approximation
-        const SECONDS_PER_LEDGER = 5;
-        currentLedger = Math.floor(Date.now() / 1000 / SECONDS_PER_LEDGER);
-      }
+      const nowSeconds = Math.floor(Date.now() / 1000);
 
       // Fetch user's escrows from the contract
       // Check if there are any escrows created yet (nextEscrowId > 1 means at least one escrow exists)
@@ -193,30 +180,21 @@ export default function DashboardPage() {
             continue;
           }
 
-          // Check if user is involved in this escrow
           const isPayer =
-            escrowData.creator &&
-            escrowData.creator.toLowerCase().trim() ===
+            escrowData.depositor &&
+            escrowData.depositor.toLowerCase().trim() ===
               wallet.address.toLowerCase().trim();
           const isBeneficiary =
-            escrowData.freelancer &&
-            escrowData.freelancer.toLowerCase().trim() ===
+            escrowData.beneficiary &&
+            escrowData.beneficiary.toLowerCase().trim() ===
               wallet.address.toLowerCase().trim();
 
 
-          // Show escrows for both clients and freelancers, but with different functionality
           if (isPayer || isBeneficiary) {
-            // Convert ledger sequence to approximate timestamp
-            const SECONDS_PER_LEDGER = 5;
-            const createdAtLedger = escrowData.created_at || 0;
-            const ledgersAgo = currentLedger - createdAtLedger;
-            const secondsAgo = ledgersAgo * SECONDS_PER_LEDGER;
-            const approxCreatedAt = Date.now() - secondsAgo * 1000;
-
-            // Calculate duration in seconds (deadline - created_at are both ledger sequences)
-            const deadlineLedger = escrowData.deadline || 0;
-            const durationInSeconds =
-              (deadlineLedger - createdAtLedger) * SECONDS_PER_LEDGER;
+            const approxCreatedAt = Date.now();
+            const deadlineSeconds = Number(escrowData.deadline ?? 0);
+            const remainingSeconds = Math.max(0, deadlineSeconds - nowSeconds);
+            const durationInSeconds = remainingSeconds;
 
             // Fetch milestones for this escrow
             let milestonesData: any[] = [];
@@ -309,34 +287,10 @@ export default function DashboardPage() {
                   const status = statusMap[statusNumber] || "pending";
 
 
-                  // Convert ledger sequences to timestamps
-                  const SECONDS_PER_LEDGER = 5;
-                  const submittedAtLedger = m.submitted_at || 0;
-                  const approvedAtLedger = m.approved_at || 0;
-                  const submittedAt =
-                    submittedAtLedger > 0
-                      ? Date.now() -
-                        (currentLedger - submittedAtLedger) *
-                          SECONDS_PER_LEDGER *
-                          1000
-                      : undefined;
-                  const approvedAt =
-                    approvedAtLedger > 0
-                      ? Date.now() -
-                        (currentLedger - approvedAtLedger) *
-                          SECONDS_PER_LEDGER *
-                          1000
-                      : undefined;
-
-                  // Get resolution data if milestone is resolved
-                  const resolvedAtLedger = m.resolved_at || 0;
-                  const resolvedAt =
-                    resolvedAtLedger > 0
-                      ? Date.now() -
-                        (currentLedger - resolvedAtLedger) *
-                          SECONDS_PER_LEDGER *
-                          1000
-                      : undefined;
+                  // milestone timestamps are Unix seconds (from block.timestamp)
+                  const submittedAt = m.submittedAt > 0 ? Number(m.submittedAt) * 1000 : undefined;
+                  const approvedAt = m.approvedAt > 0 ? Number(m.approvedAt) * 1000 : undefined;
+                  const resolvedAt = m.resolvedAt > 0 ? Number(m.resolvedAt) * 1000 : undefined;
 
                   return {
                     description: m.description || "",
@@ -344,12 +298,11 @@ export default function DashboardPage() {
                     status,
                     submittedAt,
                     approvedAt,
-                    disputeReason: m.dispute_reason || undefined,
-                    rejectionReason: m.rejection_reason || undefined,
+                    disputeReason: m.disputeReason || undefined,
+                    rejectionReason: m.rejectionReason || undefined,
                     resolvedAt,
-                    resolvedBy: m.resolved_by || undefined,
-                    resolutionAmount:
-                      m.resolution_amount?.toString() || undefined,
+                    resolvedBy: m.resolvedBy || undefined,
+                    resolutionAmount: undefined,
                   };
                 } catch (error) {
                   // Return a safe default milestone object if parsing fails
@@ -366,23 +319,17 @@ export default function DashboardPage() {
               })
               .filter((m) => m !== null && m !== undefined);
 
-            // Compute approximate deadline timestamp (ms)
-            const deadlineAt =
-              deadlineLedger > 0
-                ? Date.now() +
-                  (deadlineLedger - currentLedger) * SECONDS_PER_LEDGER * 1000
-                : undefined;
+            const deadlineAt = deadlineSeconds > 0 ? deadlineSeconds * 1000 : undefined;
 
-            // Convert contract data to our Escrow type
             const escrow: Escrow = {
               id: i.toString(),
-              payer: escrowData.creator || "",
-              beneficiary: escrowData.freelancer || "",
+              payer: escrowData.depositor || "",
+              beneficiary: escrowData.beneficiary || "",
               isClient: isPayer ? true : undefined,
               isFreelancer: isBeneficiary ? true : undefined,
-              token: escrowData.token || "native",
-              totalAmount: escrowData.amount || "0",
-              releasedAmount: escrowData.paid_amount || "0",
+              token: escrowData.token || "",
+              totalAmount: escrowData.totalAmount?.toString() ?? "0",
+              releasedAmount: escrowData.paidAmount?.toString() ?? "0",
               status: getStatusFromNumber(escrowData.status || 0) as
                 | "pending"
                 | "active"
@@ -392,10 +339,8 @@ export default function DashboardPage() {
               duration: durationInSeconds,
               deadlineAt,
               milestones,
-              projectDescription:
-                escrowData.project_title ||
-                escrowData.project_description ||
-                "",
+              projectTitle: escrowData.projectTitle || "",
+              projectDescription: escrowData.projectDescription || "",
             };
 
             userEscrows.push(escrow);
@@ -458,19 +403,19 @@ export default function DashboardPage() {
 
       setSubmittingMilestone(`${escrowId}-${milestoneIndex}`);
       const { ContractService } = await import("@/lib/web3/contract-service");
-      const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
 
       toast({
         title: "Disputing milestone...",
         description: "Please confirm the transaction in your wallet",
       });
 
-      await contractService.disputeMilestone({
+      await cs.disputeMilestone({
         escrow_id: Number(escrowId),
         milestone_index: milestoneIndex,
         reason: "Disputed by client",
         disputer: wallet.address || "",
-      });
+      }, writeContractAsync);
 
       toast({
         title: "Milestone Disputed",
@@ -503,11 +448,10 @@ export default function DashboardPage() {
 
   const startWork = async (escrowId: string) => {
     try {
-      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW);
-      if (!contract) return;
-
       setSubmittingMilestone(escrowId);
-      await contract.send("start_work", escrowId);
+      const { ContractService: CS2 } = await import("@/lib/web3/contract-service");
+      const svc2 = new CS2(CONTRACTS.SECUREFLOW_ESCROW);
+      await svc2.startWork(Number(escrowId), wallet.address || "", writeContractAsync);
       toast({
         title: "Work Started",
         description: "You have started work on this escrow",
@@ -553,14 +497,14 @@ export default function DashboardPage() {
     try {
       setSubmittingMilestone(escrowId);
       const { ContractService } = await import("@/lib/web3/contract-service");
-      const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
 
-      await contractService.disputeMilestone({
+      await cs.disputeMilestone({
         escrow_id: Number(escrowId),
         milestone_index: 0,
         reason: "General dispute",
         disputer: wallet.address || "",
-      });
+      }, writeContractAsync);
 
       toast({
         title: "Dispute Opened",
@@ -608,23 +552,17 @@ export default function DashboardPage() {
       }
 
       setSubmittingMilestone(`${escrowId}-${milestoneIndex}`);
-      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW);
-      if (!contract) return;
-
       toast({
         title: "Approving milestone...",
         description: "Please confirm the transaction in your wallet",
       });
 
-      await contract.send(
-        "approve_milestone",
-        "no-value",
-        escrowId,
-        milestoneIndex
-      );
+      const { ContractService: CS3 } = await import("@/lib/web3/contract-service");
+      const svc3 = new CS3(CONTRACTS.SECUREFLOW_ESCROW);
+      await svc3.approveMilestone({ escrow_id: Number(escrowId), milestone_index: milestoneIndex, depositor: wallet.address }, writeContractAsync);
 
       // Transaction is already confirmed via waitForConfirmation in web3-context
-      // For Stellar, we don't need to poll for receipts like Ethereum
+      // Wait for tx confirmation
       // The transaction hash is returned after confirmation
       toast({
         title: "Milestone Approved!",
@@ -684,16 +622,16 @@ export default function DashboardPage() {
   const raiseOverdueDispute = async (escrowId: string, reason: string) => {
     try {
       const { ContractService } = await import("@/lib/web3/contract-service");
-      const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
       toast({
         title: "Raising overdue dispute…",
         description: "Please confirm the transaction in your wallet",
       });
-      await contractService.raiseOverdueDispute({
+      await cs.raiseOverdueDispute({
         escrow_id: Number(escrowId),
         requester: wallet.address || "",
         reason,
-      });
+      }, writeContractAsync);
       toast({
         title: "Dispute submitted",
         description: "Arbiters have been notified and will review your case",
@@ -702,7 +640,7 @@ export default function DashboardPage() {
       // Notify all authorized arbiters via the backend
       const escrow = escrows.find((e) => e.id === escrowId);
       try {
-        const authorizedArbiters = await contractService.getAuthorizedArbiters();
+        const authorizedArbiters: string[] = []; // Arbiters not enumerable on-chain; notify via off-chain
         for (const arbAddr of authorizedArbiters) {
           addNotification(
             {
@@ -735,17 +673,17 @@ export default function DashboardPage() {
 
   const extendDeadline = async (escrowId: string, extraDays: number) => {
     try {
-      const { ContractService } = await import("@/lib/web3/contract-service");
-      const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
       toast({
         title: "Extending deadline…",
         description: "Please confirm the transaction in your wallet",
       });
-      await contractService.extendDeadline({
+      const { ContractService: CS4 } = await import("@/lib/web3/contract-service");
+      const svc4 = new CS4(CONTRACTS.SECUREFLOW_ESCROW);
+      await svc4.extendDeadline({
         escrow_id: Number(escrowId),
-        extra_seconds: extraDays * 24 * 3600,
+        extra_seconds: extraDays * 86400,
         depositor: wallet.address || "",
-      });
+      }, writeContractAsync);
       toast({
         title: "Deadline extended",
         description: `Added ${extraDays} day${extraDays > 1 ? "s" : ""} to the project deadline`,
@@ -782,19 +720,19 @@ export default function DashboardPage() {
 
       setSubmittingMilestone(`${escrowId}-${milestoneIndex}`);
       const { ContractService } = await import("@/lib/web3/contract-service");
-      const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
 
       toast({
         title: "Rejecting milestone...",
         description: "Please confirm the transaction in your wallet",
       });
 
-      await contractService.rejectMilestone({
+      await cs.rejectMilestone({
         escrow_id: Number(escrowId),
         milestone_index: milestoneIndex,
         reason: reason,
         depositor: wallet.address || "",
-      });
+      }, writeContractAsync);
 
       toast({
         title: "Milestone Rejected",

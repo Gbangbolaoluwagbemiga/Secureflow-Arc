@@ -3,7 +3,7 @@ import { getSupabase } from "../lib/supabase.js";
 
 export const messagesRouter = Router();
 
-const STELLAR_ADDR = /^G[A-Z0-9]{55}$/;
+const EVM_ADDR = /^0x[0-9a-fA-F]{40}$/;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -22,10 +22,10 @@ messagesRouter.post("/", async (req, res) => {
   const { sender_address, recipient_address, content } = req.body ?? {};
 
   if (
-    !sender_address || !STELLAR_ADDR.test(String(sender_address)) ||
-    !recipient_address || !STELLAR_ADDR.test(String(recipient_address))
+    !sender_address || !EVM_ADDR.test(String(sender_address)) ||
+    !recipient_address || !EVM_ADDR.test(String(recipient_address))
   ) {
-    res.status(400).json({ error: "sender_address and recipient_address must be valid Stellar G-addresses" });
+    res.status(400).json({ error: "sender_address and recipient_address must be valid Arc EVM addresses (0x…)" });
     return;
   }
 
@@ -72,8 +72,8 @@ messagesRouter.get("/conversation", async (req, res) => {
   const b = String(req.query.b ?? "").trim();
   const since = String(req.query.since ?? "").trim();
 
-  if (!STELLAR_ADDR.test(a) || !STELLAR_ADDR.test(b)) {
-    res.status(400).json({ error: "a and b must be valid Stellar G-addresses" });
+  if (!EVM_ADDR.test(a) || !EVM_ADDR.test(b)) {
+    res.status(400).json({ error: "a and b must be valid Arc EVM addresses (0x…)" });
     return;
   }
 
@@ -107,8 +107,8 @@ messagesRouter.get("/inbox", async (req, res) => {
   }
 
   const wallet = String(req.query.wallet ?? "").trim();
-  if (!STELLAR_ADDR.test(wallet)) {
-    res.status(400).json({ error: "wallet must be a valid Stellar G-address" });
+  if (!EVM_ADDR.test(wallet)) {
+    res.status(400).json({ error: "wallet must be a valid Arc EVM address (0x…)" });
     return;
   }
 
@@ -164,8 +164,8 @@ messagesRouter.get("/unread-count", async (req, res) => {
   }
 
   const wallet = String(req.query.wallet ?? "").trim();
-  if (!STELLAR_ADDR.test(wallet)) {
-    res.status(400).json({ error: "wallet must be a valid Stellar G-address" });
+  if (!EVM_ADDR.test(wallet)) {
+    res.status(400).json({ error: "wallet must be a valid Arc EVM address (0x…)" });
     return;
   }
 
@@ -195,8 +195,8 @@ messagesRouter.patch("/conversation/read", async (req, res) => {
   const b = String(req.query.b ?? "").trim();
   const wallet = String(req.query.wallet ?? "").trim();
 
-  if (!STELLAR_ADDR.test(a) || !STELLAR_ADDR.test(b) || !STELLAR_ADDR.test(wallet)) {
-    res.status(400).json({ error: "a, b, and wallet must be valid Stellar G-addresses" });
+  if (!EVM_ADDR.test(a) || !EVM_ADDR.test(b) || !EVM_ADDR.test(wallet)) {
+    res.status(400).json({ error: "a, b, and wallet must be valid Arc EVM addresses (0x…)" });
     return;
   }
 
@@ -231,8 +231,8 @@ messagesRouter.patch("/:id/read", async (req, res) => {
   }
 
   const wallet = String(req.query.wallet ?? "").trim();
-  if (!STELLAR_ADDR.test(wallet)) {
-    res.status(400).json({ error: "wallet must be a valid Stellar G-address" });
+  if (!EVM_ADDR.test(wallet)) {
+    res.status(400).json({ error: "wallet must be a valid Arc EVM address (0x…)" });
     return;
   }
 
