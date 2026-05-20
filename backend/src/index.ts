@@ -9,6 +9,8 @@ import { uploadRouter } from "./routes/upload.js";
 import { messagesRouter } from "./routes/messages.js";
 import { gaslessRouter } from "./routes/gasless.js";
 import { evidenceRouter } from "./routes/evidence.js";
+import { analyticsRouter } from "./routes/analytics.js";
+import { applicationsRouter } from "./routes/applications.js";
 
 const app = express();
 const port = Number(process.env.PORT) || 8787;
@@ -61,6 +63,8 @@ app.use("/v1/upload", auth, uploadRouter);
 app.use("/v1/messages", auth, messagesRouter);
 app.use("/v1/gasless", auth, gaslessRouter);
 app.use("/v1/evidence", auth, evidenceRouter);
+app.use("/v1/analytics", auth, analyticsRouter);
+app.use("/v1/applications", auth, applicationsRouter);
 
 app.listen(port, () => {
   console.log(`secureflow-api listening on :${port}`);

@@ -55,8 +55,8 @@ export function DashboardStats({ escrows }: DashboardStatsProps) {
           <TrendingUp className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{totalValue.toFixed(2)} ETH</div>
-          <p className="text-xs text-muted-foreground">ETH in escrows</p>
+          <div className="text-2xl font-bold">{totalValue.toFixed(2)} USDC</div>
+          <p className="text-xs text-muted-foreground">USDC in escrows</p>
         </CardContent>
       </Card>
 
@@ -66,8 +66,8 @@ export function DashboardStats({ escrows }: DashboardStatsProps) {
           <FileText className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{totalReleased.toFixed(2)} ETH</div>
-          <p className="text-xs text-muted-foreground">ETH released</p>
+          <div className="text-2xl font-bold">{totalReleased.toFixed(2)} USDC</div>
+          <p className="text-xs text-muted-foreground">USDC released</p>
         </CardContent>
       </Card>
 

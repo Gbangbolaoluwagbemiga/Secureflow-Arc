@@ -14,12 +14,13 @@ const USDC_ADDRESS = (
 
 /**
  * Resolve token metadata from its contract address.
- * address(0) = native ETH (18 decimals)
- * USDC contract = USDC (6 decimals)
+ * address(0) = native USDC on Arc Testnet (6 decimals)
+ * Other ERC-20 tokens can be added as needed
  */
 function tokenMeta(tokenAddress?: string | null): { symbol: string; decimals: number } {
   const addr = (tokenAddress ?? "").toLowerCase();
-  if (!addr || addr === ZERO_ADDRESS) return { symbol: "ETH", decimals: 18 };
+  // Native token on Arc Testnet is USDC (6 decimals)
+  if (!addr || addr === ZERO_ADDRESS) return { symbol: "USDC", decimals: 6 };
   if (USDC_ADDRESS && addr === USDC_ADDRESS) return { symbol: "USDC", decimals: 6 };
   // Unknown ERC-20: assume 18 decimals, show shortened address
   return { symbol: "tokens", decimals: 18 };
@@ -29,8 +30,8 @@ function tokenMeta(tokenAddress?: string | null): { symbol: string; decimals: nu
  * Format a raw on-chain amount to a human-readable string with the correct
  * token symbol, respecting each token's decimal places.
  *
- * @param rawAmount  Raw contract amount (wei for ETH, base units for ERC-20)
- * @param tokenAddress  Token contract address (address(0) = native ETH)
+ * @param rawAmount  Raw contract amount (base units for native USDC or ERC-20)
+ * @param tokenAddress  Token contract address (address(0) = native USDC)
  */
 export function formatTokenAmount(
   rawAmount: string | number | bigint | undefined | null,
@@ -48,7 +49,7 @@ export function formatTokenAmount(
     const whole = raw / bigDivisor;
     const rem = Number(raw % bigDivisor) / divisor;
     const total = Number(whole) + rem;
-    const maxDec = decimals === 6 ? 2 : 6; // USDC: 2dp, ETH: 6dp
+    const maxDec = decimals === 6 ? 2 : 6; // USDC: 2dp, other tokens: 6dp
     return `${total.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: maxDec })} ${symbol}`;
   } catch {
     const n = parseFloat(String(rawAmount));
@@ -58,8 +59,8 @@ export function formatTokenAmount(
 }
 
 /**
- * Convenience wrapper — formats ETH (native, 18 decimals).
- * For ERC-20 amounts use formatTokenAmount(amount, tokenAddress).
+ * Convenience wrapper — formats USDC (native, 6 decimals).
+ * For other ERC-20 amounts use formatTokenAmount(amount, tokenAddress).
  */
 export function formatEth(weiAmount: string | number | bigint | undefined | null): string {
   return formatTokenAmount(weiAmount, ZERO_ADDRESS);

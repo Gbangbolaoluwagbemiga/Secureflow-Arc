@@ -74,7 +74,7 @@ export function FreelancerStats({
           <div className="text-2xl font-bold">
             {formatEth(totalEarnings)}
           </div>
-          <p className="text-xs text-muted-foreground">ETH earned</p>
+          <p className="text-xs text-muted-foreground">USDC earned</p>
         </CardContent>
       </Card>
 
@@ -87,7 +87,7 @@ export function FreelancerStats({
           <div className="text-2xl font-bold">
             {formatEth(totalValue)}
           </div>
-          <p className="text-xs text-muted-foreground">ETH in projects</p>
+          <p className="text-xs text-muted-foreground">USDC in projects</p>
         </CardContent>
       </Card>
 

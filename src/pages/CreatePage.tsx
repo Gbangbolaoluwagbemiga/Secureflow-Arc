@@ -19,10 +19,11 @@ const USDC_ADDRESS = (
   (import.meta.env.VITE_USDC_TOKEN_CONTRACT as string | undefined) ?? ""
 ).trim() as `0x${string}` | "";
 
-// USDC has 6 decimals; ETH has 18
+// Native USDC has 6 decimals on Arc Testnet
 function parseTokenAmount(amount: string, tokenAddress: string | undefined): bigint {
+  // Native token (address(0)) is USDC with 6 decimals on Arc Testnet
   if (!tokenAddress || tokenAddress === "0x0000000000000000000000000000000000000000") {
-    return parseEther(amount);
+    return parseUnits(amount, 6);
   }
   // USDC — 6 decimals
   if (USDC_ADDRESS && tokenAddress.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
@@ -99,9 +100,9 @@ export default function CreateEscrowPage() {
     duration: "",
     totalBudget: "",
     beneficiary: prefillFreelancer,
-    // Default to USDC if a contract is configured, otherwise native ETH
-    token: USDC_ADDRESS || "",
-    useNativeToken: !USDC_ADDRESS,
+    // Default to native USDC, no external token needed
+    token: "",
+    useNativeToken: true,
     isOpenJob: false,
     milestones: [
       { description: "", amount: "" },
@@ -130,7 +131,7 @@ export default function CreateEscrowPage() {
         hasErrors = true;
       }
       if (!formData.totalBudget || Number(formData.totalBudget) < 0.0001) {
-        newErrors.totalBudget = "Total budget must be at least 0.0001 ETH";
+        newErrors.totalBudget = "Total budget must be at least 0.0001 USDC";
         hasErrors = true;
       }
       if (!formData.isOpenJob && (!formData.beneficiary || !/^0x[a-fA-F0-9]{40}$/.test(formData.beneficiary))) {
@@ -138,7 +139,7 @@ export default function CreateEscrowPage() {
         hasErrors = true;
       }
       if (!formData.useNativeToken && !formData.token) {
-        newErrors.tokenAddress = "Please select a whitelisted token or use native ETH";
+        newErrors.tokenAddress = "Please select a whitelisted token or use native USDC";
         hasErrors = true;
       }
     } else if (step === 2) {
@@ -177,7 +178,7 @@ export default function CreateEscrowPage() {
     if (!formData.duration || Number(formData.duration) < 1 || Number(formData.duration) > 365)
       errs.push("Duration must be between 1 and 365 days");
     if (!formData.totalBudget || Number(formData.totalBudget) < 0.0001)
-      errs.push("Total budget must be at least 0.0001 ETH");
+      errs.push("Total budget must be at least 0.0001 USDC");
     if (!formData.useNativeToken && !formData.token)
       errs.push("Please select a whitelisted token");
     if (!formData.isOpenJob) {
@@ -194,7 +195,7 @@ export default function CreateEscrowPage() {
       if (!m.description || m.description.length < 10)
         errs.push(`Milestone ${i + 1} description must be at least 10 characters`);
       if (!m.amount || Number(m.amount) < 0.0001)
-        errs.push(`Milestone ${i + 1} amount must be at least 0.0001 ETH`);
+        errs.push(`Milestone ${i + 1} amount must be at least 0.0001 USDC`);
     }
 
     const milestoneTotal = formData.milestones.reduce((s, m) => s + Number(m.amount || 0), 0);
@@ -232,13 +233,13 @@ export default function CreateEscrowPage() {
         parseTokenAmount(m.amount || "0", tokenAddr)
       );
 
-      // Check native ETH balance
+      // Check native USDC balance
       if (formData.useNativeToken || !formData.token) {
         const walletBalance = Number.parseFloat(wallet.balance || "0");
         const requiredBalance = Number.parseFloat(formData.totalBudget);
         if (walletBalance < requiredBalance) {
           throw new Error(
-            `Insufficient ETH balance. You have ${walletBalance.toFixed(6)} ETH but need ${formData.totalBudget} ETH (plus a small platform fee).`
+            `Insufficient USDC balance. You have ${walletBalance.toFixed(2)} USDC but need ${formData.totalBudget} USDC (plus a small platform fee).`
           );
         }
       }

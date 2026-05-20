@@ -436,7 +436,7 @@ export default function JobsPage() {
           Number(job.id),
           wallet.address!,
           {
-            jobTitle: job.projectDescription || `Job #${job.id}`,
+            jobTitle: job.projectTitle || `Job #${job.id}`,
             freelancerName:
               wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
           }

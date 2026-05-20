@@ -46,10 +46,14 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
     error EscrowNotReleased();
     error NotParticipant();
     error ExtensionTooShort();
+    error JobAlreadyAssigned();
+    error CannotCancelAssignedJob();
+    error NoPendingProposal();
+    error ProposalAlreadyExists();
 
     /* ===================== ENUMS & STRUCTS ===================== */
-    enum EscrowStatus { Pending, InProgress, Released, Refunded, Disputed, Expired }
-    enum MilestoneStatus { NotStarted, Submitted, Approved, Rejected, Disputed }
+    enum EscrowStatus { Pending, InProgress, Released, Refunded, Disputed, Expired, Cancelled }
+    enum MilestoneStatus { NotStarted, Submitted, Approved, Rejected, Disputed, ProposalPending }
 
     struct Milestone {
         uint256 amount;
@@ -63,6 +67,8 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
         string rejectionReason;
         uint256 resolvedAt;
         address resolvedBy;
+        uint256 proposedAmount;
+        string proposedDescription;
     }
 
     struct Escrow {
@@ -161,6 +167,11 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
     event PlatformFeeUpdated(uint256 feeBp);
     event FeeCollectorUpdated(address indexed feeCollector);
     event FeesWithdrawn(address indexed token, uint256 amount, address indexed to);
+    event JobCancelled(uint256 indexed escrowId, address indexed depositor, uint256 refundAmount);
+    event JobFundsUpdated(uint256 indexed escrowId, uint256 oldAmount, uint256 newAmount, bool isIncrease);
+    event MilestoneProposalSubmitted(uint256 indexed escrowId, uint256 indexed milestoneIndex, address indexed freelancer, uint256 proposedAmount, string proposedDescription);
+    event MilestoneProposalApproved(uint256 indexed escrowId, uint256 indexed milestoneIndex, uint256 newAmount, string newDescription);
+    event MilestoneProposalRejected(uint256 indexed escrowId, uint256 indexed milestoneIndex);
 
     /* ===================== MODIFIERS ===================== */
     modifier onlyArbiter() {
@@ -252,7 +263,9 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
                 disputeReason: "",
                 rejectionReason: "",
                 resolvedAt: 0,
-                resolvedBy: address(0)
+                resolvedBy: address(0),
+                proposedAmount: 0,
+                proposedDescription: ""
             }));
         }
 
@@ -522,6 +535,152 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
         userEscrows[freelancer].push(escrowId);
 
         emit FreelancerAccepted(escrowId, freelancer);
+    }
+
+    /* ===================== JOB MANAGEMENT (BEFORE ASSIGNMENT) ===================== */
+
+    /**
+     * @notice Cancel an open job and refund the depositor (only if no freelancer assigned)
+     */
+    function cancelJob(uint256 escrowId) external nonReentrant whenNotPaused {
+        Escrow storage esc = _requireEscrow(escrowId);
+        if (msg.sender != esc.depositor) revert Unauthorized();
+        if (!esc.isOpenJob) revert CannotCancelAssignedJob();
+        if (esc.status != EscrowStatus.Pending) revert InvalidEscrowStatus();
+
+        uint256 refundAmount = esc.totalAmount;
+        uint256 feeRefund = esc.platformFee;
+
+        esc.status = EscrowStatus.Cancelled;
+        escrowedAmount[esc.token] -= refundAmount;
+        totalFeesByToken[esc.token] -= feeRefund;
+
+        uint256 totalRefund = refundAmount + feeRefund;
+        _doTransfer(esc.token, address(this), esc.depositor, totalRefund);
+
+        emit JobCancelled(escrowId, msg.sender, totalRefund);
+        emit EscrowUpdated(escrowId, EscrowStatus.Cancelled, block.timestamp);
+    }
+
+    /**
+     * @notice Add more funds to an open job (before freelancer is assigned)
+     */
+    function addJobFunds(uint256 escrowId, uint256 additionalAmount) external payable nonReentrant whenNotPaused {
+        Escrow storage esc = _requireEscrow(escrowId);
+        if (msg.sender != esc.depositor) revert Unauthorized();
+        if (!esc.isOpenJob) revert CannotCancelAssignedJob();
+        if (esc.status != EscrowStatus.Pending) revert InvalidEscrowStatus();
+        if (additionalAmount == 0) revert InvalidAmount();
+
+        uint256 additionalFee = (additionalAmount * platformFeeBP) / 10000;
+        uint256 totalDeposit = additionalAmount + additionalFee;
+
+        if (esc.token == NATIVE_TOKEN) {
+            if (msg.value != totalDeposit) revert InvalidAmount();
+        } else {
+            if (msg.value != 0) revert InvalidAmount();
+            IERC20(esc.token).safeTransferFrom(msg.sender, address(this), totalDeposit);
+        }
+
+        uint256 oldAmount = esc.totalAmount;
+        esc.totalAmount += additionalAmount;
+        esc.platformFee += additionalFee;
+
+        escrowedAmount[esc.token] += additionalAmount;
+        totalFeesByToken[esc.token] += additionalFee;
+
+        emit JobFundsUpdated(escrowId, oldAmount, esc.totalAmount, true);
+    }
+
+    /**
+     * @notice Withdraw funds from an open job (before freelancer is assigned)
+     */
+    function withdrawJobFunds(uint256 escrowId, uint256 withdrawAmount) external nonReentrant whenNotPaused {
+        Escrow storage esc = _requireEscrow(escrowId);
+        if (msg.sender != esc.depositor) revert Unauthorized();
+        if (!esc.isOpenJob) revert CannotCancelAssignedJob();
+        if (esc.status != EscrowStatus.Pending) revert InvalidEscrowStatus();
+        if (withdrawAmount == 0 || withdrawAmount > esc.totalAmount) revert InvalidAmount();
+
+        uint256 feeToRefund = (withdrawAmount * platformFeeBP) / 10000;
+        uint256 oldAmount = esc.totalAmount;
+
+        esc.totalAmount -= withdrawAmount;
+        esc.platformFee -= feeToRefund;
+
+        escrowedAmount[esc.token] -= withdrawAmount;
+        totalFeesByToken[esc.token] -= feeToRefund;
+
+        uint256 totalWithdraw = withdrawAmount + feeToRefund;
+        _doTransfer(esc.token, address(this), esc.depositor, totalWithdraw);
+
+        emit JobFundsUpdated(escrowId, oldAmount, esc.totalAmount, false);
+    }
+
+    /* ===================== MILESTONE NEGOTIATION ===================== */
+
+    /**
+     * @notice Freelancer proposes changes to a milestone
+     */
+    function proposeMilestoneChange(
+        uint256 escrowId,
+        uint256 milestoneIndex,
+        uint256 proposedAmount,
+        string calldata proposedDescription
+    ) external whenNotPaused {
+        Escrow storage esc = _requireEscrow(escrowId);
+        if (msg.sender != esc.beneficiary) revert Unauthorized();
+        if (esc.status != EscrowStatus.InProgress && esc.status != EscrowStatus.Pending) revert EscrowNotActive();
+
+        Milestone storage m = _getMilestone(escrowId, milestoneIndex);
+        if (m.status != MilestoneStatus.NotStarted) revert MilestoneAlreadyProcessed();
+        if (proposedAmount == 0) revert InvalidAmount();
+
+        m.proposedAmount = proposedAmount;
+        m.proposedDescription = proposedDescription;
+        m.status = MilestoneStatus.ProposalPending;
+
+        emit MilestoneProposalSubmitted(escrowId, milestoneIndex, msg.sender, proposedAmount, proposedDescription);
+    }
+
+    /**
+     * @notice Client approves the proposed milestone changes
+     */
+    function approveMilestoneProposal(uint256 escrowId, uint256 milestoneIndex) external whenNotPaused {
+        Escrow storage esc = _requireEscrow(escrowId);
+        if (msg.sender != esc.depositor) revert Unauthorized();
+
+        Milestone storage m = _getMilestone(escrowId, milestoneIndex);
+        if (m.status != MilestoneStatus.ProposalPending) revert NoPendingProposal();
+
+        // Update milestone with proposed values
+        m.amount = m.proposedAmount;
+        m.description = m.proposedDescription;
+        m.status = MilestoneStatus.NotStarted;
+
+        // Clear proposal data
+        m.proposedAmount = 0;
+        m.proposedDescription = "";
+
+        emit MilestoneProposalApproved(escrowId, milestoneIndex, m.amount, m.description);
+    }
+
+    /**
+     * @notice Client rejects the proposed milestone changes
+     */
+    function rejectMilestoneProposal(uint256 escrowId, uint256 milestoneIndex) external whenNotPaused {
+        Escrow storage esc = _requireEscrow(escrowId);
+        if (msg.sender != esc.depositor) revert Unauthorized();
+
+        Milestone storage m = _getMilestone(escrowId, milestoneIndex);
+        if (m.status != MilestoneStatus.ProposalPending) revert NoPendingProposal();
+
+        // Revert to NotStarted status
+        m.status = MilestoneStatus.NotStarted;
+        m.proposedAmount = 0;
+        m.proposedDescription = "";
+
+        emit MilestoneProposalRejected(escrowId, milestoneIndex);
     }
 
     /* ===================== ADMIN LOGIC ===================== */

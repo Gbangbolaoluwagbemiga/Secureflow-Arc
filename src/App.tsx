@@ -13,6 +13,7 @@ import DisputesPage from "./pages/DisputesPage";
 import ApprovalsPage from "./pages/ApprovalsPage";
 import FreelancersPage from "./pages/FreelancersPage";
 import MessagesPage from "./pages/MessagesPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
 
 
 const AppLayout = () => (
@@ -41,7 +42,7 @@ function App() {
         <Route path="/disputes" element={<DisputesPage />} />
         <Route path="/approvals" element={<ApprovalsPage />} />
         <Route path="/messages" element={<MessagesPage />} />
-
+        <Route path="/analytics" element={<AnalyticsPage />} />
       </Route>
     </Routes>
   );

@@ -58,7 +58,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           address: address || null,
           isConnected,
           balance: balanceData
-            ? (Number(balanceData.value) / 10 ** balanceData.decimals).toFixed(6)
+            ? (Number(balanceData.value) / 1e18).toFixed(2)
             : "0",
           chainId,
         },

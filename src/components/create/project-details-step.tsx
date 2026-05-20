@@ -199,7 +199,7 @@ export function ProjectDetailsStep({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <Label htmlFor="totalBudget" className="mb-2 block">
-              Total Budget (ETH) *
+              Total Budget (USDC) *
             </Label>
             <Input
               id="totalBudget"
@@ -218,7 +218,7 @@ export function ProjectDetailsStep({
               <p className="text-red-500 text-sm mt-1">{errors.totalBudget}</p>
             ) : (
               <p className="text-xs text-muted-foreground mt-1">
-                Minimum 0.0001 ETH required
+                Minimum 0.0001 USDC required
               </p>
             )}
           </div>
@@ -261,7 +261,7 @@ export function ProjectDetailsStep({
               className="rounded w-4 h-4"
             />
             <Label htmlFor="useNativeToken" className="cursor-pointer ml-1">
-              Use Native Token (ETH)
+              Use Native Token (USDC)
             </Label>
           </div>
 

@@ -10,7 +10,7 @@ import type { AppKitNetwork } from "@reown/appkit/networks";
 export const arcTestnet = defineChain({
   id: 5042002,
   name: "Arc Testnet",
-  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
   rpcUrls: {
     default: { http: ["https://rpc.drpc.testnet.arc.network"] },
   },

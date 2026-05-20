@@ -55,8 +55,8 @@ export default function HomePage() {
           const status = escrowData.status || 0;
           const totalAmount = Number(escrowData.totalAmount || "0");
 
-          // Add to total volume (convert from wei to ETH - 18 decimals)
-          totalVolume += totalAmount / 1e18;
+          // Add to total volume (convert from base units to USDC - 6 decimals)
+          totalVolume += totalAmount / 1e6;
 
           // EscrowStatus enum: Pending=0, InProgress=1, Released=2, Refunded=3, Disputed=4, Expired=5
           if (status === 1) {
@@ -174,7 +174,7 @@ export default function HomePage() {
                     $...
                   </span>
                 ) : (
-                  `${stats.totalVolume} ETH`
+                  `${stats.totalVolume} USDC`
                 )}
               </div>
               <div className="text-sm text-muted-foreground">

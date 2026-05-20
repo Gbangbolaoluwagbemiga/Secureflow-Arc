@@ -220,13 +220,17 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     // Send cross-wallet notifications via backend API (Supabase) so the
     // other party actually receives them regardless of browser / device.
     if (targets.length > 0) {
+      console.log('[addNotification] Sending to targets:', targets);
       targets.forEach((address) => {
+        console.log('[addNotification] Processing target:', address, 'current:', current);
         if (address && address.toLowerCase() !== current) {
+          console.log('[addNotification] Sending notification to:', address);
           if (isApiConfigured()) {
             const outboundData = {
               ...(notification.data ?? {}),
               sourceAddress: wallet.address,
             };
+            console.log('[addNotification] Calling postNotification API for:', address);
             postNotification({
               wallet_address: address, // original case preserved — backend requires G-prefix
               type: notification.type,
@@ -234,7 +238,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               message: notification.message,
               action_url: notification.actionUrl,
               data: outboundData,
-            }).catch(() => {
+            }).then((result) => {
+              console.log('[addNotification] ✓ Notification sent successfully to:', address, result);
+            }).catch((error) => {
+              console.error('[addNotification] ✗ Failed to send notification to:', address, error);
               // Fallback: write to localStorage so the other party at least
               // sees it if they happen to share the same browser profile.
               const existing = JSON.parse(
@@ -246,6 +253,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               );
             });
           } else {
+            console.log('[addNotification] API not configured, using localStorage for:', address);
             const existing = JSON.parse(
               localStorage.getItem(`notifications_${address}`) || "[]",
             );
@@ -254,6 +262,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               JSON.stringify([newNotification, ...existing]),
             );
           }
+        } else {
+          console.log('[addNotification] Skipping target (same as current):', address);
         }
       });
     }

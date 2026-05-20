@@ -206,7 +206,7 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
                       <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-2">
                         <span className="flex items-center gap-1"><User className="h-3 w-3" />Client: {d.clientAddress.slice(0, 6)}…{d.clientAddress.slice(-4)}</span>
                         <span className="flex items-center gap-1"><User className="h-3 w-3" />Freelancer: {d.freelancerAddress.slice(0, 6)}…{d.freelancerAddress.slice(-4)}</span>
-                        <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{d.milestoneAmountEth.toFixed(6)} ETH</span>
+                        <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{d.milestoneAmountEth.toFixed(6)} USDC</span>
                         <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{getDisputeAge(d.disputedAt)}</span>
                       </div>
                     </div>
@@ -232,13 +232,13 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
                 <p><strong>Project:</strong> {selectedDispute.projectTitle}</p>
                 <p><strong>Milestone:</strong> {selectedDispute.milestoneDescription}</p>
                 <p><strong>Dispute Reason:</strong> {selectedDispute.disputeReason}</p>
-                <p><strong>Total at stake:</strong> {selectedDispute.milestoneAmountEth.toFixed(6)} ETH</p>
+                <p><strong>Total at stake:</strong> {selectedDispute.milestoneAmountEth.toFixed(6)} USDC</p>
               </div>
 
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">
-                  <span>Client gets: {clientEth.toFixed(6)} ETH</span>
-                  <span>Freelancer gets: {freelancerEth.toFixed(6)} ETH</span>
+                  <span>Client gets: {clientEth.toFixed(6)} USDC</span>
+                  <span>Freelancer gets: {freelancerEth.toFixed(6)} USDC</span>
                 </div>
                 <Slider value={[freelancerPct]} onValueChange={([v]) => setFreelancerPct(v)} min={0} max={100} step={1} />
                 <p className="text-xs text-muted-foreground text-center">Freelancer's share: {freelancerPct}%</p>

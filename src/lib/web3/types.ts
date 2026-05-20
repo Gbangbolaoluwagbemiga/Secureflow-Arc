@@ -51,7 +51,7 @@ export interface WalletState {
   address: string | null;
   chainId: number | null;
   isConnected: boolean;
-  balance: string; // ETH balance (18 decimals)
+  balance: string; // USDC balance (18 decimals on-chain, displayed as 6)
 }
 
 export interface Application {

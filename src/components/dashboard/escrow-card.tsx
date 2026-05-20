@@ -8,6 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { motion } from "framer-motion";
 import { Clock, DollarSign, ChevronDown, ChevronUp, Star, AlertTriangle, CalendarPlus, Scale, Paperclip, MessageCircle } from "lucide-react";
 import { MilestoneActions } from "@/components/milestone-actions";
+import { MilestoneNegotiation } from "@/components/milestone-negotiation";
+import { JobManagement } from "@/components/job-management";
 import { parseAttachment, formatEth, formatTokenAmount } from "@/lib/utils";
 import { RatingDialog } from "@/components/rating/rating-dialog";
 import { ChatDialog } from "@/components/chat/chat-dialog";
@@ -319,9 +321,32 @@ export function EscrowCard({
                           }}
                         />
                       </div>
+                      {/* Milestone Negotiation Component */}
+                      <MilestoneNegotiation
+                        escrowId={escrow.id}
+                        milestoneIndex={idx}
+                        milestone={milestone}
+                        isFreelancer={escrow.isFreelancer || false}
+                        isClient={escrow.isClient || false}
+                        onUpdate={() => {
+                          window.dispatchEvent(new CustomEvent("escrowUpdated"));
+                        }}
+                      />
                     </div>
                   ))}
                 </div>
+
+                {/* Job Management Component - Only shows for open jobs */}
+                <JobManagement
+                  escrowId={escrow.id}
+                  isOpenJob={!escrow.beneficiary || escrow.beneficiary === "0x0000000000000000000000000000000000000000"}
+                  isClient={escrow.isClient || false}
+                  totalAmount={escrow.totalAmount}
+                  token={escrow.token}
+                  onUpdate={() => {
+                    window.dispatchEvent(new CustomEvent("escrowUpdated"));
+                  }}
+                />
               </div>
             )}
 

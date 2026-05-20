@@ -10,9 +10,9 @@ export const ARC_TESTNET = {
   chainId: 5042002,
   chainName: "Arc Testnet",
   nativeCurrency: {
-    name: "Ether",
-    symbol: "ETH",
-    decimals: 18,
+    name: "USDC",
+    symbol: "USDC",
+    decimals: 6,
   },
   rpcUrls: ["https://rpc.drpc.testnet.arc.network"],
   blockExplorerUrls: ["https://testnet.arcscan.app"],

@@ -49,7 +49,7 @@ export function ReviewStep({
     formData.useNativeToken && balance > 0 && budget > balance;
 
   const tokenSymbol = formData.useNativeToken
-    ? "Native ETH"
+    ? "Native USDC"
     : WHITELISTED_TOKENS.find(t => t.address === formData.token)?.symbol || formData.token || "Not selected";
 
   return (
@@ -133,7 +133,7 @@ export function ReviewStep({
             {hasInsufficientBalance && (
               <p className="text-sm text-destructive mt-3 flex items-center gap-1">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                Insufficient balance — you have {balance.toFixed(6)} ETH but need {budget.toFixed(6)} ETH (plus platform fee)
+                Insufficient balance — you have {balance.toFixed(6)} USDC but need {budget.toFixed(6)} USDC (plus platform fee)
               </p>
             )}
           </div>

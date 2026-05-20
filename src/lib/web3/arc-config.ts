@@ -6,7 +6,7 @@ export const ARC_NETWORKS = {
     name: "Arc Testnet",
     rpcUrl: "https://rpc.drpc.testnet.arc.network",
     blockExplorer: "https://testnet.arcscan.app",
-    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
   },
 } as const;
 
@@ -23,7 +23,7 @@ export const CONTRACTS = {
     import.meta.env.VITE_TRUSTED_FORWARDER_ADDRESS ?? ""
   ).trim() as `0x${string}` | "",
 
-  /** MockUSDC on Arc Testnet (6 decimals). Empty = use native ETH. */
+  /** MockUSDC on Arc Testnet (6 decimals). Empty = use native USDC. */
   USDC: (
     import.meta.env.VITE_USDC_TOKEN_CONTRACT ?? ""
   ).trim() as `0x${string}` | "",

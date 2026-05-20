@@ -126,26 +126,32 @@ export default function ApprovalsPage() {
               let applicationCount = 0;
               const applications: Application[] = [];
 
-              // Get applications from storage
+              // Get applications from on-chain transaction data
               try {
-                const apps = await contractService.getApplications(i);
+                console.log(`Fetching applications for escrow ${i}...`);
+                const apps = await contractService.getApplicationDetails(i);
+                console.log(`Found ${apps.length} applications for escrow ${i}:`, apps);
                 applicationCount = apps.length;
 
-                for (const _app of apps) {
-                  const app = _app as any;
+                for (const app of apps) {
+                  // Get reputation data for each freelancer
+                  const badge = await contractService.getBadge(app.freelancer);
+                  const { averageX100, count } = await contractService.getAverageRating(app.freelancer);
+                  
                   applications.push({
-                    freelancerAddress: app.freelancer ?? app.freelancerAddress ?? "",
-                    coverLetter: app.cover_letter ?? app.coverLetter ?? "",
-                    proposedTimeline: app.proposed_timeline ?? app.proposedTimeline ?? 0,
+                    freelancerAddress: app.freelancer,
+                    coverLetter: app.coverLetter || "",
+                    proposedTimeline: app.proposedTimeline || 0,
                     appliedAt: Date.now(),
                     status: "pending" as const,
-                    badge: app.badge,
-                    averageRating: app.averageRating,
-                    ratingCount: app.ratingCount,
+                    badge: badge as "Beginner" | "Intermediate" | "Advanced" | "Expert" | undefined,
+                    averageRating: averageX100 / 100,
+                    ratingCount: count,
                   });
                 }
 
               } catch (error) {
+                console.error('Error fetching applications:', error);
                 applicationCount = 0;
               }
 
@@ -238,7 +244,7 @@ export default function ApprovalsPage() {
           selectedFreelancer.freelancerAddress,
           {
             jobTitle:
-              selectedJobForApproval.projectDescription ||
+              selectedJobForApproval.projectTitle ||
               `Job #${selectedJobForApproval.id}`,
             freelancerName:
               selectedFreelancer.freelancerAddress.slice(0, 6) +
@@ -419,7 +425,7 @@ export default function ApprovalsPage() {
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold">
-                  Review Applications - {selectedJob.projectDescription}
+                  Review Applications - {selectedJob.projectTitle}
                 </h3>
                 <button
                   onClick={() => {

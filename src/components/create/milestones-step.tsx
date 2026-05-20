@@ -156,7 +156,7 @@ export function MilestonesStep({
                   htmlFor={`milestone-${index}-amount`}
                   className="mb-2.5 block"
                 >
-                  Amount (ETH) *
+                  Amount (USDC) *
                 </Label>
                 <Input
                   id={`milestone-${index}-amount`}
@@ -181,7 +181,7 @@ export function MilestonesStep({
                   </p>
                 ) : (
                   <p className="text-xs text-muted-foreground mt-1">
-                    Minimum 0.0001 ETH required
+                    Minimum 0.0001 USDC required
                   </p>
                 )}
               </div>
