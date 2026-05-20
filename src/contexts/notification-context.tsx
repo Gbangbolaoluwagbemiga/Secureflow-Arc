@@ -33,12 +33,18 @@ function mergeRemoteNotifications(
     actionUrl: r.actionUrl,
     data: r.data as Record<string, unknown> | undefined,
   }));
-  const legacy = localState.filter((n) => n.id.startsWith("notification_"));
+  
+  // Keep all local notifications (both legacy and recent)
   const byId = new Map<string, Notification>();
+  
+  // Add remote notifications first
   for (const n of fromRemote) byId.set(n.id, n);
-  for (const n of legacy) {
+  
+  // Add local notifications (won't overwrite remote ones with same ID)
+  for (const n of localState) {
     if (!byId.has(n.id)) byId.set(n.id, n);
   }
+  
   return Array.from(byId.values()).sort(
     (a, b) => b.timestamp.getTime() - a.timestamp.getTime(),
   );
@@ -118,15 +124,19 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     if (wallet.isConnected && wallet.address) {
       const saved = localStorage.getItem(`notifications_${wallet.address}`);
       if (saved) {
-        const parsedNotifications = JSON.parse(saved);
-        // Convert timestamp strings back to Date objects
-        const notificationsWithDates = parsedNotifications.map(
-          (notif: any) => ({
-            ...notif,
-            timestamp: new Date(notif.timestamp),
-          }),
-        );
-        setNotifications(notificationsWithDates);
+        try {
+          const parsedNotifications = JSON.parse(saved);
+          // Convert timestamp strings back to Date objects
+          const notificationsWithDates = parsedNotifications.map(
+            (notif: any) => ({
+              ...notif,
+              timestamp: new Date(notif.timestamp),
+            }),
+          );
+          setNotifications(notificationsWithDates);
+        } catch (error) {
+          setNotifications([]);
+        }
       } else {
         // If no saved notifications, start with empty array
         setNotifications([]);
@@ -137,15 +147,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }, [wallet.isConnected, wallet.address]);
 
-  // Persist only locally-generated rows; server-backed rows load from the API
+  // Persist ALL notifications to localStorage (both local and remote)
   useEffect(() => {
-    if (wallet.isConnected && wallet.address) {
-      const legacy = notifications.filter((n) =>
-        n.id.startsWith("notification_"),
-      );
+    if (wallet.isConnected && wallet.address && notifications.length > 0) {
       localStorage.setItem(
         `notifications_${wallet.address}`,
-        JSON.stringify(legacy),
+        JSON.stringify(notifications),
       );
     }
   }, [notifications, wallet.isConnected, wallet.address]);
@@ -191,7 +198,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     lastRemoteFingerprintRef.current = "";
     lastRemoteIdsRef.current = new Set();
     void syncRemoteNotifications();
-    const t = window.setInterval(() => void syncRemoteNotifications(), 4_000);
+    // Poll every 10 seconds instead of 4 to avoid rate limiting
+    const t = window.setInterval(() => void syncRemoteNotifications(), 10_000);
     return () => window.clearInterval(t);
   }, [wallet.address, syncRemoteNotifications]);
 
@@ -220,17 +228,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     // Send cross-wallet notifications via backend API (Supabase) so the
     // other party actually receives them regardless of browser / device.
     if (targets.length > 0) {
-      console.log('[addNotification] Sending to targets:', targets);
       targets.forEach((address) => {
-        console.log('[addNotification] Processing target:', address, 'current:', current);
         if (address && address.toLowerCase() !== current) {
-          console.log('[addNotification] Sending notification to:', address);
           if (isApiConfigured()) {
             const outboundData = {
               ...(notification.data ?? {}),
               sourceAddress: wallet.address,
             };
-            console.log('[addNotification] Calling postNotification API for:', address);
             postNotification({
               wallet_address: address, // original case preserved — backend requires G-prefix
               type: notification.type,
@@ -238,10 +242,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               message: notification.message,
               action_url: notification.actionUrl,
               data: outboundData,
-            }).then((result) => {
-              console.log('[addNotification] ✓ Notification sent successfully to:', address, result);
-            }).catch((error) => {
-              console.error('[addNotification] ✗ Failed to send notification to:', address, error);
+            }).catch(() => {
               // Fallback: write to localStorage so the other party at least
               // sees it if they happen to share the same browser profile.
               const existing = JSON.parse(
@@ -253,7 +254,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               );
             });
           } else {
-            console.log('[addNotification] API not configured, using localStorage for:', address);
             const existing = JSON.parse(
               localStorage.getItem(`notifications_${address}`) || "[]",
             );
@@ -262,8 +262,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               JSON.stringify([newNotification, ...existing]),
             );
           }
-        } else {
-          console.log('[addNotification] Skipping target (same as current):', address);
         }
       });
     }

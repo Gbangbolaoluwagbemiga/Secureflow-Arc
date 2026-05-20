@@ -157,9 +157,14 @@ export function EscrowCard({
         <CardHeader>
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <CardTitle className="text-lg mb-2">
-                {escrow.projectDescription}
+              <CardTitle className="text-lg mb-1">
+                {escrow.projectTitle || `Escrow #${escrow.id}`}
               </CardTitle>
+              {escrow.projectDescription && (
+                <p className="text-sm text-muted-foreground mb-2">
+                  {escrow.projectDescription}
+                </p>
+              )}
               <div className="flex items-center gap-4 text-sm text-gray-600">
                 <div className="flex items-center gap-1">
                   <Clock className="h-4 w-4" />

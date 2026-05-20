@@ -112,12 +112,12 @@ export function ChatDialog({
       .finally(() => setLoading(false));
   }, [open, fetchMessages, myAddress, otherAddress]);
 
-  // Poll for new messages every 8 seconds
+  // Poll for new messages every 15 seconds to reduce API load
   useEffect(() => {
     if (!open) return;
     pollRef.current = setInterval(() => {
       void fetchMessages(latestTimestampRef.current);
-    }, 8000);
+    }, 15000);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };

@@ -108,10 +108,6 @@ export class ContractService {
     } catch { return []; }
   }
 
-  /**
-   * Fetch application details using ApplicationSubmitted events
-   * Returns array of {freelancer, coverLetter, proposedTimeline}
-   */
   async getApplicationDetails(escrowId: number): Promise<Array<{
     freelancer: string;
     coverLetter: string;
@@ -120,8 +116,6 @@ export class ContractService {
     try {
       // Get the list of freelancers who applied from storage
       const addresses = await this.contract.read.getEscrowApplications([BigInt(escrowId)]) as string[];
-      
-      console.log(`[getApplicationDetails] Escrow ${escrowId}: Found ${addresses.length} applicants from storage:`, addresses);
       
       if (addresses.length === 0) {
         return [];
@@ -135,12 +129,10 @@ export class ContractService {
 
       // Get current block number
       const currentBlock = await this.client.getBlockNumber();
-      console.log(`[getApplicationDetails] Current block: ${currentBlock}`);
       
       // Arc Testnet RPC limit: max 10000 blocks per query
       // Search last 9000 blocks to stay under limit
       const fromBlock = currentBlock > 9000n ? currentBlock - 9000n : 0n;
-      console.log(`[getApplicationDetails] Searching from block ${fromBlock} to ${currentBlock}`);
 
       // Get ApplicationSubmitted events for this escrow
       const { parseEventLogs } = await import('viem');
@@ -152,15 +144,11 @@ export class ContractService {
           toBlock: 'latest'
         });
 
-        console.log(`[getApplicationDetails] Found ${logs.length} logs for contract`);
-
         // Parse the events
         const parsedLogs = parseEventLogs({
           abi: SecureFlowABI.abi,
           logs: logs as any[]
         });
-
-        console.log(`[getApplicationDetails] Parsed ${parsedLogs.length} events`);
 
         for (const log of parsedLogs) {
           if ((log as any).eventName === 'ApplicationSubmitted') {
@@ -176,8 +164,6 @@ export class ContractService {
               continue;
             }
 
-            console.log(`[getApplicationDetails] ✓ Found application from ${args.freelancer}, timeline: ${args.proposedTimeline}, coverLetter length: ${args.coverLetter?.length || 0}`);
-
             applications.push({
               freelancer: args.freelancer.toLowerCase(),
               coverLetter: args.coverLetter || '',
@@ -190,7 +176,6 @@ export class ContractService {
         for (const addr of addresses) {
           const found = applications.find(app => app.freelancer.toLowerCase() === addr.toLowerCase());
           if (!found) {
-            console.warn(`[getApplicationDetails] ⚠ No event found for ${addr}, adding with empty data`);
             applications.push({
               freelancer: addr,
               coverLetter: '',
@@ -200,16 +185,12 @@ export class ContractService {
         }
 
       } catch (eventError) {
-        console.error('[getApplicationDetails] Error fetching events, falling back to transaction decoding:', eventError);
-        
         // Fallback: decode transactions
         const allLogs = await this.client.getLogs({
           address: this.contract.address as Address,
           fromBlock,
           toBlock: 'latest'
         });
-
-        console.log(`[getApplicationDetails] Fallback: Found ${allLogs.length} logs, checking transactions...`);
 
         for (const freelancerAddress of addresses) {
           let found = false;
@@ -239,7 +220,6 @@ export class ContractService {
                     coverLetter: coverLetter || '',
                     proposedTimeline: Number(proposedTimeline) || 0
                   });
-                  console.log(`[getApplicationDetails] ✓ Fallback: Found application from ${freelancerAddress}`);
                   found = true;
                   break;
                 }
@@ -250,7 +230,6 @@ export class ContractService {
           }
 
           if (!found) {
-            console.warn(`[getApplicationDetails] ⚠ Fallback: Could not find application for ${freelancerAddress}`);
             applications.push({
               freelancer: freelancerAddress,
               coverLetter: '',
@@ -260,21 +239,17 @@ export class ContractService {
         }
       }
 
-      console.log(`[getApplicationDetails] Returning ${applications.length} applications for escrow ${escrowId}`);
       return applications;
     } catch (error) {
-      console.error('[getApplicationDetails] Error fetching application details:', error);
       // Final fallback: return addresses with empty data
       try {
         const addresses = await this.contract.read.getEscrowApplications([BigInt(escrowId)]) as string[];
-        console.log('[getApplicationDetails] Final fallback: got addresses from storage:', addresses);
         return addresses.map((addr: string) => ({
           freelancer: addr,
           coverLetter: '',
           proposedTimeline: 0
         }));
       } catch (fallbackError) {
-        console.error('[getApplicationDetails] Final fallback also failed:', fallbackError);
         return [];
       }
     }

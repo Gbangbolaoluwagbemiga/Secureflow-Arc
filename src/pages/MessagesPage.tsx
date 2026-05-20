@@ -71,7 +71,8 @@ export default function MessagesPage() {
 
   useEffect(() => {
     void fetchInbox();
-    const interval = setInterval(() => void fetchInbox(), 15000);
+    // Poll every 30 seconds instead of 15 to reduce API load
+    const interval = setInterval(() => void fetchInbox(), 30000);
     return () => clearInterval(interval);
   }, [fetchInbox]);
 
