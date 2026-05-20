@@ -14,12 +14,12 @@ interface DashboardStatsProps {
 
 export function DashboardStats({ escrows }: DashboardStatsProps) {
   const totalValue = escrows.reduce(
-    (sum, escrow) => sum + Number.parseFloat(escrow.totalAmount) / 1e7,
+    (sum, escrow) => sum + Number.parseFloat(escrow.totalAmount) / 1e18,
     0
   );
 
   const totalReleased = escrows.reduce(
-    (sum, escrow) => sum + Number.parseFloat(escrow.releasedAmount) / 1e7,
+    (sum, escrow) => sum + Number.parseFloat(escrow.releasedAmount) / 1e18,
     0
   );
 
@@ -55,8 +55,8 @@ export function DashboardStats({ escrows }: DashboardStatsProps) {
           <TrendingUp className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{totalValue.toFixed(2)}</div>
-          <p className="text-xs text-muted-foreground">tokens in escrows</p>
+          <div className="text-2xl font-bold">{totalValue.toFixed(2)} ETH</div>
+          <p className="text-xs text-muted-foreground">ETH in escrows</p>
         </CardContent>
       </Card>
 
@@ -66,8 +66,8 @@ export function DashboardStats({ escrows }: DashboardStatsProps) {
           <FileText className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{totalReleased.toFixed(2)}</div>
-          <p className="text-xs text-muted-foreground">tokens released</p>
+          <div className="text-2xl font-bold">{totalReleased.toFixed(2)} ETH</div>
+          <p className="text-xs text-muted-foreground">ETH released</p>
         </CardContent>
       </Card>
 

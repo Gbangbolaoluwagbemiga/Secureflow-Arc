@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { Clock, MessageSquare } from "lucide-react";
+import { formatEth, formatTokenAmount } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -91,8 +92,7 @@ export function JobCard({
               <span>Posted {new Date(job.createdAt).toLocaleDateString()}</span>
               <span>•</span>
               <span>
-                Budget: {(Number.parseFloat(job.totalAmount) / 1e7).toFixed(2)}{" "}
-                tokens
+                Budget: {formatTokenAmount(job.totalAmount, job.token)}
               </span>
             </div>
           </div>
@@ -101,7 +101,7 @@ export function JobCard({
             <div className="text-right w-full lg:w-auto">
               <p className="text-sm text-muted-foreground mb-1">Total Budget</p>
               <p className="text-2xl md:text-3xl font-bold text-primary break-all">
-                {(Number.parseFloat(job.totalAmount) / 1e7).toFixed(2)}
+                {formatTokenAmount(job.totalAmount, job.token)}
               </p>
             </div>
 

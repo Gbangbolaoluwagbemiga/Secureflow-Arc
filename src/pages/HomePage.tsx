@@ -174,7 +174,7 @@ export default function HomePage() {
                     $...
                   </span>
                 ) : (
-                  `$${stats.totalVolume}`
+                  `${stats.totalVolume} ETH`
                 )}
               </div>
               <div className="text-sm text-muted-foreground">

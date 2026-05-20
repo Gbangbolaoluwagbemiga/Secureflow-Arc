@@ -8,6 +8,7 @@ import {
   Award,
 } from "lucide-react";
 import type { Badge as BadgeType } from "@/lib/web3/types";
+import { formatEth, formatTokenAmount } from "@/lib/utils";
 
 interface FreelancerStatsProps {
   escrows: Array<{
@@ -71,9 +72,9 @@ export function FreelancerStats({
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">
-            {(totalEarnings / 1e7).toFixed(2)}
+            {formatEth(totalEarnings)}
           </div>
-          <p className="text-xs text-muted-foreground">tokens earned</p>
+          <p className="text-xs text-muted-foreground">ETH earned</p>
         </CardContent>
       </Card>
 
@@ -84,9 +85,9 @@ export function FreelancerStats({
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">
-            {(totalValue / 1e7).toFixed(2)}
+            {formatEth(totalValue)}
           </div>
-          <p className="text-xs text-muted-foreground">tokens in projects</p>
+          <p className="text-xs text-muted-foreground">ETH in projects</p>
         </CardContent>
       </Card>
 

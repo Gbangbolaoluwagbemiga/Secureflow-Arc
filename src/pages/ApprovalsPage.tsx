@@ -335,7 +335,7 @@ export default function ApprovalsPage() {
   //   0
   // ); // Unused
   // const totalValue = jobs.reduce(
-  //   (sum, job) => sum + Number(job.totalAmount) / 1e7,
+  //   (sum, job) => sum + Number(job.totalAmount) / 1e18,
   //   0
   // ); // Unused
 

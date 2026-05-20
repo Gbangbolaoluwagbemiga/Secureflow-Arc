@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { motion } from "framer-motion";
 import { Clock, DollarSign, ChevronDown, ChevronUp, Star, AlertTriangle, CalendarPlus, Scale, Paperclip, MessageCircle } from "lucide-react";
 import { MilestoneActions } from "@/components/milestone-actions";
-import { parseAttachment } from "@/lib/utils";
+import { parseAttachment, formatEth, formatTokenAmount } from "@/lib/utils";
 import { RatingDialog } from "@/components/rating/rating-dialog";
 import { ChatDialog } from "@/components/chat/chat-dialog";
 import { useState, useEffect } from "react";
@@ -168,8 +168,7 @@ export function EscrowCard({
                 <div className="flex items-center gap-1">
                   <DollarSign className="h-4 w-4" />
                   <span>
-                    {(Number.parseFloat(escrow.totalAmount) / 1e7).toFixed(2)}{" "}
-                    tokens
+                    {formatTokenAmount(escrow.totalAmount, escrow.token)}
                   </span>
                 </div>
               </div>
@@ -227,15 +226,13 @@ export function EscrowCard({
               <div>
                 <span className="text-gray-600">Total Amount:</span>
                 <div className="font-semibold">
-                  {(Number.parseFloat(escrow.totalAmount) / 1e7).toFixed(2)}{" "}
-                  tokens
+                  {formatTokenAmount(escrow.totalAmount, escrow.token)}
                 </div>
               </div>
               <div>
                 <span className="text-gray-600">Released:</span>
                 <div className="font-semibold">
-                  {(Number.parseFloat(escrow.releasedAmount) / 1e7).toFixed(2)}{" "}
-                  tokens
+                  {formatTokenAmount(escrow.releasedAmount, escrow.token)}
                 </div>
               </div>
               <div>
@@ -286,10 +283,7 @@ export function EscrowCard({
                           );
                         })()}
                         <p className="text-xs text-muted-foreground">
-                          {(Number.parseFloat(milestone.amount) / 1e7).toFixed(
-                            2
-                          )}{" "}
-                          tokens
+                          {formatTokenAmount(milestone.amount, escrow.token)}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">

@@ -68,6 +68,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { RefreshCw, MessageCircle as MessageCircleFreelancer } from "lucide-react";
 import { Link } from "react-router-dom";
+import { formatEth, formatTokenAmount } from "@/lib/utils";
 
 interface Escrow {
   id: string;
@@ -1173,15 +1174,7 @@ export default function FreelancerPage() {
   };
 
   const formatAmount = (amount: string) => {
-    try {
-      const num = Number(amount) / 1e18;
-      if (isNaN(num) || num < 0) {
-        return "0.00";
-      }
-      return num.toFixed(2);
-    } catch (error) {
-      return "0.00";
-    }
+    return formatEth(amount);
   };
 
   const calculateDaysLeft = (createdAt: number, duration: number): number => {
@@ -1457,7 +1450,7 @@ export default function FreelancerPage() {
                                 Total Value
                               </p>
                               <p className="font-semibold text-green-700 dark:text-green-400">
-                                {formatAmount(escrow.totalAmount)} tokens
+                                {formatAmount(escrow.totalAmount)}
                               </p>
                             </div>
                           </div>
@@ -1468,7 +1461,7 @@ export default function FreelancerPage() {
                                 Released
                               </p>
                               <p className="font-semibold text-blue-700 dark:text-blue-400">
-                                {formatAmount(escrow.releasedAmount)} tokens
+                                {formatAmount(escrow.releasedAmount)}
                               </p>
                             </div>
                           </div>
@@ -1707,7 +1700,7 @@ export default function FreelancerPage() {
                                       )}
 
                                     <div className="text-sm font-semibold text-green-600 dark:text-green-400">
-                                      {formatAmount(milestone.amount)} tokens
+                                      {formatAmount(milestone.amount)}
                                     </div>
 
                                     {/* Show rejected status if milestone is rejected */}
@@ -1780,10 +1773,7 @@ export default function FreelancerPage() {
                                                 {resolutionAmount > 0 ? (
                                                   <p className="text-green-600 dark:text-green-400 font-medium">
                                                     ✅ You won!{" "}
-                                                    {(
-                                                      resolutionAmount / 1e18
-                                                    ).toFixed(2)}{" "}
-                                                    tokens awarded
+                                                    {formatEth(resolutionAmount)} awarded
                                                   </p>
                                                 ) : (
                                                   <p className="text-orange-600 dark:text-orange-400 font-medium">

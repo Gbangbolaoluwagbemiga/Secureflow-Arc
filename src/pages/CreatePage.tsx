@@ -13,7 +13,24 @@ import { ReviewStep } from "@/components/create/review-step";
 import { useCreateEscrow } from "@/hooks/use-escrows";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
-import { parseEther } from "viem";
+import { parseEther, parseUnits } from "viem";
+
+const USDC_ADDRESS = (
+  (import.meta.env.VITE_USDC_TOKEN_CONTRACT as string | undefined) ?? ""
+).trim() as `0x${string}` | "";
+
+// USDC has 6 decimals; ETH has 18
+function parseTokenAmount(amount: string, tokenAddress: string | undefined): bigint {
+  if (!tokenAddress || tokenAddress === "0x0000000000000000000000000000000000000000") {
+    return parseEther(amount);
+  }
+  // USDC — 6 decimals
+  if (USDC_ADDRESS && tokenAddress.toLowerCase() === USDC_ADDRESS.toLowerCase()) {
+    return parseUnits(amount, 6);
+  }
+  // Unknown ERC-20 — default to 18
+  return parseEther(amount);
+}
 
 interface Milestone {
   description: string;
@@ -82,8 +99,9 @@ export default function CreateEscrowPage() {
     duration: "",
     totalBudget: "",
     beneficiary: prefillFreelancer,
-    token: "", // empty string = native ETH; otherwise ERC-20 token address
-    useNativeToken: true,
+    // Default to USDC if a contract is configured, otherwise native ETH
+    token: USDC_ADDRESS || "",
+    useNativeToken: !USDC_ADDRESS,
     isOpenJob: false,
     milestones: [
       { description: "", amount: "" },
@@ -207,10 +225,11 @@ export default function CreateEscrowPage() {
         ? undefined
         : (formData.beneficiary as `0x${string}`) || undefined;
 
-      // Convert ETH amounts to wei (1 ETH = 10^18 wei)
-      const totalAmountWei = parseEther(formData.totalBudget);
+      // Convert amounts to base units using the correct token decimals
+      const tokenAddr = formData.useNativeToken ? undefined : (formData.token || undefined);
+      const totalAmountWei = parseTokenAmount(formData.totalBudget, tokenAddr);
       const milestoneAmountsWei = formData.milestones.map((m) =>
-        parseEther(m.amount || "0")
+        parseTokenAmount(m.amount || "0", tokenAddr)
       );
 
       // Check native ETH balance

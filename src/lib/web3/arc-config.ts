@@ -22,4 +22,9 @@ export const CONTRACTS = {
   TRUSTED_FORWARDER: (
     import.meta.env.VITE_TRUSTED_FORWARDER_ADDRESS ?? ""
   ).trim() as `0x${string}` | "",
+
+  /** MockUSDC on Arc Testnet (6 decimals). Empty = use native ETH. */
+  USDC: (
+    import.meta.env.VITE_USDC_TOKEN_CONTRACT ?? ""
+  ).trim() as `0x${string}` | "",
 } as const;

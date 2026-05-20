@@ -1,10 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useWriteContract } from "wagmi";
+import { useWriteContract, useReadContract } from "wagmi";
 import { contractService } from "@/lib/web3/contract-service";
 import { CONTRACTS } from "@/lib/web3/config";
 import SecureFlowABI from "../../contracts/solidity/out/SecureFlow.sol/SecureFlow.json";
 import useWalletStore from "@/store/wallet.store";
 import { toast } from "@/hooks/use-toast";
+import { erc20Abi } from "@/lib/web3/abis";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 
@@ -83,6 +84,32 @@ export function useCreateEscrow() {
       const { deposit } = await contractService.quoteDeposit(totalAmount);
 
       const isNativeEth = token === ZERO_ADDRESS;
+
+      // For ERC-20 tokens (e.g. USDC): check allowance and approve if needed
+      if (!isNativeEth) {
+        const escrowAddr = contractAddr();
+        // Read current allowance
+        const { createPublicClient, http } = await import("viem");
+        const { arcTestnet } = await import("@/providers/WalletProvider");
+        const publicClient = createPublicClient({ chain: arcTestnet, transport: http() });
+        const allowance = await publicClient.readContract({
+          address: token,
+          abi: erc20Abi,
+          functionName: "allowance",
+          args: [params.depositor as `0x${string}`, escrowAddr],
+        }) as bigint;
+
+        if (allowance < deposit) {
+          toast({ title: "Approving USDC…", description: "Please confirm the approval in your wallet." });
+          await writeContractAsync({
+            address: token,
+            abi: erc20Abi,
+            functionName: "approve",
+            args: [escrowAddr, deposit],
+          });
+          toast({ title: "USDC approved", description: "Now creating escrow…" });
+        }
+      }
 
       const hash = await writeContractAsync({
         address: contractAddr(),

@@ -26,6 +26,7 @@ import {
   XCircle,
 } from "lucide-react";
 import type { Milestone } from "@/lib/web3/types";
+import { formatEth, formatTokenAmount } from "@/lib/utils";
 
 interface MilestoneActionsProps {
   escrowId: string;
@@ -490,7 +491,7 @@ export function MilestoneActions({
                     {resolutionAmount > 0 ? (
                       <span className="text-green-600 dark:text-green-400">
                         <strong>Freelancer won:</strong>{" "}
-                        {(resolutionAmount / 1e7).toFixed(2)} tokens awarded
+                        {formatEth(resolutionAmount)} awarded
                       </span>
                     ) : (
                       <span className="text-orange-600 dark:text-orange-400">
@@ -570,15 +571,7 @@ export function MilestoneActions({
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Amount:</span>
                 <span className="font-bold text-primary">
-                  {(() => {
-                    try {
-                      const amount = Number.parseFloat(milestone.amount);
-                      if (isNaN(amount)) return "0.00";
-                      return (amount / 1e7).toFixed(2);
-                    } catch (e) {
-                      return "0.00";
-                    }
-                  })()}
+                  {formatEth(milestone.amount)}
                 </span>
               </div>
             </div>

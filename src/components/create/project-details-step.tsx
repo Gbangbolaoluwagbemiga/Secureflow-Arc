@@ -24,7 +24,7 @@ const USDC_TOKEN_CONTRACT =
 
 export const WHITELISTED_TOKENS: WhitelistedToken[] = [
   { symbol: "USDC", address: USDC_TOKEN_CONTRACT },
-].filter((t) => /^C[A-Z2-7]{55}$/.test(t.address));
+].filter((t) => /^0x[0-9a-fA-F]{40}$/.test(t.address));
 
 interface ProjectDetailsStepProps {
   formData: {
@@ -199,7 +199,7 @@ export function ProjectDetailsStep({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <Label htmlFor="totalBudget" className="mb-2 block">
-              Total Budget (tokens) *
+              Total Budget (ETH) *
             </Label>
             <Input
               id="totalBudget"
@@ -218,7 +218,7 @@ export function ProjectDetailsStep({
               <p className="text-red-500 text-sm mt-1">{errors.totalBudget}</p>
             ) : (
               <p className="text-xs text-muted-foreground mt-1">
-                Minimum 0.01 tokens required
+                Minimum 0.0001 ETH required
               </p>
             )}
           </div>

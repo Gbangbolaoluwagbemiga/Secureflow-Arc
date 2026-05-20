@@ -7,6 +7,7 @@ import { Clock, AlertCircle, Star } from "lucide-react";
 import type { Escrow } from "@/lib/web3/types";
 import { ContractService } from "@/lib/web3/contract-service";
 import { CONTRACTS } from "@/lib/web3/config";
+import { formatEth, formatTokenAmount } from "@/lib/utils";
 
 interface JobCardProps {
   job: Escrow;
@@ -78,8 +79,7 @@ export function JobCard({
               <span>Posted {new Date(job.createdAt).toLocaleDateString()}</span>
               <span>•</span>
               <span>
-                Budget: {(Number.parseFloat(job.totalAmount) / 1e7).toFixed(2)}{" "}
-                tokens
+                Budget: {formatTokenAmount(job.totalAmount, job.token)}
               </span>
               {clientRating && (
                 <>
@@ -98,7 +98,7 @@ export function JobCard({
             <div className="text-right w-full lg:w-auto">
               <p className="text-sm text-muted-foreground mb-1">Total Budget</p>
               <p className="text-2xl md:text-3xl font-bold text-primary break-all">
-                {(Number.parseFloat(job.totalAmount) / 1e7).toFixed(2)}
+                {formatTokenAmount(job.totalAmount, job.token)}
               </p>
             </div>
 

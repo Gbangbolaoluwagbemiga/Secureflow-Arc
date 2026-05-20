@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Briefcase, DollarSign, Clock, User } from "lucide-react";
+import { formatEth, formatTokenAmount } from "@/lib/utils";
 
 interface JobsStatsProps {
   jobs: Array<{
@@ -56,7 +57,7 @@ export function JobsStats({
           <div className="min-w-0 flex-1">
             <p className="text-sm text-muted-foreground mb-1">Total Value</p>
             <p className="text-2xl md:text-3xl font-bold break-all">
-              {(totalValue / 1e7).toFixed(2)} tokens
+              {formatEth(totalValue)}
             </p>
           </div>
           <DollarSign className="h-8 w-8 md:h-10 md:w-10 text-accent opacity-50 shrink-0" />
