@@ -278,69 +278,71 @@ export function EscrowCard({
                   {escrow.milestones.map((milestone, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between p-2 bg-muted/20 rounded"
+                      className="flex flex-col gap-3 p-3 bg-muted/20 rounded-lg border border-muted"
                     >
-                      <div className="flex-1">
-                        {(() => {
-                          const { body, attachment } = parseAttachment(milestone.description ?? "");
-                          return (
-                            <>
-                              <p className="text-sm font-medium">{body}</p>
-                              {attachment && (
-                                <a
-                                  href={attachment.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 mt-1 text-xs text-primary hover:underline"
-                                >
-                                  <Paperclip className="h-3 w-3 shrink-0" />
-                                  {attachment.name}
-                                </a>
-                              )}
-                            </>
-                          );
-                        })()}
-                        <p className="text-xs text-muted-foreground">
-                          {formatTokenAmount(milestone.amount, escrow.token)}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          {(() => {
+                            const { body, attachment } = parseAttachment(milestone.description ?? "");
+                            return (
+                              <>
+                                <p className="text-sm font-medium">{body}</p>
+                                {attachment && (
+                                  <a
+                                    href={attachment.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 mt-1 text-xs text-primary hover:underline"
+                                  >
+                                    <Paperclip className="h-3 w-3 shrink-0" />
+                                    {attachment.name}
+                                  </a>
+                                )}
+                              </>
+                            );
+                          })()}
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {formatTokenAmount(milestone.amount, escrow.token)}
+                          </p>
+                        </div>
                         <Badge
                           className={getMilestoneStatusColor(milestone.status)}
                         >
                           {milestone.status}
                         </Badge>
-                        <MilestoneActions
-                          escrowId={escrow.id}
-                          milestoneIndex={idx}
-                          milestone={milestone}
-                          isPayer={escrow.isClient || false}
-                          isBeneficiary={escrow.isFreelancer || false}
-                          escrowStatus={escrow.status}
-                          allMilestones={escrow.milestones}
-                          showSubmitButton={false} // Hide submit buttons on dashboard
-                          payerAddress={escrow.payer} // Client address for notifications
-                          beneficiaryAddress={escrow.beneficiary} // Freelancer address for notifications
-                          escrowReleasedAmount={escrow.releasedAmount}
-                          escrowTotalAmount={escrow.totalAmount}
-                          onSuccess={async () => {
-                            // Refresh the escrow data
-                            window.dispatchEvent(
-                              new CustomEvent("escrowUpdated")
-                            );
-                            // Wait a moment for blockchain state to update
-                            await new Promise((resolve) =>
-                              setTimeout(resolve, 2000)
-                            );
-                            // Trigger refresh without reloading the page
-                            // The parent component should listen to the event and refresh
-                          }}
-                        />
                       </div>
+                      
+                      {/* Milestone Actions - Now vertical */}
+                      <MilestoneActions
+                        escrowId={escrow.id}
+                        milestoneIndex={idx}
+                        milestone={milestone}
+                        isPayer={escrow.isClient || false}
+                        isBeneficiary={escrow.isFreelancer || false}
+                        escrowStatus={escrow.status}
+                        allMilestones={escrow.milestones}
+                        showSubmitButton={false} // Hide submit buttons on dashboard
+                        payerAddress={escrow.payer} // Client address for notifications
+                        beneficiaryAddress={escrow.beneficiary} // Freelancer address for notifications
+                        escrowReleasedAmount={escrow.releasedAmount}
+                        escrowTotalAmount={escrow.totalAmount}
+                        onSuccess={async () => {
+                          // Refresh the escrow data
+                          window.dispatchEvent(
+                            new CustomEvent("escrowUpdated")
+                          );
+                          // Wait a moment for blockchain state to update
+                          await new Promise((resolve) =>
+                            setTimeout(resolve, 2000)
+                          );
+                          // Trigger refresh without reloading the page
+                          // The parent component should listen to the event and refresh
+                        }}
+                      />
                       
                       {/* Evidence buttons for disputed milestones */}
                       {milestone.status === "disputed" && (
-                        <div className="mt-3 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                        <div className="mt-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
                           <div className="flex items-center gap-2 mb-2">
                             <AlertTriangle className="h-4 w-4 text-orange-600" />
                             <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
@@ -350,7 +352,7 @@ export function EscrowCard({
                           <p className="text-xs text-orange-600 dark:text-orange-400 mb-3">
                             This milestone is being reviewed by an arbiter. Submit evidence to support your case.
                           </p>
-                          <div className="flex gap-2">
+                          <div className="flex flex-col gap-2">
                             <ViewEvidenceButton
                               escrowId={escrow.id}
                               milestoneIndex={idx}
@@ -358,7 +360,7 @@ export function EscrowCard({
                               freelancerAddress={escrow.beneficiary}
                               variant="outline"
                               size="sm"
-                              className="flex-1"
+                              className="w-full"
                             />
                             <EvidenceSubmissionButton
                               escrowId={escrow.id}
@@ -371,7 +373,7 @@ export function EscrowCard({
                               }}
                               variant="default"
                               size="sm"
-                              className="flex-1"
+                              className="w-full"
                             />
                           </div>
                         </div>

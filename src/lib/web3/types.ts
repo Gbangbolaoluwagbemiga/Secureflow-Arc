@@ -7,7 +7,8 @@ export interface Milestone {
     | "approved"
     | "rejected"
     | "disputed"
-    | "resolved";
+    | "resolved"
+    | "proposal_pending";
   submittedAt?: number;
   approvedAt?: number;
   rejectionReason?: string;
@@ -15,6 +16,8 @@ export interface Milestone {
   resolvedAt?: number;
   resolvedBy?: string;
   resolutionAmount?: string; // Amount paid to beneficiary in resolution (0 = client wins, >0 = freelancer wins)
+  proposedAmount?: string; // Proposed amount for milestone changes
+  proposedDescription?: string; // Proposed description for milestone changes
 }
 
 export interface Escrow {

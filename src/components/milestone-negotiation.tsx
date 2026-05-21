@@ -87,14 +87,49 @@ export function MilestoneNegotiation({
         description: "The client will review your proposed changes",
       });
 
+      // Dispatch event to notify client
+      window.dispatchEvent(new CustomEvent("milestoneProposalSubmitted", {
+        detail: {
+          escrowId,
+          milestoneIndex,
+          freelancerAddress: wallet.address,
+          proposedAmount,
+          proposedDescription,
+        }
+      }));
+
       setIsProposing(false);
+      setProposedAmount("");
       onUpdate?.();
     } catch (error: any) {
-      toast({
-        title: "Proposal Failed",
-        description: error.message || "Failed to submit proposal",
-        variant: "destructive",
-      });
+      const errorMsg = error.message || "Failed to submit proposal";
+      
+      // Check for specific contract errors
+      if (errorMsg.includes("MilestoneAlreadyProcessed")) {
+        toast({
+          title: "Cannot Propose",
+          description: "This milestone has already been processed and cannot be modified",
+          variant: "destructive",
+        });
+      } else if (errorMsg.includes("EscrowNotActive")) {
+        toast({
+          title: "Cannot Propose",
+          description: "This escrow is not in an active state for proposals",
+          variant: "destructive",
+        });
+      } else if (errorMsg.includes("Unauthorized")) {
+        toast({
+          title: "Cannot Propose",
+          description: "Only the freelancer can propose changes",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Proposal Failed",
+          description: errorMsg,
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -105,6 +140,18 @@ export function MilestoneNegotiation({
     try {
       const { ContractService } = await import("@/lib/web3/contract-service");
       const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+
+      // Check if proposed amount is different from current amount
+      const currentAmount = parseFloat(milestone.amount) / 1e18;
+      const proposedAmount = parseFloat(milestone.proposedAmount || "0") / 1e18;
+      
+      if (proposedAmount > currentAmount) {
+        // Show warning about increased amount
+        toast({
+          title: "Amount Increased",
+          description: `Milestone amount increased from ${currentAmount} to ${proposedAmount} USDC. Freelancer will receive the full ${proposedAmount} USDC.`,
+        });
+      }
 
       toast({
         title: "Approving proposal...",
@@ -122,16 +169,45 @@ export function MilestoneNegotiation({
 
       toast({
         title: "Proposal Approved",
-        description: "Milestone has been updated with the new terms",
+        description: `Milestone updated. Freelancer will receive ${proposedAmount.toFixed(6)} USDC`,
       });
+
+      // Get escrow details to notify freelancer
+      try {
+        const escrow = await cs.getEscrow(Number(escrowId));
+        if (escrow && escrow.beneficiary) {
+          // Dispatch event to notify freelancer
+          window.dispatchEvent(new CustomEvent("milestoneProposalApproved", {
+            detail: {
+              escrowId,
+              milestoneIndex,
+              freelancerAddress: escrow.beneficiary,
+              clientAddress: wallet.address,
+              proposedAmount,
+            }
+          }));
+        }
+      } catch (error) {
+        // Continue even if notification fails
+      }
 
       onUpdate?.();
     } catch (error: any) {
-      toast({
-        title: "Approval Failed",
-        description: error.message || "Failed to approve proposal",
-        variant: "destructive",
-      });
+      const errorMsg = error.message || "Failed to approve proposal";
+      
+      if (errorMsg.includes("NoPendingProposal")) {
+        toast({
+          title: "No Pending Proposal",
+          description: "There is no pending proposal to approve for this milestone",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Approval Failed",
+          description: errorMsg,
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -162,13 +238,41 @@ export function MilestoneNegotiation({
         description: "The freelancer can submit a new proposal",
       });
 
+      // Get escrow details to notify freelancer
+      try {
+        const escrow = await cs.getEscrow(Number(escrowId));
+        if (escrow && escrow.beneficiary) {
+          // Dispatch event to notify freelancer
+          window.dispatchEvent(new CustomEvent("milestoneProposalRejected", {
+            detail: {
+              escrowId,
+              milestoneIndex,
+              freelancerAddress: escrow.beneficiary,
+              clientAddress: wallet.address,
+            }
+          }));
+        }
+      } catch (error) {
+        // Continue even if notification fails
+      }
+
       onUpdate?.();
     } catch (error: any) {
-      toast({
-        title: "Rejection Failed",
-        description: error.message || "Failed to reject proposal",
-        variant: "destructive",
-      });
+      const errorMsg = error.message || "Failed to reject proposal";
+      
+      if (errorMsg.includes("NoPendingProposal")) {
+        toast({
+          title: "No Pending Proposal",
+          description: "There is no pending proposal to reject for this milestone",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Rejection Failed",
+          description: errorMsg,
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -244,7 +348,7 @@ export function MilestoneNegotiation({
               <div>
                 <span className="text-muted-foreground">Proposed Amount: </span>
                 <span className="font-medium">
-                  {parseFloat(milestone.proposedAmount) / 1e18} USDC
+                  {(parseFloat(milestone.proposedAmount) / 1e18).toFixed(6)} USDC
                 </span>
                 <span className="text-muted-foreground ml-2">
                   (Current: {parseFloat(milestone.amount) / 1e18} USDC)

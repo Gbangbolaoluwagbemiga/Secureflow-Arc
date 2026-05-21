@@ -230,14 +230,12 @@ export default function ApprovalsPage() {
         depositor: wallet.address,
       }, writeContractAsync);
 
-
       toast({
         title: "Freelancer Approved",
         description: "The freelancer has been approved for this job",
       });
 
-      // Add notification for freelancer approval - notify the FREELANCER
-      // Use original case address, not lowercase
+      // 1. Notify the APPROVED freelancer
       addNotification(
         createApplicationNotification(
           "approved",
@@ -253,8 +251,47 @@ export default function ApprovalsPage() {
               selectedFreelancer.freelancerAddress.slice(-4),
           }
         ),
-        [selectedFreelancer.freelancerAddress] // Use original case, not lowercase
+        [selectedFreelancer.freelancerAddress]
       );
+
+      // 2. Notify the CLIENT (confirming their approval action)
+      addNotification(
+        {
+          type: "application",
+          title: "Freelancer Approved",
+          message: `You approved ${selectedFreelancer.freelancerAddress.slice(0, 6)}...${selectedFreelancer.freelancerAddress.slice(-4)} for "${selectedJobForApproval.projectTitle || `Job #${selectedJobForApproval.id}`}"`,
+          actionUrl: `/dashboard?job=${selectedJobForApproval.id}`,
+          data: {
+            jobId: Number(selectedJobForApproval.id),
+            freelancerAddress: selectedFreelancer.freelancerAddress,
+            action: "client_approved",
+          },
+        },
+        [wallet.address]
+      );
+
+      // 3. Notify ALL OTHER freelancers who applied (job was given to someone else)
+      const otherApplicants = selectedJobForApproval.applications.filter(
+        (app) => app.freelancerAddress.toLowerCase() !== selectedFreelancer.freelancerAddress.toLowerCase()
+      );
+
+      for (const applicant of otherApplicants) {
+        addNotification(
+          {
+            type: "application",
+            title: "Job Position Filled",
+            message: `The position for "${selectedJobForApproval.projectTitle || `Job #${selectedJobForApproval.id}`}" has been filled. Thank you for your application!`,
+            actionUrl: `/browse-jobs`,
+            data: {
+              jobId: Number(selectedJobForApproval.id),
+              freelancerAddress: applicant.freelancerAddress,
+              action: "position_filled",
+              selectedFreelancer: selectedFreelancer.freelancerAddress,
+            },
+          },
+          [applicant.freelancerAddress]
+        );
+      }
 
       // Close modals first
       setSelectedJob(null);

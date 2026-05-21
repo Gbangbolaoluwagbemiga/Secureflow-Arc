@@ -44,6 +44,7 @@ import { Badge } from "@/components/ui/badge";
 // import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Unused
 import { EvidenceSubmissionButton } from "@/components/evidence-submission-button";
 import { ViewEvidenceButton } from "@/components/view-evidence-button";
+import { MilestoneNegotiation } from "@/components/milestone-negotiation";
 import {
   FileText,
   User,
@@ -399,14 +400,14 @@ export default function FreelancerPage() {
                   | "approved"
                   | "rejected"
                   | "disputed"
-                  | "resolved"
+                  | "proposal_pending"
                 > = {
-                  0: "pending",
-                  1: "submitted",
-                  2: "approved",
-                  3: "rejected",      // Fixed: was "disputed"
-                  4: "disputed",      // Fixed: was "resolved"
-                  5: "pending",       // ProposalPending - treat as pending
+                  0: "pending",           // NotStarted
+                  1: "submitted",         // Submitted
+                  2: "approved",          // Approved
+                  3: "rejected",          // Rejected
+                  4: "disputed",          // Disputed
+                  5: "proposal_pending",  // ProposalPending
                 };
                 const status = statusMap[statusNumber] || "pending";
 
@@ -435,6 +436,8 @@ export default function FreelancerPage() {
                   approvedAt,
                   disputeReason: m.disputeReason || undefined,
                   rejectionReason: m.rejectionReason || undefined,
+                  proposedAmount: m.proposedAmount?.toString() || undefined,
+                  proposedDescription: m.proposedDescription || undefined,
                 };
               }
             );
@@ -1839,6 +1842,32 @@ export default function FreelancerPage() {
                                             </p>
                                           );
                                         })()}
+                                      </div>
+                                    )}
+
+                                    {/* Show milestone negotiation component for pending milestones */}
+                                    {milestone.status === "pending" && (
+                                      <div className="mt-3">
+                                        <MilestoneNegotiation
+                                          escrowId={escrow.id}
+                                          milestoneIndex={index}
+                                          milestone={milestone}
+                                          isFreelancer={true}
+                                          isClient={false}
+                                          onUpdate={() => fetchFreelancerEscrows()}
+                                        />
+                                      </div>
+                                    )}
+
+                                    {/* Show proposal pending status for freelancers */}
+                                    {milestone.status === "proposal_pending" && (
+                                      <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                                        <div className="flex items-center gap-2">
+                                          <Clock className="h-4 w-4 text-yellow-500" />
+                                          <span className="text-sm text-yellow-700 dark:text-yellow-300 font-medium">
+                                            Proposal pending client review
+                                          </span>
+                                        </div>
                                       </div>
                                     )}
 

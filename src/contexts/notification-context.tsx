@@ -95,6 +95,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const lastRemoteFingerprintRef = useRef<string>("");
   const lastRemoteIdsRef = useRef<Set<string>>(new Set());
+  const lastSyncTimeRef = useRef<number>(0);
+  const syncInProgressRef = useRef<boolean>(false);
 
   const isCrossPartyRemoteNotification = useCallback(
     (row: RemoteNotificationRow): boolean => {
@@ -159,6 +161,15 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const syncRemoteNotifications = useCallback(async () => {
     if (!wallet.address || !isApiConfigured()) return;
+    
+    // Prevent concurrent syncs and rate limit to once per 5 seconds minimum
+    if (syncInProgressRef.current) return;
+    const now = Date.now();
+    if (now - lastSyncTimeRef.current < 5000) return;
+    
+    syncInProgressRef.current = true;
+    lastSyncTimeRef.current = now;
+    
     try {
       const remote = await getNotifications(wallet.address);
       const prevIds = lastRemoteIdsRef.current;
@@ -190,18 +201,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       }
     } catch {
       /* offline or API down — keep local state */
+    } finally {
+      syncInProgressRef.current = false;
     }
   }, [wallet.address, isCrossPartyRemoteNotification]);
-
-  useEffect(() => {
-    if (!wallet.address || !isApiConfigured()) return;
-    lastRemoteFingerprintRef.current = "";
-    lastRemoteIdsRef.current = new Set();
-    void syncRemoteNotifications();
-    // Poll every 10 seconds instead of 4 to avoid rate limiting
-    const t = window.setInterval(() => void syncRemoteNotifications(), 10_000);
-    return () => window.clearInterval(t);
-  }, [wallet.address, syncRemoteNotifications]);
 
   const addNotification = (
     notification: Omit<Notification, "id" | "timestamp" | "read">,
@@ -245,6 +248,20 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             }).catch(() => {
               // Fallback: write to localStorage so the other party at least
               // sees it if they happen to share the same browser profile.
+              try {
+                const existing = JSON.parse(
+                  localStorage.getItem(`notifications_${address}`) || "[]",
+                );
+                localStorage.setItem(
+                  `notifications_${address}`,
+                  JSON.stringify([newNotification, ...existing]),
+                );
+              } catch {
+                // Silently fail if localStorage is unavailable
+              }
+            });
+          } else {
+            try {
               const existing = JSON.parse(
                 localStorage.getItem(`notifications_${address}`) || "[]",
               );
@@ -252,15 +269,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
                 `notifications_${address}`,
                 JSON.stringify([newNotification, ...existing]),
               );
-            });
-          } else {
-            const existing = JSON.parse(
-              localStorage.getItem(`notifications_${address}`) || "[]",
-            );
-            localStorage.setItem(
-              `notifications_${address}`,
-              JSON.stringify([newNotification, ...existing]),
-            );
+            } catch {
+              // Silently fail if localStorage is unavailable
+            }
           }
         }
       });
@@ -276,6 +287,223 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       });
     }
   };
+
+  useEffect(() => {
+    if (!wallet.address || !isApiConfigured()) return;
+    lastRemoteFingerprintRef.current = "";
+    lastRemoteIdsRef.current = new Set();
+    void syncRemoteNotifications();
+    // Poll every 30 seconds to avoid rate limiting
+    const t = window.setInterval(() => void syncRemoteNotifications(), 30_000);
+    
+    // Listen for work started events
+    const handleWorkStarted = (event: CustomEvent) => {
+      const { 
+        escrowId, 
+        freelancerAddress, 
+        clientAddress, 
+        projectTitle, 
+        freelancerName 
+      } = event.detail;
+      
+      // Notify the client that work has started
+      if (clientAddress) {
+        addNotification(
+          {
+            type: "escrow",
+            title: "Work Started!",
+            message: `${freelancerName} has started work on ${projectTitle}`,
+            actionUrl: `/dashboard?escrow=${escrowId}`,
+            data: {
+              escrowId,
+              freelancerName,
+              projectTitle,
+              freelancerAddress,
+            },
+          },
+          [clientAddress]
+        );
+      }
+      
+      // Notify the freelancer (confirmation)
+      if (freelancerAddress) {
+        addNotification(
+          {
+            type: "escrow",
+            title: "Work Started!",
+            message: `You have successfully started work on "${projectTitle}"`,
+            actionUrl: `/freelancer?escrow=${escrowId}`,
+            data: {
+              escrowId,
+              action: "work_started_confirmation",
+            },
+          },
+          [freelancerAddress]
+        );
+      }
+    };
+    
+    // Listen for job application events
+    const handleJobApplicationSubmitted = (event: CustomEvent) => {
+      const {
+        jobId,
+        freelancerAddress,
+        clientAddress,
+        jobTitle,
+        freelancerName,
+      } = event.detail;
+      
+      // Notify the client about the new application
+      if (clientAddress) {
+        addNotification(
+          {
+            type: "application",
+            title: "New Job Application",
+            message: `Someone applied to your job: ${jobTitle}`,
+            actionUrl: `/approvals?job=${jobId}`,
+            data: {
+              jobId,
+              freelancerAddress,
+              jobTitle,
+              freelancerName,
+            },
+          },
+          [clientAddress]
+        );
+      }
+      
+      // Notify the freelancer (confirmation)
+      if (freelancerAddress) {
+        addNotification(
+          {
+            type: "application",
+            title: "Application Submitted!",
+            message: `Your application for "${jobTitle}" has been submitted successfully`,
+            actionUrl: `/browse-jobs?job=${jobId}`,
+            data: {
+              jobId,
+              action: "application_submitted_confirmation",
+            },
+          },
+          [freelancerAddress]
+        );
+      }
+    };
+
+    // Listen for milestone proposal events
+    const handleMilestoneProposalSubmitted = (event: CustomEvent) => {
+      const {
+        escrowId,
+        milestoneIndex,
+        freelancerAddress,
+        proposedAmount,
+        proposedDescription,
+      } = event.detail;
+
+      // Get escrow details to find client address
+      (async () => {
+        try {
+          const { ContractService } = await import("@/lib/web3/contract-service");
+          const cs = new ContractService();
+          const escrow = await cs.getEscrow(Number(escrowId));
+          
+          if (escrow && escrow.depositor) {
+            // Notify the client about the proposal
+            addNotification(
+              {
+                type: "milestone",
+                title: "Milestone Proposal Received",
+                message: `Freelancer proposed changes to milestone ${milestoneIndex + 1}. New amount: ${(parseFloat(proposedAmount) / 1e18).toFixed(6)} USDC`,
+                actionUrl: `/dashboard?escrow=${escrowId}`,
+                data: {
+                  escrowId,
+                  milestoneIndex,
+                  freelancerAddress,
+                  proposedAmount,
+                  proposedDescription,
+                  action: "milestone_proposal_pending",
+                },
+              },
+              [escrow.depositor]
+            );
+          }
+        } catch (error) {
+          // Silently fail - notification is not critical
+        }
+      })();
+    };
+
+    // Listen for milestone proposal rejection events
+    const handleMilestoneProposalRejected = (event: CustomEvent) => {
+      const {
+        escrowId,
+        milestoneIndex,
+        freelancerAddress,
+      } = event.detail;
+
+      // Notify the freelancer that their proposal was rejected
+      if (freelancerAddress) {
+        addNotification(
+          {
+            type: "milestone",
+            title: "Proposal Rejected",
+            message: `Your proposal for milestone ${milestoneIndex + 1} was rejected. You can submit a new proposal.`,
+            actionUrl: `/freelancer?escrow=${escrowId}`,
+            data: {
+              escrowId,
+              milestoneIndex,
+              action: "milestone_proposal_rejected",
+            },
+          },
+          [freelancerAddress]
+        );
+      }
+    };
+
+    // Listen for milestone proposal approval events
+    const handleMilestoneProposalApproved = (event: CustomEvent) => {
+      const {
+        escrowId,
+        milestoneIndex,
+        freelancerAddress,
+        proposedAmount,
+      } = event.detail;
+
+      // Notify the freelancer that their proposal was approved
+      if (freelancerAddress) {
+        addNotification(
+          {
+            type: "milestone",
+            title: "Proposal Approved!",
+            message: `Your proposal for milestone ${milestoneIndex + 1} was approved. New amount: ${(parseFloat(proposedAmount) / 1e18).toFixed(6)} USDC. You can now submit the milestone.`,
+            actionUrl: `/freelancer?escrow=${escrowId}`,
+            data: {
+              escrowId,
+              milestoneIndex,
+              proposedAmount,
+              action: "milestone_proposal_approved",
+            },
+          },
+          [freelancerAddress]
+        );
+      }
+    };
+    
+    window.addEventListener("workStarted", handleWorkStarted as EventListener);
+    window.addEventListener("jobApplicationSubmitted", handleJobApplicationSubmitted as EventListener);
+    window.addEventListener("milestoneProposalSubmitted", handleMilestoneProposalSubmitted as EventListener);
+    window.addEventListener("milestoneProposalRejected", handleMilestoneProposalRejected as EventListener);
+    window.addEventListener("milestoneProposalApproved", handleMilestoneProposalApproved as EventListener);
+    
+    return () => {
+      window.clearInterval(t);
+      window.removeEventListener("workStarted", handleWorkStarted as EventListener);
+      window.removeEventListener("jobApplicationSubmitted", handleJobApplicationSubmitted as EventListener);
+      window.removeEventListener("milestoneProposalSubmitted", handleMilestoneProposalSubmitted as EventListener);
+      window.removeEventListener("milestoneProposalRejected", handleMilestoneProposalRejected as EventListener);
+      window.removeEventListener("milestoneProposalApproved", handleMilestoneProposalApproved as EventListener);
+    };
+  }, [wallet.address, syncRemoteNotifications, addNotification]);
 
   const markAsRead = (id: string) => {
     if (wallet.address && notificationIdIsRemote(id)) {
@@ -364,6 +592,20 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           action_url: newNotification.actionUrl,
           data: outboundData,
         }).catch(() => {
+          try {
+            const existing = JSON.parse(
+              localStorage.getItem(`notifications_${address}`) || "[]",
+            );
+            localStorage.setItem(
+              `notifications_${address}`,
+              JSON.stringify([newNotification, ...existing]),
+            );
+          } catch {
+            // Silently fail if localStorage is unavailable
+          }
+        });
+      } else {
+        try {
           const existing = JSON.parse(
             localStorage.getItem(`notifications_${address}`) || "[]",
           );
@@ -371,15 +613,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             `notifications_${address}`,
             JSON.stringify([newNotification, ...existing]),
           );
-        });
-      } else {
-        const existing = JSON.parse(
-          localStorage.getItem(`notifications_${address}`) || "[]",
-        );
-        localStorage.setItem(
-          `notifications_${address}`,
-          JSON.stringify([newNotification, ...existing]),
-        );
+        } catch {
+          // Silently fail if localStorage is unavailable
+        }
       }
     });
 

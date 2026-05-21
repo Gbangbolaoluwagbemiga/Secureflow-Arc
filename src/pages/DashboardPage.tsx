@@ -10,6 +10,7 @@ import {
   createEscrowNotification,
   createMilestoneNotification,
 } from "@/contexts/notification-context";
+import { MilestoneNegotiation } from "@/components/milestone-negotiation";
 import type { Escrow } from "@/lib/web3/types";
 import {
   Wallet,
@@ -276,13 +277,14 @@ export default function DashboardPage() {
                     | "rejected"
                     | "disputed"
                     | "resolved"
+                    | "proposal_pending"
                   > = {
                     0: "pending",
                     1: "submitted",
                     2: "approved",
                     3: "rejected",      // Fixed: was "disputed"
                     4: "disputed",      // Fixed: was "resolved"
-                    5: "pending",       // ProposalPending - treat as pending
+                    5: "proposal_pending",  // ProposalPending
                   };
                   const status = statusMap[statusNumber] || "pending";
 
@@ -303,6 +305,8 @@ export default function DashboardPage() {
                     resolvedAt,
                     resolvedBy: m.resolvedBy || undefined,
                     resolutionAmount: undefined,
+                    proposedAmount: m.proposedAmount?.toString() || undefined,
+                    proposedDescription: m.proposedDescription || undefined,
                   };
                 } catch (error) {
                   // Return a safe default milestone object if parsing fails

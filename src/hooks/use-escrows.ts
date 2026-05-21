@@ -247,9 +247,35 @@ export function useStartWork() {
         args: [BigInt(escrowId)],
       });
     },
-    onSuccess: () => {
+    onSuccess: async (_, escrowId) => {
       queryClient.invalidateQueries({ queryKey: ["escrow"] });
       queryClient.invalidateQueries({ queryKey: ["user-escrows"] });
+      
+      // Get escrow details for notifications
+      try {
+        const escrow = await contractService.getEscrow(escrowId);
+        if (escrow && address) {
+          // Import notification functions
+          const { useNotifications, createEscrowNotification } = await import("@/contexts/notification-context");
+          
+          // Get notification context - we need to do this differently since we're in a hook
+          // We'll dispatch a custom event that the notification provider can listen to
+          const notificationData = {
+            type: "work_started",
+            escrowId: escrowId.toString(),
+            freelancerAddress: address,
+            clientAddress: escrow.depositor,
+            projectTitle: escrow.projectTitle || `Project #${escrowId}`,
+            freelancerName: `${address.slice(0, 6)}...${address.slice(-4)}`,
+          };
+          
+          // Dispatch custom event for notifications
+          window.dispatchEvent(new CustomEvent("workStarted", { detail: notificationData }));
+        }
+      } catch (error) {
+        console.error("Failed to send work started notifications:", error);
+      }
+      
       toast({ title: "Work started", description: "You have accepted this contract." });
     },
     onError: (error: Error) => {
@@ -403,8 +429,31 @@ export function useApplyToJob() {
         args: [BigInt(params.escrow_id), params.cover_letter, BigInt(params.proposed_timeline)],
       });
     },
-    onSuccess: () => {
+    onSuccess: async (_, params) => {
       queryClient.invalidateQueries({ queryKey: ["escrow"] });
+      
+      // Get escrow details for notifications
+      try {
+        const escrow = await contractService.getEscrow(params.escrow_id);
+        if (escrow && address) {
+          // Dispatch custom event for notifications
+          const notificationData = {
+            jobId: params.escrow_id,
+            freelancerAddress: address,
+            clientAddress: escrow.depositor,
+            jobTitle: escrow.projectTitle || `Job #${params.escrow_id}`,
+            freelancerName: `${address.slice(0, 6)}...${address.slice(-4)}`,
+            coverLetter: params.cover_letter,
+            proposedTimeline: params.proposed_timeline,
+          };
+          
+          // Dispatch custom event for notifications
+          window.dispatchEvent(new CustomEvent("jobApplicationSubmitted", { detail: notificationData }));
+        }
+      } catch (error) {
+        console.error("Failed to send job application notifications:", error);
+      }
+      
       toast({ title: "Application submitted", description: "The client has been notified." });
     },
     onError: (error: Error) => {

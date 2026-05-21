@@ -404,14 +404,14 @@ export function MilestoneActions({
 
   return (
     <>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-2">
         {/* Approve Milestone - Only payer for submitted milestones (disabled if disputed) */}
         {canApproveMilestone() && !isProjectDisputed && (
           <Button
             onClick={() => openDialog("approve")}
             size="sm"
             variant="default"
-            className="gap-2 bg-green-600 hover:bg-green-700 text-white"
+            className="gap-2 bg-green-600 hover:bg-green-700 text-white w-full justify-center"
             disabled={isLoading}
           >
             <CheckCircle2 className="h-4 w-4" />
@@ -425,7 +425,7 @@ export function MilestoneActions({
             onClick={() => openDialog("reject")}
             size="sm"
             variant="outline"
-            className="gap-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+            className="gap-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 w-full justify-center"
             disabled={isLoading}
           >
             <XCircle className="h-4 w-4" />
@@ -441,7 +441,7 @@ export function MilestoneActions({
               onClick={() => openDialog("dispute")}
               size="sm"
               variant="destructive"
-              className="gap-2"
+              className="gap-2 w-full justify-center"
               disabled={isLoading}
             >
               <Gavel className="h-4 w-4" />
@@ -451,7 +451,7 @@ export function MilestoneActions({
 
         {/* Approved Status - Show approved badge */}
         {milestone.status === "approved" && (
-          <div className="flex items-center gap-2 text-green-600">
+          <div className="flex items-center justify-center gap-2 text-green-600 py-2">
             <CheckCircle2 className="h-4 w-4" />
             <span className="text-sm font-medium">Approved</span>
           </div>
@@ -459,8 +459,8 @@ export function MilestoneActions({
 
         {/* Rejected Status - Show rejected badge and resubmit button */}
         {milestone.status === "rejected" && (
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 text-red-600">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-center gap-2 text-red-600 py-2">
               <AlertTriangle className="h-4 w-4" />
               <span className="text-sm font-medium">Rejected</span>
             </div>
@@ -469,7 +469,7 @@ export function MilestoneActions({
                 onClick={() => openDialog("resubmit")}
                 size="sm"
                 variant="default"
-                className="gap-2"
+                className="gap-2 w-full justify-center"
                 disabled={isLoading}
                 data-action="resubmit"
               >
@@ -483,12 +483,12 @@ export function MilestoneActions({
         {/* Disputed Status - Show disputed badge with reason */}
         {milestone.status === "disputed" && (
           <div className="flex flex-col gap-2 text-orange-600">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-center gap-2 py-2">
               <Gavel className="h-4 w-4" />
               <span className="text-sm font-medium">Disputed</span>
             </div>
             {milestone.disputeReason && (
-              <div className="text-xs text-orange-700 bg-orange-50 p-2 rounded border">
+              <div className="text-xs text-orange-700 bg-orange-50 p-2 rounded border border-orange-200">
                 <strong>Reason:</strong> {milestone.disputeReason}
               </div>
             )}
@@ -498,7 +498,7 @@ export function MilestoneActions({
         {/* Resolved Status - Show resolved badge with winner info */}
         {milestone.status === "resolved" && (
           <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2 text-blue-600">
+            <div className="flex items-center justify-center gap-2 text-blue-600 py-2">
               <CheckCircle2 className="h-4 w-4" />
               <span className="text-sm font-medium">Resolved</span>
             </div>
