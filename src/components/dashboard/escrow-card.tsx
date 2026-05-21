@@ -10,12 +10,15 @@ import { Clock, DollarSign, ChevronDown, ChevronUp, Star, AlertTriangle, Calenda
 import { MilestoneActions } from "@/components/milestone-actions";
 import { MilestoneNegotiation } from "@/components/milestone-negotiation";
 import { JobManagement } from "@/components/job-management";
+import { EvidenceSubmissionButton } from "@/components/evidence-submission-button";
+import { ViewEvidenceButton } from "@/components/view-evidence-button";
 import { parseAttachment, formatEth, formatTokenAmount } from "@/lib/utils";
 import { RatingDialog } from "@/components/rating/rating-dialog";
 import { ChatDialog } from "@/components/chat/chat-dialog";
 import { useState, useEffect } from "react";
 import { contractService } from "@/lib/web3/contract-service";
 import { useWeb3 } from "@/contexts/web3-context";
+import { useToast } from "@/hooks/use-toast";
 import { isApiConfigured } from "@/lib/api";
 import type { Escrow } from "@/lib/web3/types";
 
@@ -51,6 +54,7 @@ export function EscrowCard({
   onRaiseOverdueDispute,
   onExtendDeadline,
 }: EscrowCardProps) {
+  const { toast } = useToast();
   const [showRatingDialog, setShowRatingDialog] = useState(false);
   const [hasRating, setHasRating] = useState(false);
   const [existingRating, setExistingRating] = useState<{
@@ -326,6 +330,46 @@ export function EscrowCard({
                           }}
                         />
                       </div>
+                      
+                      {/* Evidence buttons for disputed milestones */}
+                      {milestone.status === "disputed" && (
+                        <div className="mt-3 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                          <div className="flex items-center gap-2 mb-2">
+                            <AlertTriangle className="h-4 w-4 text-orange-600" />
+                            <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                              Milestone Under Dispute
+                            </span>
+                          </div>
+                          <p className="text-xs text-orange-600 dark:text-orange-400 mb-3">
+                            This milestone is being reviewed by an arbiter. Submit evidence to support your case.
+                          </p>
+                          <div className="flex gap-2">
+                            <ViewEvidenceButton
+                              escrowId={escrow.id}
+                              milestoneIndex={idx}
+                              clientAddress={escrow.payer}
+                              freelancerAddress={escrow.beneficiary}
+                              variant="outline"
+                              size="sm"
+                              className="flex-1"
+                            />
+                            <EvidenceSubmissionButton
+                              escrowId={escrow.id}
+                              milestoneIndex={idx}
+                              onEvidenceSubmitted={() => {
+                                toast({
+                                  title: "Evidence submitted",
+                                  description: "Your evidence has been recorded on-chain",
+                                });
+                              }}
+                              variant="default"
+                              size="sm"
+                              className="flex-1"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      
                       {/* Milestone Negotiation Component */}
                       <MilestoneNegotiation
                         escrowId={escrow.id}

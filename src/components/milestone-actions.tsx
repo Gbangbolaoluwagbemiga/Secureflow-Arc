@@ -307,6 +307,27 @@ export function MilestoneActions({
               [otherParty],
             );
           }
+
+          // Notify admin/contract owner about the new dispute
+          try {
+            const { ContractService: AdminCS } = await import("@/lib/web3/contract-service");
+            const adminCS = new AdminCS(CONTRACTS.SECUREFLOW_ESCROW);
+            const ownerAddress = await adminCS.getOwner();
+            if (ownerAddress) {
+              addNotification(
+                {
+                  type: "dispute",
+                  title: "New Dispute Raised",
+                  message: `Escrow #${escrowId}, Milestone ${milestoneIndex}: ${disputeReason}`,
+                  actionUrl: `/admin`,
+                  data: { escrowId, milestoneIndex, reason: disputeReason },
+                },
+                [ownerAddress],
+              );
+            }
+          } catch (error) {
+            console.error("Failed to notify admin:", error);
+          }
         }
 
         setDialogOpen(false);

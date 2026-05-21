@@ -32,7 +32,7 @@ export class ContractService {
   async getEscrow(id: number) {
     try {
       const e = await this.contract.read.getEscrow([BigInt(id)]);
-      return {
+      const escrowData = {
         depositor: e.depositor,
         beneficiary: e.beneficiary,
         token: e.token,
@@ -46,11 +46,34 @@ export class ContractService {
         projectTitle: e.projectTitle,
         projectDescription: e.projectDescription,
       };
-    } catch { return null; }
+      console.log(`getEscrow(${id}) returned:`, {
+        totalAmount: escrowData.totalAmount?.toString(),
+        paidAmount: escrowData.paidAmount?.toString(),
+        status: escrowData.status
+      });
+      return escrowData;
+    } catch (error) {
+      console.error(`getEscrow(${id}) failed:`, error);
+      return null;
+    }
   }
 
   async getMilestones(id: number) {
-    try { return await this.contract.read.getMilestones([BigInt(id)]); } catch { return []; }
+    try {
+      const milestones = await this.contract.read.getMilestones([BigInt(id)]);
+      console.log(`getMilestones(${id}) returned ${milestones.length} milestones`);
+      if (milestones.length > 0) {
+        console.log(`First milestone:`, {
+          amount: milestones[0].amount?.toString(),
+          status: milestones[0].status,
+          description: milestones[0].description
+        });
+      }
+      return milestones;
+    } catch (error) {
+      console.error(`getMilestones(${id}) failed:`, error);
+      return [];
+    }
   }
 
   async getReputation(addr: string): Promise<number> {
@@ -58,7 +81,14 @@ export class ContractService {
   }
 
   async getOwner(): Promise<string | null> {
-    try { return await this.contract.read.owner() as string; } catch { return null; }
+    try { 
+      const owner = await this.contract.read.owner() as string;
+      console.log("Contract owner fetched:", owner);
+      return owner;
+    } catch (error) {
+      console.error("Failed to fetch contract owner:", error);
+      return null;
+    }
   }
 
   async isAuthorizedArbiter(addr: string): Promise<boolean> {
@@ -449,6 +479,27 @@ export class ContractService {
       abi: SecureFlowABI.abi,
       functionName: "revokeArbiter",
       args: [arbiter as `0x${string}`],
+    });
+  }
+
+  async authorizeArbiter(arbiter: string, write: WagmiWrite): Promise<`0x${string}`> {
+    return write({
+      address: this.addr,
+      abi: SecureFlowABI.abi,
+      functionName: "authorizeArbiter",
+      args: [arbiter as `0x${string}`],
+    });
+  }
+
+  async submitEvidence(
+    params: { escrow_id: number; milestone_index: number; cid: string; submitter: string },
+    write: WagmiWrite
+  ): Promise<`0x${string}`> {
+    return write({
+      address: this.addr,
+      abi: SecureFlowABI.abi,
+      functionName: "submitEvidence",
+      args: [BigInt(params.escrow_id), BigInt(params.milestone_index), params.cid],
     });
   }
 

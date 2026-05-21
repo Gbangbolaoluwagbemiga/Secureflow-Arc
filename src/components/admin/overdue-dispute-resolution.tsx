@@ -6,6 +6,18 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -17,7 +29,7 @@ import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { useNotifications } from "@/contexts/notification-context";
 import { CONTRACTS } from "@/lib/web3/config";
-import { AlertTriangle, Scale, CheckCircle, Undo2, Clock } from "lucide-react";
+import { AlertTriangle, Scale, CheckCircle, Undo2, Clock, ChevronDown, ChevronUp } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface OverdueCase {
@@ -50,6 +62,12 @@ export function OverdueDisputeResolution({ onResolved }: Props) {
   /** 0 = full refund to client; 100 = full award to freelancer */
   const [freelancerPct, setFreelancerPct] = useState(0);
   const [freelancerPctInput, setFreelancerPctInput] = useState("0");
+  
+  // Pagination and filtering
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "amount">("newest");
+  const [isExpanded, setIsExpanded] = useState(true);
 
   const fetchCases = useCallback(async () => {
     if (!wallet.address) return;
@@ -204,83 +222,183 @@ export function OverdueDisputeResolution({ onResolved }: Props) {
     );
   }
 
+  // Sort cases
+  const sortedCases = [...cases].sort((a, b) => {
+    switch (sortBy) {
+      case "newest":
+        return b.requestedAt - a.requestedAt;
+      case "oldest":
+        return a.requestedAt - b.requestedAt;
+      case "amount":
+        return b.unreleased - a.unreleased;
+      default:
+        return 0;
+    }
+  });
+
+  // Paginate cases
+  const totalPages = Math.ceil(sortedCases.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedCases = sortedCases.slice(startIndex, endIndex);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Scale className="h-5 w-5 text-orange-500" />
-          <h3 className="text-lg font-semibold">Overdue Disputes</h3>
-          {cases.length > 0 && (
-            <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
-              {cases.length}
-            </Badge>
-          )}
-        </div>
-        <Button variant="ghost" size="sm" onClick={() => void fetchCases()}>
-          Refresh
-        </Button>
-      </div>
+      <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+        <Card className="glass border-primary/20 p-6">
+          <CollapsibleTrigger asChild>
+            <div className="flex items-center justify-between cursor-pointer hover:opacity-80 transition-opacity mb-4">
+              <div className="flex items-center gap-2">
+                <Scale className="h-5 w-5 text-orange-500" />
+                <h3 className="text-lg font-semibold">Overdue Disputes</h3>
+                {cases.length > 0 && (
+                  <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+                    {cases.length}
+                  </Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+              </div>
+            </div>
+          </CollapsibleTrigger>
 
-      {cases.length === 0 ? (
-        <Card className="glass border-primary/20 p-8 text-center">
-          <CheckCircle className="h-10 w-10 mx-auto mb-3 text-green-500 opacity-60" />
-          <p className="text-muted-foreground">No overdue disputes pending</p>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {cases.map((c, i) => (
-            <motion.div
-              key={c.escrowId}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.05 }}
-            >
-              <Card className="glass border-orange-300/40 dark:border-orange-700/40 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-2 min-w-0">
-                    <AlertTriangle className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
-                    <div className="min-w-0">
-                      <p className="font-medium truncate">{c.projectTitle}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Escrow #{c.escrowId} · Raised by{" "}
-                        <span className="font-mono">
-                          {c.requesterAddress.slice(0, 6)}…
-                          {c.requesterAddress.slice(-4)}
-                        </span>
-                      </p>
-                      {c.reason && (
-                        <p className="text-xs mt-1 text-gray-600 dark:text-gray-400 line-clamp-2">
-                          "{c.reason}"
-                        </p>
-                      )}
-                      <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                        <span>
-                          Unreleased:{" "}
-                          <strong className="text-foreground">
-                            {c.unreleased.toFixed(2)} USDC
-                          </strong>
-                        </span>
-                        <span>
-                          Paid: {c.paidAmount.toFixed(2)} /{" "}
-                          {c.totalAmount.toFixed(2)} USDC
-                        </span>
-                      </div>
+          <CollapsibleContent>
+            {cases.length > 0 && (
+              <div className="flex flex-wrap items-center gap-3 mb-4 pb-4 border-b">
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm">Sort by:</Label>
+                  <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="newest">Newest</SelectItem>
+                      <SelectItem value="oldest">Oldest</SelectItem>
+                      <SelectItem value="amount">Amount</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm">Per page:</Label>
+                  <Select value={itemsPerPage.toString()} onValueChange={(v) => {
+                    setItemsPerPage(Number(v));
+                    setCurrentPage(1);
+                  }}>
+                    <SelectTrigger className="w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5</SelectItem>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Button variant="ghost" size="sm" onClick={() => void fetchCases()} className="ml-auto">
+                  Refresh
+                </Button>
+              </div>
+            )}
+
+            {cases.length === 0 ? (
+              <div className="text-center py-8">
+                <CheckCircle className="h-10 w-10 mx-auto mb-3 text-green-500 opacity-60" />
+                <p className="text-muted-foreground">No overdue disputes pending</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-3">
+                  {paginatedCases.map((c, i) => (
+                    <motion.div
+                      key={c.escrowId}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                    >
+                      <Card className="glass border-orange-300/40 dark:border-orange-700/40 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-2 min-w-0">
+                            <AlertTriangle className="h-4 w-4 text-orange-500 shrink-0 mt-0.5" />
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">{c.projectTitle}</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Escrow #{c.escrowId} · Raised by{" "}
+                                <span className="font-mono">
+                                  {c.requesterAddress.slice(0, 6)}…
+                                  {c.requesterAddress.slice(-4)}
+                                </span>
+                              </p>
+                              {c.reason && (
+                                <p className="text-xs mt-1 text-gray-600 dark:text-gray-400 line-clamp-2">
+                                  "{c.reason}"
+                                </p>
+                              )}
+                              <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                                <span>
+                                  Unreleased:{" "}
+                                  <strong className="text-foreground">
+                                    {c.unreleased.toFixed(2)} USDC
+                                  </strong>
+                                </span>
+                                <span>
+                                  Paid: {c.paidAmount.toFixed(2)} /{" "}
+                                  {c.totalAmount.toFixed(2)} USDC
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="shrink-0 border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-400"
+                            onClick={() => openDialog(c)}
+                          >
+                            Resolve
+                          </Button>
+                        </div>
+                      </Card>
+                    </motion.div>
+                  ))}
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                    <p className="text-sm text-muted-foreground">
+                      Showing {startIndex + 1}-{Math.min(endIndex, cases.length)} of {cases.length} cases
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      <span className="text-sm">
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                      </Button>
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="shrink-0 border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-400"
-                    onClick={() => openDialog(c)}
-                  >
-                    Resolve
-                  </Button>
-                </div>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
-      )}
+                )}
+              </>
+            )}
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {/* Resolution dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

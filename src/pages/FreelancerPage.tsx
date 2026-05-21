@@ -42,6 +42,8 @@ import { Badge } from "@/components/ui/badge";
 // } from "@/components/ui/dialog"; // Unused
 // import { Alert, AlertDescription } from "@/components/ui/alert"; // Unused
 // import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Unused
+import { EvidenceSubmissionButton } from "@/components/evidence-submission-button";
+import { ViewEvidenceButton } from "@/components/view-evidence-button";
 import {
   FileText,
   User,
@@ -1042,6 +1044,25 @@ export default function FreelancerPage() {
         })
       );
 
+      // Notify admin about the new dispute
+      try {
+        const ownerAddress = await contractService.getOwner();
+        if (ownerAddress) {
+          addNotification(
+            {
+              type: "dispute",
+              title: "New Dispute Raised",
+              message: `Escrow #${escrowId}, Milestone ${milestoneIndex}: ${reason}`,
+              actionUrl: `/admin`,
+              data: { escrowId, milestoneIndex, reason },
+            },
+            [ownerAddress],
+          );
+        }
+      } catch (error) {
+        console.error("Failed to notify admin:", error);
+      }
+
       // Refresh escrows
       await fetchFreelancerEscrows();
     } catch (error) {
@@ -1844,15 +1865,29 @@ export default function FreelancerPage() {
                                             </p>
                                           </div>
                                         )}
-                                        <div className="flex gap-2">
-                                          <Button
-                                            size="sm"
+                                        <div className="flex gap-2 mt-3">
+                                          <ViewEvidenceButton
+                                            escrowId={escrow.id}
+                                            milestoneIndex={index}
+                                            clientAddress={escrow.payer}
+                                            freelancerAddress={escrow.beneficiary}
                                             variant="outline"
-                                            disabled
-                                            className="border-orange-300 dark:border-orange-600 text-orange-700 dark:text-orange-300"
-                                          >
-                                            Under Review
-                                          </Button>
+                                            size="sm"
+                                            className="flex-1"
+                                          />
+                                          <EvidenceSubmissionButton
+                                            escrowId={escrow.id}
+                                            milestoneIndex={index}
+                                            onEvidenceSubmitted={() => {
+                                              toast({
+                                                title: "Evidence submitted",
+                                                description: "Your evidence has been recorded",
+                                              });
+                                            }}
+                                            variant="default"
+                                            size="sm"
+                                            className="flex-1"
+                                          />
                                         </div>
                                       </div>
                                     )}

@@ -6,6 +6,19 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -18,9 +31,11 @@ import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
 import { useNotifications } from "@/contexts/notification-context";
-import { AlertTriangle, Clock, User, DollarSign, Scale, CheckCircle } from "lucide-react";
+import { AlertTriangle, Clock, User, DollarSign, Scale, CheckCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { motion } from "framer-motion";
 import { formatUnits } from "viem";
+import { DisputeEvidence } from "./dispute-evidence";
+import { AdminDisputeCommunication } from "./admin-dispute-communication";
 
 interface Dispute {
   escrowId: string;
@@ -52,6 +67,12 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
   const [isResolving, setIsResolving] = useState(false);
   const [freelancerPct, setFreelancerPct] = useState(50);
   const [resolutionReason, setResolutionReason] = useState("");
+  
+  // Pagination and filtering
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "amount">("newest");
+  const [isExpanded, setIsExpanded] = useState(true);
 
   useEffect(() => {
     if (wallet.isConnected) void fetchDisputes();
@@ -69,10 +90,58 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
         try {
           const escrow = await svc.getEscrow(id);
           if (!escrow || escrow.status !== 4 /* Disputed */) continue;
+          
+          console.log(`Escrow #${id} data:`, {
+            totalAmount: escrow.totalAmount?.toString(),
+            paidAmount: escrow.paidAmount?.toString(),
+            status: escrow.status
+          });
+          
           const milestones: any[] = await svc.getMilestones(id) as any[];
           milestones.forEach((m, idx) => {
             if (Number(m.status) === 4 /* MilestoneStatus.Disputed */) {
-              const amtWei = BigInt(m.amount ?? 0);
+              // Calculate remaining amount at stake (total - already paid)
+              const escrowTotalWei = BigInt(escrow.totalAmount ?? 0);
+              const escrowPaidWei = BigInt(escrow.paidAmount ?? 0);
+              const remainingWei = escrowTotalWei - escrowPaidWei;
+              
+              // Use milestone amount if available, otherwise use remaining escrow balance
+              const milestoneAmtWei = BigInt(m.amount ?? 0);
+              let amtWei = milestoneAmtWei > 0n ? milestoneAmtWei : remainingWei;
+              
+              // FALLBACK: If still 0, use total escrow amount (ignore paidAmount)
+              if (amtWei === 0n && escrowTotalWei > 0n) {
+                console.warn(`Using escrow totalAmount as fallback for dispute #${id}`);
+                amtWei = escrowTotalWei;
+              }
+              
+              // Debug logging with multiple decimal interpretations
+              const rawAmount = amtWei.toString();
+              console.log(`Dispute #${id} Milestone ${idx}:`, {
+                rawAmount: rawAmount,
+                escrowTotal: escrowTotalWei.toString(),
+                escrowPaid: escrowPaidWei.toString(),
+                remaining: remainingWei.toString(),
+                milestoneAmount: milestoneAmtWei.toString(),
+                finalAmount: amtWei.toString(),
+                'as_18_decimals': Number(formatUnits(amtWei, 18)),
+                'as_6_decimals': Number(formatUnits(amtWei, 6)),
+                'as_0_decimals': Number(amtWei)
+              });
+              
+              // Alert if amount is still 0
+              if (amtWei === 0n) {
+                console.error(`⚠️ CRITICAL: Dispute #${id} Milestone ${idx} has 0 amount!`);
+                console.error('Escrow data:', escrow);
+                console.error('Milestone data:', m);
+              }
+              
+              // CRITICAL FIX: Arc Testnet USDC uses 6 decimals, not 18!
+              // The contract stores USDC amounts with 6 decimal places
+              const displayAmount = Number(formatUnits(amtWei, 6));
+              
+              console.log(`Final display amount for Dispute #${id}:`, displayAmount);
+              
               found.push({
                 escrowId: id.toString(),
                 milestoneIndex: idx,
@@ -80,7 +149,7 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
                 disputeReason: m.disputeReason ?? "",
                 disputedAt: Number(m.disputedAt ?? 0),
                 milestoneAmountWei: amtWei,
-                milestoneAmountEth: Number(formatUnits(amtWei, 18)),
+                milestoneAmountEth: displayAmount,
                 clientAddress: escrow.depositor,
                 freelancerAddress: escrow.beneficiary,
                 projectTitle: escrow.projectTitle || `Project #${id}`,
@@ -154,6 +223,26 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
     return "Just now";
   };
 
+  // Sort disputes
+  const sortedDisputes = [...disputes].sort((a, b) => {
+    switch (sortBy) {
+      case "newest":
+        return b.disputedAt - a.disputedAt;
+      case "oldest":
+        return a.disputedAt - b.disputedAt;
+      case "amount":
+        return Number(b.milestoneAmountWei - a.milestoneAmountWei);
+      default:
+        return 0;
+    }
+  });
+
+  // Paginate disputes
+  const totalPages = Math.ceil(sortedDisputes.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedDisputes = sortedDisputes.slice(startIndex, endIndex);
+
   const freelancerEth = selectedDispute ? (selectedDispute.milestoneAmountEth * freelancerPct) / 100 : 0;
   const clientEth = selectedDispute ? selectedDispute.milestoneAmountEth - freelancerEth : 0;
 
@@ -170,90 +259,198 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
 
   return (
     <div className="space-y-6">
-      <Card className="glass border-primary/20 p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <Scale className="h-6 w-6 text-primary" />
-          <h2 className="text-2xl font-bold">Dispute Resolution</h2>
-          <Badge variant="outline" className="ml-auto">{disputes.length} Active</Badge>
-          <Button onClick={() => void fetchDisputes(false)} variant="outline" size="sm">Refresh</Button>
-        </div>
+      <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+        <Card className="glass border-primary/20 p-6">
+          <CollapsibleTrigger asChild>
+            <div className="flex items-center gap-3 mb-4 cursor-pointer hover:opacity-80 transition-opacity">
+              <Scale className="h-6 w-6 text-primary" />
+              <h2 className="text-2xl font-bold">Dispute Resolution</h2>
+              <Badge variant="outline" className="ml-auto">{disputes.length} Active</Badge>
+              {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+            </div>
+          </CollapsibleTrigger>
 
-        {disputes.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
-            <p className="text-lg">No active disputes</p>
-            <p className="text-sm">All escrows are running smoothly</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {disputes.map((d, i) => (
-              <motion.div
-                key={`${d.escrowId}-${d.milestoneIndex}`}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.1 }}
-              >
-                <Card className="border-red-200 bg-red-100/80 dark:bg-red-900/20 p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <AlertTriangle className="h-4 w-4 text-red-500" />
-                        <span className="font-semibold text-red-700 dark:text-red-400">Dispute #{d.escrowId}</span>
-                        <Badge variant="destructive">Milestone {d.milestoneIndex}</Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-1">{d.projectTitle}</p>
-                      <p className="text-sm mb-1"><strong>Reason:</strong> {d.disputeReason}</p>
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-2">
-                        <span className="flex items-center gap-1"><User className="h-3 w-3" />Client: {d.clientAddress.slice(0, 6)}…{d.clientAddress.slice(-4)}</span>
-                        <span className="flex items-center gap-1"><User className="h-3 w-3" />Freelancer: {d.freelancerAddress.slice(0, 6)}…{d.freelancerAddress.slice(-4)}</span>
-                        <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{d.milestoneAmountEth.toFixed(6)} USDC</span>
-                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{getDisputeAge(d.disputedAt)}</span>
-                      </div>
+          <CollapsibleContent>
+            {disputes.length > 0 && (
+              <div className="flex flex-wrap items-center gap-3 mb-4 pb-4 border-b">
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm">Sort by:</Label>
+                  <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="newest">Newest</SelectItem>
+                      <SelectItem value="oldest">Oldest</SelectItem>
+                      <SelectItem value="amount">Amount</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm">Per page:</Label>
+                  <Select value={itemsPerPage.toString()} onValueChange={(v) => {
+                    setItemsPerPage(Number(v));
+                    setCurrentPage(1);
+                  }}>
+                    <SelectTrigger className="w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5</SelectItem>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Button onClick={() => void fetchDisputes(false)} variant="outline" size="sm" className="ml-auto">
+                  Refresh
+                </Button>
+              </div>
+            )}
+
+            {disputes.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
+                <p className="text-lg">No active disputes</p>
+                <p className="text-sm">All escrows are running smoothly</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-4">
+                  {paginatedDisputes.map((d, i) => (
+                    <motion.div
+                      key={`${d.escrowId}-${d.milestoneIndex}`}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                    >
+                      <Card className="border-red-200 bg-red-100/80 dark:bg-red-900/20 p-4">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <AlertTriangle className="h-4 w-4 text-red-500" />
+                              <span className="font-semibold text-red-700 dark:text-red-400">Dispute #{d.escrowId}</span>
+                              <Badge variant="destructive">Milestone {d.milestoneIndex}</Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground mb-1">{d.projectTitle}</p>
+                            <p className="text-sm mb-1"><strong>Reason:</strong> {d.disputeReason}</p>
+                            <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-2">
+                              <span className="flex items-center gap-1"><User className="h-3 w-3" />Client: {d.clientAddress.slice(0, 6)}…{d.clientAddress.slice(-4)}</span>
+                              <span className="flex items-center gap-1"><User className="h-3 w-3" />Freelancer: {d.freelancerAddress.slice(0, 6)}…{d.freelancerAddress.slice(-4)}</span>
+                              <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{d.milestoneAmountEth.toFixed(6)} USDC</span>
+                              <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{getDisputeAge(d.disputedAt)}</span>
+                            </div>
+                          </div>
+                          <Button onClick={() => openDialog(d)} className="ml-4 shrink-0">Resolve</Button>
+                        </div>
+                      </Card>
+                    </motion.div>
+                  ))}
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                    <p className="text-sm text-muted-foreground">
+                      Showing {startIndex + 1}-{Math.min(endIndex, disputes.length)} of {disputes.length} disputes
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      <span className="text-sm">
+                        Page {currentPage} of {totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                      </Button>
                     </div>
-                    <Button onClick={() => openDialog(d)} className="ml-4 shrink-0">Resolve</Button>
                   </div>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        )}
-      </Card>
+                )}
+              </>
+            )}
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Resolve Dispute</DialogTitle>
-            <DialogDescription>Set the fund split between client and freelancer.</DialogDescription>
+            <DialogDescription>Review evidence and set the fund split between client and freelancer.</DialogDescription>
           </DialogHeader>
 
           {selectedDispute && (
-            <div className="space-y-5">
-              <div className="bg-muted/50 p-4 rounded-lg text-sm space-y-1">
-                <p><strong>Project:</strong> {selectedDispute.projectTitle}</p>
-                <p><strong>Milestone:</strong> {selectedDispute.milestoneDescription}</p>
-                <p><strong>Dispute Reason:</strong> {selectedDispute.disputeReason}</p>
-                <p><strong>Total at stake:</strong> {selectedDispute.milestoneAmountEth.toFixed(6)} USDC</p>
-              </div>
+            <Tabs defaultValue="details" className="space-y-4">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="details">Dispute Details</TabsTrigger>
+                <TabsTrigger value="communication">Evidence & Messages</TabsTrigger>
+              </TabsList>
 
-              <div className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span>Client gets: {clientEth.toFixed(6)} USDC</span>
-                  <span>Freelancer gets: {freelancerEth.toFixed(6)} USDC</span>
+              {/* Dispute Details Tab */}
+              <TabsContent value="details" className="space-y-5">
+                <div className="bg-muted/50 p-4 rounded-lg text-sm space-y-1">
+                  <p><strong>Project:</strong> {selectedDispute.projectTitle}</p>
+                  <p><strong>Milestone:</strong> {selectedDispute.milestoneDescription}</p>
+                  <p><strong>Dispute Reason:</strong> {selectedDispute.disputeReason}</p>
+                  <p><strong>Total at stake:</strong> {selectedDispute.milestoneAmountEth.toFixed(6)} USDC</p>
+                  <p><strong>Client:</strong> <span className="font-mono text-xs">{selectedDispute.clientAddress}</span></p>
+                  <p><strong>Freelancer:</strong> <span className="font-mono text-xs">{selectedDispute.freelancerAddress}</span></p>
                 </div>
-                <Slider value={[freelancerPct]} onValueChange={([v]) => setFreelancerPct(v)} min={0} max={100} step={1} />
-                <p className="text-xs text-muted-foreground text-center">Freelancer's share: {freelancerPct}%</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setFreelancerPct(0)}>All to Client</Button>
-                  <Button variant="outline" size="sm" onClick={() => setFreelancerPct(50)}>50 / 50</Button>
-                  <Button variant="outline" size="sm" onClick={() => setFreelancerPct(100)}>All to Freelancer</Button>
-                </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label>Resolution Reason (optional)</Label>
-                <Input value={resolutionReason} onChange={(e) => setResolutionReason(e.target.value)} placeholder="Explain your decision…" />
-              </div>
-            </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span>Client gets: {clientEth.toFixed(6)} USDC</span>
+                    <span>Freelancer gets: {freelancerEth.toFixed(6)} USDC</span>
+                  </div>
+                  <Slider value={[freelancerPct]} onValueChange={([v]) => setFreelancerPct(v)} min={0} max={100} step={1} />
+                  <p className="text-xs text-muted-foreground text-center">Freelancer's share: {freelancerPct}%</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setFreelancerPct(0)}>All to Client</Button>
+                    <Button variant="outline" size="sm" onClick={() => setFreelancerPct(50)}>50 / 50</Button>
+                    <Button variant="outline" size="sm" onClick={() => setFreelancerPct(100)}>All to Freelancer</Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Resolution Reason (optional)</Label>
+                  <Input value={resolutionReason} onChange={(e) => setResolutionReason(e.target.value)} placeholder="Explain your decision…" />
+                </div>
+              </TabsContent>
+
+              {/* Evidence & Messages Tab */}
+              <TabsContent value="communication" className="space-y-4">
+                {/* Evidence Thread */}
+                <DisputeEvidence
+                  escrowId={selectedDispute.escrowId}
+                  milestoneIndex={selectedDispute.milestoneIndex}
+                  clientAddress={selectedDispute.clientAddress}
+                  freelancerAddress={selectedDispute.freelancerAddress}
+                />
+                
+                {/* Admin Communication */}
+                <AdminDisputeCommunication
+                  escrowId={selectedDispute.escrowId}
+                  milestoneIndex={selectedDispute.milestoneIndex}
+                  clientAddress={selectedDispute.clientAddress}
+                  freelancerAddress={selectedDispute.freelancerAddress}
+                  projectTitle={selectedDispute.projectTitle}
+                />
+              </TabsContent>
+            </Tabs>
           )}
 
           <DialogFooter>

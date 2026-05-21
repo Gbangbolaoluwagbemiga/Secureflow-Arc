@@ -422,6 +422,25 @@ export default function DashboardPage() {
         description: "A dispute has been opened for this milestone",
       });
 
+      // Notify admin about the new dispute
+      try {
+        const ownerAddress = await cs.getOwner();
+        if (ownerAddress) {
+          addNotification(
+            {
+              type: "dispute",
+              title: "New Dispute Raised",
+              message: `Escrow #${escrowId}, Milestone ${milestoneIndex}: Disputed by client`,
+              actionUrl: `/admin`,
+              data: { escrowId, milestoneIndex, reason: "Disputed by client" },
+            },
+            [ownerAddress],
+          );
+        }
+      } catch (error) {
+        console.error("Failed to notify admin:", error);
+      }
+
       // Wait a moment for blockchain state to update
       await new Promise((resolve) => setTimeout(resolve, 2000));
       try {
@@ -510,6 +529,25 @@ export default function DashboardPage() {
         title: "Dispute Opened",
         description: "A dispute has been opened for this escrow",
       });
+
+      // Notify admin about the new dispute
+      try {
+        const ownerAddress = await cs.getOwner();
+        if (ownerAddress) {
+          addNotification(
+            {
+              type: "dispute",
+              title: "New Dispute Raised",
+              message: `Escrow #${escrowId}, Milestone 0: General dispute`,
+              actionUrl: `/admin`,
+              data: { escrowId, milestoneIndex: 0, reason: "General dispute" },
+            },
+            [ownerAddress],
+          );
+        }
+      } catch (error) {
+        console.error("Failed to notify admin:", error);
+      }
 
       // Wait a moment for blockchain state to update
       await new Promise((resolve) => setTimeout(resolve, 2000));

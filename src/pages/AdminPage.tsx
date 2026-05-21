@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,7 @@ import { contractService } from "@/lib/web3/contract-service";
 import { useWriteContract } from "wagmi";
 import { Shield, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ArbiterManagement } from "@/components/admin/arbiter-management";
 
 const USDC_ADDRESS = (
   (import.meta.env.VITE_USDC_TOKEN_CONTRACT as string | undefined) ?? ""
@@ -18,6 +20,7 @@ export default function AdminPage() {
   const { wallet } = useWeb3();
   const { toast } = useToast();
   const { writeContractAsync } = useWriteContract();
+  const navigate = useNavigate();
   const [isOwner, setIsOwner] = useState(false);
   const [isCheckingOwner, setIsCheckingOwner] = useState(true);
   const [tokenAddress, setTokenAddress] = useState(USDC_ADDRESS);
@@ -37,9 +40,32 @@ export default function AdminPage() {
     setIsCheckingOwner(true);
     try {
       const owner = await contractService.getOwner();
+      console.log("Contract owner:", owner);
+      console.log("Current wallet:", wallet.address);
+      
+      if (!owner) {
+        console.error("Failed to fetch contract owner - RPC might be down");
+        toast({
+          title: "Connection Issue",
+          description: "Failed to verify admin access. Retrying...",
+          variant: "destructive",
+        });
+        
+        // Retry after 2 seconds
+        setTimeout(() => {
+          checkOwnership();
+        }, 2000);
+        return;
+      }
+      
       setIsOwner(owner?.toLowerCase() === wallet.address.toLowerCase());
     } catch (error) {
       console.error("Failed to check ownership:", error);
+      toast({
+        title: "Connection Error",
+        description: "Failed to connect to blockchain. Please refresh the page.",
+        variant: "destructive",
+      });
       setIsOwner(false);
     } finally {
       setIsCheckingOwner(false);
@@ -169,7 +195,7 @@ export default function AdminPage() {
               </CardTitle>
               <CardDescription>Manage SecureFlow contract settings</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Access Denied</AlertTitle>
@@ -177,6 +203,37 @@ export default function AdminPage() {
                   You are not the contract owner. Only the owner can access this panel.
                 </AlertDescription>
               </Alert>
+              
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <p className="text-sm font-medium">Troubleshooting:</p>
+                <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                  <li>Make sure you're connected with the owner wallet</li>
+                  <li>Check if the RPC connection is working</li>
+                  <li>Try refreshing the page</li>
+                </ul>
+                <Button 
+                  onClick={() => {
+                    setIsCheckingOwner(true);
+                    checkOwnership();
+                  }} 
+                  variant="outline" 
+                  className="w-full mt-3"
+                  disabled={isCheckingOwner}
+                >
+                  {isCheckingOwner ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Checking...
+                    </>
+                  ) : (
+                    "Retry Access Check"
+                  )}
+                </Button>
+              </div>
+              
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p><strong>Your Address:</strong> <code className="bg-muted px-1 py-0.5 rounded">{wallet.address}</code></p>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -270,6 +327,44 @@ export default function AdminPage() {
                 "Whitelist Token"
               )}
             </Button>
+          </CardContent>
+        </Card>
+
+        {/* Arbiter Management */}
+        <ArbiterManagement onArbiterAdded={() => {
+          toast({
+            title: "Arbiter authorized",
+            description: "The arbiter has been successfully authorized",
+          });
+        }} onArbiterRemoved={() => {
+          toast({
+            title: "Arbiter removed",
+            description: "The arbiter has been successfully removed",
+          });
+        }} />
+
+        {/* Dispute Management - Navigate to Separate Page */}
+        <Card className="border-orange-200 bg-orange-50/50 dark:bg-orange-900/10">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-orange-600" />
+              Dispute Management
+            </CardTitle>
+            <CardDescription>
+              View and resolve disputes on a dedicated page for better performance
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button 
+              onClick={() => navigate('/disputes')} 
+              className="w-full bg-orange-600 hover:bg-orange-700"
+              size="lg"
+            >
+              Open Dispute Management Page
+            </Button>
+            <p className="text-xs text-muted-foreground mt-3 text-center">
+              Manage active disputes, review evidence, and communicate with parties
+            </p>
           </CardContent>
         </Card>
 
