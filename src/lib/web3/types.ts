@@ -24,7 +24,7 @@ export interface Escrow {
   token: string;
   totalAmount: string;
   releasedAmount: string;
-  status: "pending" | "active" | "completed" | "disputed";
+  status: "pending" | "active" | "completed" | "disputed" | "cancelled";
   createdAt: number;
   duration: number;
   /** Deadline as Unix timestamp (ms) from the on-chain deadline field */

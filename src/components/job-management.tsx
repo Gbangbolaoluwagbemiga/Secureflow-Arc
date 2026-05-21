@@ -56,7 +56,8 @@ export function JobManagement({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isNativeToken = token === "0x0000000000000000000000000000000000000000";
-  const currentAmount = parseFloat(totalAmount) / 1e18;
+  // Arc Testnet USDC uses 6 decimals, not 18
+  const currentAmount = parseFloat(totalAmount) / 1e6;
 
   // Only show for open jobs (no freelancer assigned yet)
   if (!isOpenJob || !isClient) {

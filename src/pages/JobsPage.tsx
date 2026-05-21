@@ -54,7 +54,7 @@ export default function JobsPage() {
 
   const getStatusFromNumber = (
     status: number
-  ): "pending" | "disputed" | "active" | "completed" => {
+  ): "pending" | "disputed" | "active" | "completed" | "cancelled" => {
     switch (status) {
       case 0:
         return "pending";
@@ -65,7 +65,11 @@ export default function JobsPage() {
       case 3:
         return "disputed";
       case 4:
-        return "pending"; // Map cancelled to pending
+        return "pending"; // Refunded - map to pending
+      case 5:
+        return "pending"; // Expired - map to pending
+      case 6:
+        return "cancelled";
       default:
         return "pending";
     }
@@ -73,13 +77,13 @@ export default function JobsPage() {
 
   const normalizeJobStatus = (
     raw: unknown
-  ): "pending" | "active" | "completed" | "disputed" => {
+  ): "pending" | "active" | "completed" | "disputed" | "cancelled" => {
     if (typeof raw === "string") {
       const s = raw.toLowerCase().trim();
-      if (s === "pending" || s === "active" || s === "completed" || s === "disputed") {
+      if (s === "pending" || s === "active" || s === "completed" || s === "disputed" || s === "cancelled") {
         return s;
       }
-      if (s === "cancelled" || s === "canceled") return "pending";
+      if (s === "cancelled" || s === "canceled") return "cancelled";
       return "pending";
     }
 
@@ -227,8 +231,8 @@ export default function JobsPage() {
       // Fetch open jobs from the contract
       // escrowCount is the next available ID, so if it's 2, that means 1 escrow exists
       // But if it times out and returns 1, we should still check escrow 1 directly
-      // Limit the number of escrows to fetch to prevent long loading times
-      const maxEscrowsToFetch = 20; // Limit to 20 escrows max
+      // Increased limit to 100 to show more jobs
+      const maxEscrowsToFetch = 100; // Increased from 20 to 100
       const escrowsToCheck = Math.min(
         Math.max(escrowCount - 1, 1),
         maxEscrowsToFetch
@@ -480,10 +484,11 @@ export default function JobsPage() {
     const jobStatus = normalizeJobStatus(job.status);
     const matchesStatus = statusFilter === "all" || jobStatus === statusFilter;
 
-    // Don't show jobs created by the current user (they should see them in Dashboard/Approvals)
-    const isNotMyJob = !job.isJobCreator;
+    // Don't show cancelled jobs
+    const isNotCancelled = jobStatus !== "cancelled";
 
-    return matchesSearch && matchesStatus && isNotMyJob;
+    // Show all jobs including user's own jobs (apply button will be disabled for own jobs)
+    return matchesSearch && matchesStatus && isNotCancelled;
   });
 
   if (!wallet.isConnected || loading) {

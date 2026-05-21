@@ -21,6 +21,11 @@ const USDC_ADDRESS = (
 
 // Native USDC has 6 decimals on Arc Testnet
 function parseTokenAmount(amount: string, tokenAddress: string | undefined): bigint {
+  // Validate amount
+  if (!amount || amount === "0" || isNaN(Number(amount))) {
+    throw new Error("Invalid amount: must be greater than 0");
+  }
+
   // Native token (address(0)) is USDC with 6 decimals on Arc Testnet
   if (!tokenAddress || tokenAddress === "0x0000000000000000000000000000000000000000") {
     return parseUnits(amount, 6);
@@ -217,6 +222,19 @@ export default function CreateEscrowPage() {
       return;
     }
 
+    // Additional validation for amounts
+    const totalBudgetNum = Number.parseFloat(formData.totalBudget || "0");
+    if (totalBudgetNum <= 0) {
+      toast({ title: "Invalid amount", description: "Total budget must be greater than 0", variant: "destructive" });
+      return;
+    }
+
+    const totalMilestones = formData.milestones.reduce((sum, m) => sum + Number.parseFloat(m.amount || "0"), 0);
+    if (Math.abs(totalMilestones - totalBudgetNum) > 0.01) {
+      toast({ title: "Amount mismatch", description: "Milestone amounts must equal total budget", variant: "destructive" });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -227,13 +245,23 @@ export default function CreateEscrowPage() {
         : (formData.beneficiary as `0x${string}`) || undefined;
 
       // Convert amounts to base units using the correct token decimals
-      const tokenAddr = formData.useNativeToken ? undefined : (formData.token || undefined);
+      // Arc Testnet USDC is an ERC-20 token at 0x3600...0000, NOT native token
+      // Use the USDC token address from env, or default to native if not set
+      const tokenAddr = formData.useNativeToken 
+        ? (USDC_ADDRESS || "0x0000000000000000000000000000000000000000")
+        : (formData.token || USDC_ADDRESS || "0x0000000000000000000000000000000000000000");
+      
       const totalAmountWei = parseTokenAmount(formData.totalBudget, tokenAddr);
       const milestoneAmountsWei = formData.milestones.map((m) =>
         parseTokenAmount(m.amount || "0", tokenAddr)
       );
 
-      // Check native USDC balance
+      // Validate converted amounts
+      if (totalAmountWei === 0n) {
+        throw new Error("Total amount is 0. Please enter a valid amount.");
+      }
+
+      // Check USDC balance (wallet.balance shows USDC balance on Arc Testnet)
       if (formData.useNativeToken || !formData.token) {
         const walletBalance = Number.parseFloat(wallet.balance || "0");
         const requiredBalance = Number.parseFloat(formData.totalBudget);
@@ -250,13 +278,19 @@ export default function CreateEscrowPage() {
 
       if (!wallet.address) throw new Error("Wallet not connected");
 
+      // For Arc Testnet USDC (ERC-20), pass the USDC token address
+      // NOT address(0) - that's for native ETH/currency
+      const tokenToPass = formData.useNativeToken 
+        ? (USDC_ADDRESS || "0x0000000000000000000000000000000000000000")
+        : (formData.token || USDC_ADDRESS || "0x0000000000000000000000000000000000000000");
+
       const escrowId = await createEscrow.mutateAsync({
         depositor: wallet.address,
         beneficiary: beneficiaryAddress,
         arbiters: [],
         required_confirmations: 1,
         milestones,
-        token: formData.useNativeToken || !formData.token ? undefined : formData.token,
+        token: tokenToPass,
         total_amount: totalAmountWei.toString(),
         duration: Number(formData.duration) * 86400,
         project_title: formData.projectTitle,

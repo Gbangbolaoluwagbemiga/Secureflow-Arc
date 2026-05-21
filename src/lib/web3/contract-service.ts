@@ -7,6 +7,8 @@ import SecureFlowABI from "../../../contracts/solidity/out/SecureFlow.sol/Secure
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type WagmiWrite = (args: any) => Promise<`0x${string}`>;
 
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
+
 export class ContractService {
   private client;
   private contract: any; // typed loosely to avoid viem generic constraints
@@ -523,16 +525,52 @@ export class ContractService {
   }
 
   async addJobFunds(
-    params: { escrow_id: number; additional_amount: string; depositor: string },
+    params: { escrow_id: number; additional_amount: string; depositor: string; token?: string },
     write: WagmiWrite
   ): Promise<`0x${string}`> {
-    const amountWei = BigInt(Math.floor(parseFloat(params.additional_amount) * 1e18));
+    // Arc Testnet USDC uses 6 decimals
+    const amountWei = BigInt(Math.floor(parseFloat(params.additional_amount) * 1e6));
+    
+    // Get escrow to check token type
+    const escrow = await this.getEscrow(params.escrow_id);
+    if (!escrow) throw new Error("Escrow not found");
+    
+    const isNativeToken = escrow.token === ZERO_ADDRESS;
+    const token = escrow.token as `0x${string}`;
+    
+    // Calculate total deposit (amount + platform fee)
+    const { deposit } = await this.quoteDeposit(amountWei);
+    
+    // For ERC-20 tokens: approve spending first
+    if (!isNativeToken) {
+      const { createPublicClient, http } = await import("viem");
+      const { arcTestnet } = await import("@/providers/WalletProvider");
+      const { erc20Abi } = await import("@/lib/web3/abis");
+      
+      const publicClient = createPublicClient({ chain: arcTestnet, transport: http() });
+      const allowance = await publicClient.readContract({
+        address: token,
+        abi: erc20Abi,
+        functionName: "allowance",
+        args: [params.depositor as `0x${string}`, this.addr],
+      }) as bigint;
+      
+      if (allowance < deposit) {
+        await write({
+          address: token,
+          abi: erc20Abi,
+          functionName: "approve",
+          args: [this.addr, deposit],
+        });
+      }
+    }
+    
     return write({
       address: this.addr,
       abi: SecureFlowABI.abi,
       functionName: "addJobFunds",
       args: [BigInt(params.escrow_id), amountWei],
-      value: amountWei, // For native USDC
+      value: isNativeToken ? deposit : 0n,
     });
   }
 
@@ -540,7 +578,8 @@ export class ContractService {
     params: { escrow_id: number; withdraw_amount: string; depositor: string },
     write: WagmiWrite
   ): Promise<`0x${string}`> {
-    const amountWei = BigInt(Math.floor(parseFloat(params.withdraw_amount) * 1e18));
+    // Arc Testnet USDC uses 6 decimals
+    const amountWei = BigInt(Math.floor(parseFloat(params.withdraw_amount) * 1e6));
     return write({
       address: this.addr,
       abi: SecureFlowABI.abi,

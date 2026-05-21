@@ -261,7 +261,7 @@ export function ProjectDetailsStep({
               className="rounded w-4 h-4"
             />
             <Label htmlFor="useNativeToken" className="cursor-pointer ml-1">
-              Use Native Token (USDC)
+              Use Arc Testnet USDC (Recommended)
             </Label>
           </div>
 

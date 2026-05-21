@@ -72,21 +72,44 @@ export function useCreateEscrow() {
       if (!params.depositor) throw new Error("Wallet not connected");
 
       const totalAmount = BigInt(params.total_amount);
+      
+      // Validate total amount
+      if (totalAmount === 0n) {
+        throw new Error("Total amount cannot be 0. Please enter a valid amount.");
+      }
+
       const durationDays = BigInt(Math.max(1, Math.round(params.duration / 86400)));
-      const token = (params.token || ZERO_ADDRESS) as `0x${string}`;
+      
+      // CRITICAL: Arc Testnet USDC is an ERC-20 token, NOT native token
+      // Token address should be the USDC contract address (0x3600...0000)
+      // NOT address(0) - that's for native ETH/currency
+      const token = (params.token && params.token.trim() !== "" 
+        ? params.token 
+        : ZERO_ADDRESS) as `0x${string}`;
+      
       const beneficiary = (params.beneficiary || ZERO_ADDRESS) as `0x${string}`;
       const arbiters = (params.arbiters || []) as `0x${string}`[];
       const requiredConfirmations = BigInt(params.required_confirmations || 1);
       const milestoneAmounts = params.milestones.map(([amt]) => BigInt(amt));
       const milestoneDescriptions = params.milestones.map(([, desc]) => desc);
 
+      // Validate milestone amounts
+      const milestoneSum = milestoneAmounts.reduce((sum, amt) => sum + amt, 0n);
+      if (milestoneSum !== totalAmount) {
+        throw new Error(`Milestone amounts (${milestoneSum}) do not equal total amount (${totalAmount})`);
+      }
+
       // Get exact deposit amount (totalAmount + platformFee) from contract
       const { deposit } = await contractService.quoteDeposit(totalAmount);
 
-      const isNativeEth = token === ZERO_ADDRESS;
+      if (deposit === 0n) {
+        throw new Error("Deposit amount is 0. Please check your input amounts.");
+      }
 
-      // For ERC-20 tokens (e.g. USDC): check allowance and approve if needed
-      if (!isNativeEth) {
+      const isNativeToken = token === ZERO_ADDRESS;
+
+      // For ERC-20 tokens (Arc Testnet USDC): check allowance and approve if needed
+      if (!isNativeToken) {
         const escrowAddr = contractAddr();
         // Read current allowance
         const { createPublicClient, http } = await import("viem");
@@ -127,7 +150,7 @@ export function useCreateEscrow() {
           params.project_title,
           params.project_description,
         ],
-        value: isNativeEth ? deposit : 0n,
+        value: isNativeToken ? deposit : 0n,
       });
 
       return hash;

@@ -953,6 +953,11 @@ export default function DashboardPage() {
           <div className="space-y-6">
             {escrows
               .filter((escrow) => {
+                // Don't show cancelled escrows
+                if (escrow.status === "cancelled") {
+                  return false;
+                }
+
                 // Status filter
                 const matchesStatus =
                   statusFilter === "all" || escrow.status === statusFilter;
