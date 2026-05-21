@@ -102,23 +102,32 @@ export function EscrowCard({
       case "completed":
         return "bg-green-100 text-green-800";
       case "disputed":
+        return "bg-orange-100 text-orange-800";
+      case "rejected":
         return "bg-red-100 text-red-800";
       case "resolved":
         return "bg-purple-100 text-purple-800";
-      case "terminated":
-        return "bg-gray-100 text-gray-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
   };
 
-  // Check if this escrow should be marked as terminated
-  const isTerminated = escrow.milestones.some(
+  // Check if this escrow has issues (disputed or rejected milestones)
+  const hasIssues = escrow.milestones.some(
     (milestone) =>
       milestone.status === "disputed" ||
       milestone.status === "rejected" ||
       milestone.status === "resolved"
   );
+  
+  // Determine display status
+  const getDisplayStatus = () => {
+    if (escrow.milestones.some(m => m.status === "disputed")) return "disputed";
+    if (escrow.milestones.some(m => m.status === "rejected")) return "rejected";
+    return escrow.status;
+  };
+  
+  const displayStatus = hasIssues ? getDisplayStatus() : escrow.status;
 
   const getMilestoneStatusColor = (status: string) => {
     switch (status) {
@@ -186,11 +195,9 @@ export function EscrowCard({
             </div>
             <div className="flex items-center gap-2">
               <Badge
-                className={getStatusColor(
-                  isTerminated ? "terminated" : escrow.status
-                )}
+                className={getStatusColor(displayStatus)}
               >
-                {isTerminated ? "terminated" : escrow.status}
+                {displayStatus}
               </Badge>
               {/* Message Freelancer — visible to client when a freelancer is assigned */}
               {escrow.isClient && escrow.beneficiary && wallet.address && isApiConfigured() && (

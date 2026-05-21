@@ -121,6 +121,8 @@ Open `http://localhost:5173` and connect MetaMask to Arc Testnet (chain ID 50420
 | RPC URL | https://rpc.drpc.testnet.arc.network |
 | Block Explorer | https://testnet.arcscan.app |
 | Native Currency | ETH |
+| **SecureFlow Contract** | **0x7aB0853325529aF7EB5c4745413BF01E98c0020f** |
+| USDC Token | 0x3600000000000000000000000000000000000000 |
 
 ---
 

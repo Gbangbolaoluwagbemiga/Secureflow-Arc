@@ -40,7 +40,7 @@ export function FreelancerStats({
     0
   );
 
-  // Helper function to check if an escrow is terminated
+  // Helper function to check if an escrow has issues (disputed or rejected milestones)
   const isEscrowTerminated = (escrow: any) => {
     return escrow.milestones.some(
       (milestone: any) =>
@@ -56,7 +56,7 @@ export function FreelancerStats({
     );
   }).length;
 
-  // Count terminated projects (disputed/rejected milestones)
+  // Count projects with issues (disputed/rejected milestones)
   const terminatedProjects = escrows.filter((escrow) => {
     return isEscrowTerminated(escrow);
   }).length;
@@ -104,7 +104,7 @@ export function FreelancerStats({
 
       <Card className="glass border-destructive/20 p-4 md:p-6">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Terminated</CardTitle>
+          <CardTitle className="text-sm font-medium">Issues</CardTitle>
           <AlertTriangle className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>

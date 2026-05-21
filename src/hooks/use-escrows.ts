@@ -80,9 +80,6 @@ export function useCreateEscrow() {
 
       const durationDays = BigInt(Math.max(1, Math.round(params.duration / 86400)));
       
-      // CRITICAL: Arc Testnet USDC is an ERC-20 token, NOT native token
-      // Token address should be the USDC contract address (0x3600...0000)
-      // NOT address(0) - that's for native ETH/currency
       const token = (params.token && params.token.trim() !== "" 
         ? params.token 
         : ZERO_ADDRESS) as `0x${string}`;
@@ -95,6 +92,7 @@ export function useCreateEscrow() {
 
       // Validate milestone amounts
       const milestoneSum = milestoneAmounts.reduce((sum, amt) => sum + amt, 0n);
+      
       if (milestoneSum !== totalAmount) {
         throw new Error(`Milestone amounts (${milestoneSum}) do not equal total amount (${totalAmount})`);
       }
@@ -108,9 +106,10 @@ export function useCreateEscrow() {
 
       const isNativeToken = token === ZERO_ADDRESS;
 
-      // For ERC-20 tokens (Arc Testnet USDC): check allowance and approve if needed
+      // For ERC-20 tokens: check allowance and approve if needed
       if (!isNativeToken) {
         const escrowAddr = contractAddr();
+        
         // Read current allowance
         const { createPublicClient, http } = await import("viem");
         const { arcTestnet } = await import("@/providers/WalletProvider");
@@ -123,14 +122,14 @@ export function useCreateEscrow() {
         }) as bigint;
 
         if (allowance < deposit) {
-          toast({ title: "Approving USDC…", description: "Please confirm the approval in your wallet." });
+          toast({ title: "Approving token", description: "Please confirm the approval in your wallet." });
           await writeContractAsync({
             address: token,
             abi: erc20Abi,
             functionName: "approve",
             args: [escrowAddr, deposit],
           });
-          toast({ title: "USDC approved", description: "Now creating escrow…" });
+          toast({ title: "Token approved", description: "Now creating escrow…" });
         }
       }
 
@@ -153,15 +152,82 @@ export function useCreateEscrow() {
         value: isNativeToken ? deposit : 0n,
       });
 
-      return hash;
+      // Wait for transaction to be mined and get the receipt
+      const { createPublicClient, http, decodeEventLog } = await import("viem");
+      const { arcTestnet } = await import("@/providers/WalletProvider");
+      const publicClient = createPublicClient({ chain: arcTestnet, transport: http() });
+      
+      toast({ title: "Transaction submitted", description: "Waiting for confirmation..." });
+      
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      
+      if (receipt.status === "reverted") {
+        throw new Error("Transaction failed - please check your balance and try again");
+      }
+
+      // Extract escrow ID from logs
+      let escrowId: string | undefined;
+      for (const log of receipt.logs) {
+        try {
+          const decoded = decodeEventLog({
+            abi: SecureFlowABI.abi,
+            data: log.data,
+            topics: log.topics,
+          });
+          if (decoded.eventName === "EscrowCreated") {
+            escrowId = (decoded.args as any).escrowId?.toString();
+            break;
+          }
+        } catch (e) {
+          // Continue to next log
+        }
+      }
+
+      return { hash, escrowId: escrowId || "unknown" };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["user-escrows"] });
       queryClient.invalidateQueries({ queryKey: ["escrows"] });
-      toast({ title: "Escrow created", description: "Your escrow was created successfully." });
+      toast({ 
+        title: "Escrow created", 
+        description: data.escrowId !== "unknown" 
+          ? `Escrow #${data.escrowId} created successfully` 
+          : "Your escrow was created successfully" 
+      });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message || "Failed to create escrow", variant: "destructive" });
+      // Format error message to be more readable
+      let errorMessage = error.message || "Failed to create escrow";
+      
+      // Handle common error patterns
+      if (errorMessage.includes("User rejected")) {
+        errorMessage = "Transaction cancelled - You rejected the transaction in your wallet";
+      } else if (errorMessage.includes("insufficient funds")) {
+        errorMessage = "Insufficient funds - Please ensure you have enough USDC and gas";
+      } else if (errorMessage.includes("TokenNotWhitelisted")) {
+        errorMessage = "Token not whitelisted - Please contact admin to whitelist this token";
+      } else if (errorMessage.includes("InvalidAmount")) {
+        errorMessage = "Invalid amount - Please check your input amounts";
+      } else if (errorMessage.includes("Contract Call")) {
+        // Extract readable part from contract call errors
+        const match = errorMessage.match(/Contract Call:.*?Error: (.+?)(?:\n|$)/);
+        if (match) {
+          errorMessage = match[1];
+        } else {
+          errorMessage = "Transaction failed - Please try again or contact support";
+        }
+      }
+      
+      // Remove long hex addresses from error messages
+      errorMessage = errorMessage.replace(/0x[a-fA-F0-9]{40,}/g, (match) => {
+        return match.substring(0, 10) + "..." + match.substring(match.length - 4);
+      });
+      
+      toast({ 
+        title: "Transaction Failed", 
+        description: errorMessage, 
+        variant: "destructive" 
+      });
     },
   });
 }

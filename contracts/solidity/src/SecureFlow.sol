@@ -131,6 +131,10 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
     mapping(uint256 => mapping(address => bool)) public hasApplied;
     mapping(uint256 => address[]) private escrowApplications;
 
+    // Anti-abuse: Cancellation tracking
+    mapping(address => uint256) public userCancellations;
+    mapping(address => uint256) public lastCancellationTime;
+
     /* ===================== EVENTS ===================== */
     event EscrowCreated(
         uint256 indexed escrowId,
@@ -541,6 +545,12 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
 
     /**
      * @notice Cancel an open job and refund the depositor (only if no freelancer assigned)
+     * @dev Implements tiered penalty system to prevent abuse:
+     *      - Cancellations 0-2: 0% penalty (free)
+     *      - Cancellations 3-5: 5% penalty
+     *      - Cancellations 6-10: 10% penalty
+     *      - Cancellations 11+: 15% penalty
+     *      Additional penalty based on number of applications received
      */
     function cancelJob(uint256 escrowId) external nonReentrant whenNotPaused {
         Escrow storage esc = _requireEscrow(escrowId);
@@ -548,18 +558,89 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
         if (!esc.isOpenJob) revert CannotCancelAssignedJob();
         if (esc.status != EscrowStatus.Pending) revert InvalidEscrowStatus();
 
+        // Track cancellation
+        userCancellations[msg.sender]++;
+        lastCancellationTime[msg.sender] = block.timestamp;
+
+        // Calculate penalty
+        uint256 penalty = _calculateCancellationPenalty(msg.sender, escrowId);
         uint256 refundAmount = esc.totalAmount;
         uint256 feeRefund = esc.platformFee;
+        
+        // Deduct penalty from refund
+        uint256 netRefund = refundAmount > penalty ? refundAmount - penalty : 0;
+        uint256 totalRefund = netRefund + feeRefund;
 
         esc.status = EscrowStatus.Cancelled;
         escrowedAmount[esc.token] -= refundAmount;
         totalFeesByToken[esc.token] -= feeRefund;
+        
+        // Add penalty to platform fees
+        if (penalty > 0) {
+            totalFeesByToken[esc.token] += penalty;
+        }
 
-        uint256 totalRefund = refundAmount + feeRefund;
         _doTransfer(esc.token, address(this), esc.depositor, totalRefund);
 
         emit JobCancelled(escrowId, msg.sender, totalRefund);
         emit EscrowUpdated(escrowId, EscrowStatus.Cancelled, block.timestamp);
+    }
+
+    /**
+     * @notice Calculate cancellation penalty based on user's history
+     * @dev Tiered system with application-based penalties
+     */
+    function _calculateCancellationPenalty(address user, uint256 escrowId) 
+        internal view returns (uint256) 
+    {
+        uint256 effectiveCancellations = _getEffectiveCancellations(user);
+        uint256 baseAmount = escrows[escrowId].totalAmount;
+        
+        // Base penalty based on cancellation tier
+        uint256 basePenaltyPercent = 0;
+        if (effectiveCancellations <= 2) {
+            basePenaltyPercent = 0;  // Tier 1: Free
+        } else if (effectiveCancellations <= 5) {
+            basePenaltyPercent = 5;  // Tier 2: 5%
+        } else if (effectiveCancellations <= 10) {
+            basePenaltyPercent = 10; // Tier 3: 10%
+        } else {
+            basePenaltyPercent = 15; // Tier 4: 15%
+        }
+        
+        // Additional penalty based on applications
+        uint256 applicationCount = escrowApplications[escrowId].length;
+        uint256 applicationPenaltyPercent = 0;
+        if (applicationCount >= 11) {
+            applicationPenaltyPercent = 15;
+        } else if (applicationCount >= 6) {
+            applicationPenaltyPercent = 10;
+        } else if (applicationCount >= 1) {
+            applicationPenaltyPercent = 5;
+        }
+        
+        uint256 totalPenaltyPercent = basePenaltyPercent + applicationPenaltyPercent;
+        // Cap at 30% maximum penalty
+        if (totalPenaltyPercent > 30) totalPenaltyPercent = 30;
+        
+        return (baseAmount * totalPenaltyPercent) / 100;
+    }
+
+    /**
+     * @notice Get effective cancellations with time-based reduction
+     * @dev Reduces by 1 for every 30 days without cancellation
+     */
+    function _getEffectiveCancellations(address user) internal view returns (uint256) {
+        uint256 cancellations = userCancellations[user];
+        uint256 lastCancel = lastCancellationTime[user];
+        
+        if (lastCancel == 0 || cancellations == 0) return cancellations;
+        
+        // Reduce by 1 for every 30 days without cancellation
+        uint256 daysSinceLastCancel = (block.timestamp - lastCancel) / 1 days;
+        uint256 reduction = daysSinceLastCancel / 30;
+        
+        return cancellations > reduction ? cancellations - reduction : 0;
     }
 
     /**

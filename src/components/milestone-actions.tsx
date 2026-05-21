@@ -91,7 +91,7 @@ export function MilestoneActions({
     );
   };
 
-  const isProjectTerminated =
+  const isProjectDisputed =
     milestone.status === "disputed" || escrowStatus === "disputed";
 
   const openDialog = (type: typeof actionType) => {
@@ -405,8 +405,8 @@ export function MilestoneActions({
   return (
     <>
       <div className="flex items-center gap-2">
-        {/* Approve Milestone - Only payer for submitted milestones (disabled if terminated) */}
-        {canApproveMilestone() && !isProjectTerminated && (
+        {/* Approve Milestone - Only payer for submitted milestones (disabled if disputed) */}
+        {canApproveMilestone() && !isProjectDisputed && (
           <Button
             onClick={() => openDialog("approve")}
             size="sm"
@@ -419,8 +419,8 @@ export function MilestoneActions({
           </Button>
         )}
 
-        {/* Reject Milestone - Only payer for submitted milestones (disabled if terminated) */}
-        {canApproveMilestone() && !isProjectTerminated && (
+        {/* Reject Milestone - Only payer for submitted milestones (disabled if disputed) */}
+        {canApproveMilestone() && !isProjectDisputed && (
           <Button
             onClick={() => openDialog("reject")}
             size="sm"
@@ -433,10 +433,10 @@ export function MilestoneActions({
           </Button>
         )}
 
-        {/* Dispute Milestone - Only payer for submitted milestones (disabled if terminated) */}
+        {/* Dispute Milestone - Only payer for submitted milestones (disabled if disputed) */}
         {milestone.status === "submitted" &&
           isPayer &&
-          !isProjectTerminated && (
+          !isProjectDisputed && (
             <Button
               onClick={() => openDialog("dispute")}
               size="sm"
@@ -548,14 +548,6 @@ export function MilestoneActions({
               }
               return null;
             })()}
-          </div>
-        )}
-
-        {/* Terminated Project Status - Show terminated badge */}
-        {isProjectTerminated && (
-          <div className="flex items-center gap-2 text-gray-600">
-            <AlertTriangle className="h-4 w-4" />
-            <span className="text-sm font-medium">Project Terminated</span>
           </div>
         )}
 

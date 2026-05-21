@@ -30,7 +30,7 @@ interface JobWithApplications {
   token: string;
   totalAmount: string;
   releasedAmount: string;
-  status: "pending" | "active" | "completed" | "disputed";
+  status: "pending" | "active" | "completed" | "disputed" | "cancelled";
   createdAt: number;
   duration: number;
   milestones: any[];

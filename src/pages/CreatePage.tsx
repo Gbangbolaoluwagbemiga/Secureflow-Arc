@@ -284,7 +284,7 @@ export default function CreateEscrowPage() {
         ? (USDC_ADDRESS || "0x0000000000000000000000000000000000000000")
         : (formData.token || USDC_ADDRESS || "0x0000000000000000000000000000000000000000");
 
-      const escrowId = await createEscrow.mutateAsync({
+      const result = await createEscrow.mutateAsync({
         depositor: wallet.address,
         beneficiary: beneficiaryAddress,
         arbiters: [],
@@ -297,7 +297,12 @@ export default function CreateEscrowPage() {
         project_description: formData.projectDescription,
       });
 
-      toast({ title: "Escrow created!", description: `Escrow #${escrowId} created successfully.` });
+      toast({ 
+        title: "Escrow created!", 
+        description: result.escrowId !== "unknown"
+          ? `Escrow #${result.escrowId} created successfully.`
+          : "Your escrow was created successfully."
+      });
 
       setTimeout(() => {
         navigate(formData.isOpenJob ? "/jobs" : "/dashboard");

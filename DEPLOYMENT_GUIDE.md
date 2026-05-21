@@ -31,7 +31,7 @@ forge script script/Deploy.s.sol:DeployScript \
 
 **Expected Output:**
 ```
-SecureFlow deployed to: 0x[NEW_ADDRESS]
+SecureFlow deployed to: 0x7aB0853325529aF7EB5c4745413BF01E98c0020f
 ```
 
 ### Step 2: Update Environment Variables
@@ -40,12 +40,12 @@ Update the contract address in all `.env` files:
 
 #### Root `.env`
 ```bash
-VITE_SECUREFLOW_CONTRACT_ADDRESS=0x[NEW_ADDRESS]
+VITE_SECUREFLOW_CONTRACT_ADDRESS=0x7aB0853325529aF7EB5c4745413BF01E98c0020f
 ```
 
 #### `backend/.env`
 ```bash
-CONTRACT_ADDRESS=0x[NEW_ADDRESS]
+CONTRACT_ADDRESS=0x7aB0853325529aF7EB5c4745413BF01E98c0020f
 ```
 
 ### Step 3: Update Subgraph Configuration
