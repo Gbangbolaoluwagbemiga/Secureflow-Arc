@@ -69,11 +69,6 @@ export function JobCard({
                 {job.duration > 0 ? Math.round(job.duration) : 0} days
               </Badge>
               <Badge className={getStatusColor(job.status)}>{job.status}</Badge>
-              {job.isJobCreator && (
-                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
-                  Your Project
-                </Badge>
-              )}
             </div>
 
             <p className="text-muted-foreground mb-4 break-words overflow-hidden">

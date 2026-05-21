@@ -476,11 +476,14 @@ export default function JobsPage() {
         m.description.toLowerCase().includes(searchQuery.toLowerCase())
       );
 
-    // Status filter
+    // Status filter - normalize both sides for comparison
     const jobStatus = normalizeJobStatus(job.status);
     const matchesStatus = statusFilter === "all" || jobStatus === statusFilter;
 
-    return matchesSearch && matchesStatus;
+    // Don't show jobs created by the current user (they should see them in Dashboard/Approvals)
+    const isNotMyJob = !job.isJobCreator;
+
+    return matchesSearch && matchesStatus && isNotMyJob;
   });
 
   if (!wallet.isConnected || loading) {
@@ -504,8 +507,8 @@ export default function JobsPage() {
           </Alert>
         )}
         <JobsStats
-          jobs={jobs}
-          openJobsCount={totalEscrowsCount}
+          jobs={filteredJobs}
+          openJobsCount={filteredJobs.length}
           ongoingProjectsCount={ongoingProjectsCount}
         />
 
@@ -526,8 +529,6 @@ export default function JobsPage() {
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="disputed">Disputed</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -538,25 +539,42 @@ export default function JobsPage() {
           {filteredJobs.length === 0 ? (
             <Card className="glass border-muted p-12 text-center">
               <Briefcase className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <p className="text-muted-foreground">
-                No jobs found matching your search
-              </p>
+              {jobs.length === 0 ? (
+                <>
+                  <h3 className="text-xl font-semibold mb-2">No Open Jobs Available</h3>
+                  <p className="text-muted-foreground">
+                    There are currently no open jobs on the platform. Check back later for new opportunities!
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-xl font-semibold mb-2">No Jobs Match Your Filters</h3>
+                  <p className="text-muted-foreground">
+                    Try adjusting your search or filter criteria to find more jobs.
+                  </p>
+                </>
+              )}
             </Card>
           ) : (
-            filteredJobs.map((job, index) => {
-              const jobHasApplied = hasApplied[job.id] || false;
-              return (
-                <JobCard
-                  key={job.id}
-                  job={job}
-                  index={index}
-                  hasApplied={jobHasApplied}
-                  isContractPaused={isContractPaused}
-                  ongoingProjectsCount={ongoingProjectsCount}
-                  onApply={setSelectedJob}
-                />
-              );
-            })
+            <>
+              <div className="text-sm text-muted-foreground">
+                Showing {filteredJobs.length} {filteredJobs.length === 1 ? 'job' : 'jobs'}
+              </div>
+              {filteredJobs.map((job, index) => {
+                const jobHasApplied = hasApplied[job.id] || false;
+                return (
+                  <JobCard
+                    key={job.id}
+                    job={job}
+                    index={index}
+                    hasApplied={jobHasApplied}
+                    isContractPaused={isContractPaused}
+                    ongoingProjectsCount={ongoingProjectsCount}
+                    onApply={setSelectedJob}
+                  />
+                );
+              })}
+            </>
           )}
         </div>
 
