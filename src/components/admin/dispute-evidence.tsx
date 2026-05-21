@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useWriteContract, usePublicClient, useBlockNumber } from "wagmi";
+import { useWriteContract, usePublicClient } from "wagmi";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,7 +42,6 @@ export function DisputeEvidence({
   const { toast } = useToast();
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
-  const { data: blockNumber } = useBlockNumber({ watch: true });
   
   const [evidence, setEvidence] = useState<EvidenceEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,12 +51,19 @@ export function DisputeEvidence({
 
   useEffect(() => {
     void fetchEvidence();
-  }, [escrowId, milestoneIndex, blockNumber]);
+  }, [escrowId, milestoneIndex]); // Only refetch when escrow/milestone changes, not on every block
 
   const fetchEvidence = async () => {
     setLoading(true);
     try {
       if (!publicClient) return;
+
+      // Get current block number
+      const currentBlock = await publicClient.getBlockNumber();
+      
+      // Arc Testnet RPC limit: max 10000 blocks per query
+      // Search last 9000 blocks to stay under limit
+      const fromBlock = currentBlock > 9000n ? currentBlock - 9000n : 0n;
 
       // Fetch EvidenceSubmitted events for this escrow and milestone
       const logs = await publicClient.getLogs({
@@ -67,7 +73,7 @@ export function DisputeEvidence({
           escrowId: BigInt(escrowId),
           milestoneIndex: BigInt(milestoneIndex),
         },
-        fromBlock: 'earliest',
+        fromBlock: fromBlock,
         toBlock: 'latest',
       });
 
@@ -89,6 +95,7 @@ export function DisputeEvidence({
       setEvidence(entries);
     } catch (error) {
       console.error("Failed to fetch evidence:", error);
+      // Don't show error to user, just show empty state
     } finally {
       setLoading(false);
     }
@@ -177,14 +184,33 @@ export function DisputeEvidence({
   return (
     <Card className="glass border-primary/20">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <MessageSquare className="h-5 w-5" />
-          Dispute Evidence & Communication
-          <Badge variant="outline" className="ml-auto">{evidence.length} Submissions</Badge>
-        </CardTitle>
-        <CardDescription>
-          Evidence and communication thread for Escrow #{escrowId}, Milestone {milestoneIndex}
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5" />
+              Dispute Evidence & Communication
+              <Badge variant="outline" className="ml-2">{evidence.length} Submissions</Badge>
+            </CardTitle>
+            <CardDescription>
+              Evidence and communication thread for Escrow #{escrowId}, Milestone {milestoneIndex}
+            </CardDescription>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => void fetchEvidence()}
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              "Refresh"
+            )}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {/* Single Evidence Thread - No Tabs */}

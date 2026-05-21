@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useWriteContract } from "wagmi";
+import { useWriteContract, usePublicClient } from "wagmi";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -59,6 +59,7 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
   const { wallet } = useWeb3();
   const { toast } = useToast();
   const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient();
   const { addCrossWalletNotification } = useNotifications();
   const [disputes, setDisputes] = useState<Dispute[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,12 +92,6 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
           const escrow = await svc.getEscrow(id);
           if (!escrow || escrow.status !== 4 /* Disputed */) continue;
           
-          console.log(`Escrow #${id} data:`, {
-            totalAmount: escrow.totalAmount?.toString(),
-            paidAmount: escrow.paidAmount?.toString(),
-            status: escrow.status
-          });
-          
           const milestones: any[] = await svc.getMilestones(id) as any[];
           milestones.forEach((m, idx) => {
             if (Number(m.status) === 4 /* MilestoneStatus.Disputed */) {
@@ -111,36 +106,11 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
               
               // FALLBACK: If still 0, use total escrow amount (ignore paidAmount)
               if (amtWei === 0n && escrowTotalWei > 0n) {
-                console.warn(`Using escrow totalAmount as fallback for dispute #${id}`);
                 amtWei = escrowTotalWei;
               }
               
-              // Debug logging with multiple decimal interpretations
-              const rawAmount = amtWei.toString();
-              console.log(`Dispute #${id} Milestone ${idx}:`, {
-                rawAmount: rawAmount,
-                escrowTotal: escrowTotalWei.toString(),
-                escrowPaid: escrowPaidWei.toString(),
-                remaining: remainingWei.toString(),
-                milestoneAmount: milestoneAmtWei.toString(),
-                finalAmount: amtWei.toString(),
-                'as_18_decimals': Number(formatUnits(amtWei, 18)),
-                'as_6_decimals': Number(formatUnits(amtWei, 6)),
-                'as_0_decimals': Number(amtWei)
-              });
-              
-              // Alert if amount is still 0
-              if (amtWei === 0n) {
-                console.error(`⚠️ CRITICAL: Dispute #${id} Milestone ${idx} has 0 amount!`);
-                console.error('Escrow data:', escrow);
-                console.error('Milestone data:', m);
-              }
-              
-              // CRITICAL FIX: Arc Testnet USDC uses 6 decimals, not 18!
-              // The contract stores USDC amounts with 6 decimal places
+              // USDC uses 6 decimals on Arc Testnet
               const displayAmount = Number(formatUnits(amtWei, 6));
-              
-              console.log(`Final display amount for Dispute #${id}:`, displayAmount);
               
               found.push({
                 escrowId: id.toString(),
@@ -184,13 +154,46 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
       const svc = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
       const total = selectedDispute.milestoneAmountWei;
       const freelancerAmount = (total * BigInt(freelancerPct)) / 100n;
+      const clientAmount = total - freelancerAmount;
 
-      await svc.arbiterAwardFreelancer(
+      // Validate amounts before sending
+      if (total === 0n) {
+        throw new Error("Milestone amount is 0. Cannot resolve dispute with 0 funds.");
+      }
+
+      if (freelancerAmount + clientAmount !== total) {
+        throw new Error("Amount calculation error: freelancer + client amount does not equal total");
+      }
+
+      toast({ title: "Submitting transaction...", description: "Please wait for confirmation" });
+
+      // Send transaction and get hash
+      const txHash = await svc.arbiterAwardFreelancer(
         { escrow_id: Number(selectedDispute.escrowId), arbiter: wallet.address || "", freelancer_amount: freelancerAmount },
         writeContractAsync
       );
 
-      toast({ title: "Dispute Resolved", description: "Resolution recorded on-chain." });
+      toast({ title: "Transaction sent", description: "Waiting for blockchain confirmation..." });
+
+      // Wait for transaction to be mined and confirmed
+      if (!publicClient) {
+        throw new Error("Public client not available");
+      }
+      
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+        confirmations: 1,
+      });
+
+      // Check if transaction was successful
+      if (receipt.status === "reverted") {
+        throw new Error("Transaction failed on-chain. The contract rejected the transaction.");
+      }
+
+      // Only show success and send notifications if transaction was confirmed
+      toast({ title: "Dispute Resolved", description: "Resolution confirmed on-chain." });
+      
+      // Send notification to client
       addCrossWalletNotification(
         {
           type: "dispute",
@@ -199,7 +202,18 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
           actionUrl: `/dashboard?escrow=${selectedDispute.escrowId}`,
           data: { escrowId: selectedDispute.escrowId },
         },
-        selectedDispute.clientAddress,
+        selectedDispute.clientAddress
+      );
+      
+      // Send notification to freelancer
+      addCrossWalletNotification(
+        {
+          type: "dispute",
+          title: "Dispute Resolved by Arbiter",
+          message: `Dispute #${selectedDispute.escrowId} resolved. Reason: ${resolutionReason || "No reason provided"}`,
+          actionUrl: `/freelancer?escrow=${selectedDispute.escrowId}`,
+          data: { escrowId: selectedDispute.escrowId },
+        },
         selectedDispute.freelancerAddress
       );
 
@@ -208,7 +222,24 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
       await fetchDisputes(false);
       onDisputeResolved();
     } catch (err: any) {
-      toast({ title: "Resolution Failed", description: err.message || "Transaction failed", variant: "destructive" });
+      // Better error messages for common failures
+      let errorMessage = err.message || "Transaction failed";
+      
+      if (errorMessage.includes("Unauthorized") || errorMessage.includes("unauthorized")) {
+        errorMessage = "You are not authorized as an arbiter. Ask the contract owner to authorize your address in Arbiter Management.";
+      } else if (errorMessage.includes("InsufficientFunds") || errorMessage.includes("E2b42800")) {
+        errorMessage = "Insufficient funds in escrow to complete this resolution. Check the escrow balance.";
+      } else if (errorMessage.includes("User rejected") || errorMessage.includes("User denied")) {
+        errorMessage = "Transaction was rejected by user";
+      } else if (errorMessage.includes("reverted")) {
+        errorMessage = "Transaction failed on-chain. The contract rejected the transaction.";
+      }
+      
+      toast({ 
+        title: "Resolution Failed", 
+        description: errorMessage, 
+        variant: "destructive" 
+      });
     } finally {
       setIsResolving(false);
     }

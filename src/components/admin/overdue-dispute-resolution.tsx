@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useWriteContract } from "wagmi";
+import { useWriteContract, usePublicClient } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +54,7 @@ export function OverdueDisputeResolution({ onResolved }: Props) {
   const { toast } = useToast();
   const { addNotification } = useNotifications();
   const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient();
   const [cases, setCases] = useState<OverdueCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<OverdueCase | null>(null);
@@ -128,13 +129,57 @@ export function OverdueDisputeResolution({ onResolved }: Props) {
     try {
       const { ContractService } = await import("@/lib/web3/contract-service");
       const svc = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
-      const unreleasedWei = BigInt(Math.round(selected.unreleased * 1e18));
+      const unreleasedWei = BigInt(Math.round(selected.unreleased * 1e6)); // Convert to 6 decimals
+
+      // Validate amounts
+      if (unreleasedWei === 0n) {
+        throw new Error("No unreleased funds to distribute. Cannot resolve dispute with 0 funds.");
+      }
+
+      toast({ title: "Submitting transaction...", description: "Please wait for confirmation" });
+
+      let txHash: `0x${string}`;
 
       if (fullRefundToClient) {
-        await svc.arbiterApproveRefund(
+        txHash = await svc.arbiterApproveRefund(
           { escrow_id: Number(selected.escrowId), arbiter: wallet.address || "" },
           writeContractAsync
         );
+      } else {
+        const pct = Math.min(Math.max(freelancerPct, 0), 100);
+        const freelancerWei = (unreleasedWei * BigInt(pct)) / BigInt(100);
+        const clientWei = unreleasedWei - freelancerWei;
+
+        // Validate split
+        if (freelancerWei + clientWei !== unreleasedWei) {
+          throw new Error("Amount calculation error: freelancer + client amount does not equal total");
+        }
+
+        txHash = await svc.arbiterAwardFreelancer(
+          { escrow_id: Number(selected.escrowId), arbiter: wallet.address || "", freelancer_amount: freelancerWei },
+          writeContractAsync
+        );
+      }
+
+      toast({ title: "Transaction sent", description: "Waiting for blockchain confirmation..." });
+
+      // Wait for transaction to be mined and confirmed
+      if (!publicClient) {
+        throw new Error("Public client not available");
+      }
+      
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash: txHash,
+        confirmations: 1,
+      });
+
+      // Check if transaction was successful
+      if (receipt.status === "reverted") {
+        throw new Error("Transaction failed on-chain. The contract rejected the transaction.");
+      }
+
+      // Only show success and send notifications if transaction was confirmed
+      if (fullRefundToClient) {
         toast({
           title: "Refund approved",
           description: `Full refund of ${selected.unreleased.toFixed(2)} USDC sent to client`,
@@ -164,21 +209,17 @@ export function OverdueDisputeResolution({ onResolved }: Props) {
       } else {
         const pct = Math.min(Math.max(freelancerPct, 0), 100);
         const freelancerWei = (unreleasedWei * BigInt(pct)) / BigInt(100);
-        await svc.arbiterAwardFreelancer(
-          { escrow_id: Number(selected.escrowId), arbiter: wallet.address || "", freelancer_amount: freelancerWei },
-          writeContractAsync
-        );
-        const freelancerAmt = (Number(freelancerWei) / 1e18).toFixed(6);
-        const clientAmt = (selected.unreleased - Number(freelancerWei) / 1e18).toFixed(6);
+        const freelancerAmt = Number(freelancerWei) / 1e6;
+        const clientAmt = selected.unreleased - freelancerAmt;
         toast({
           title: "Award applied",
-          description: `${freelancerAmt} USDC to freelancer, ${clientAmt} USDC returned to client`,
+          description: `${freelancerAmt.toFixed(6)} USDC to freelancer, ${clientAmt.toFixed(6)} USDC returned to client`,
         });
         addNotification(
           {
             type: "escrow",
             title: "Arbitration: Award",
-            message: `Arbiter awarded ${freelancerAmt} USDC to you for "${selected.projectTitle}"`,
+            message: `Arbiter awarded ${freelancerAmt.toFixed(6)} USDC to you for "${selected.projectTitle}"`,
             actionUrl: `/freelancer?escrow=${selected.escrowId}`,
             data: { escrowId: selected.escrowId },
           },
@@ -188,7 +229,7 @@ export function OverdueDisputeResolution({ onResolved }: Props) {
           {
             type: "escrow",
             title: "Arbitration Decision",
-            message: `${clientAmt} USDC returned to you, ${freelancerAmt} USDC awarded to freelancer`,
+            message: `${clientAmt.toFixed(6)} USDC returned to you, ${freelancerAmt.toFixed(6)} USDC awarded to freelancer`,
             actionUrl: `/dashboard?escrow=${selected.escrowId}`,
             data: { escrowId: selected.escrowId },
           },
@@ -201,9 +242,22 @@ export function OverdueDisputeResolution({ onResolved }: Props) {
       await fetchCases();
       onResolved?.();
     } catch (err: any) {
+      // Better error messages for common failures
+      let errorMessage = err.message || "Transaction failed";
+      
+      if (errorMessage.includes("Unauthorized") || errorMessage.includes("unauthorized")) {
+        errorMessage = "You are not authorized as an arbiter. Ask the contract owner to authorize your address in Arbiter Management.";
+      } else if (errorMessage.includes("InsufficientFunds") || errorMessage.includes("E2b42800")) {
+        errorMessage = "Insufficient funds in escrow to complete this resolution. Check the escrow balance.";
+      } else if (errorMessage.includes("User rejected") || errorMessage.includes("User denied")) {
+        errorMessage = "Transaction was rejected by user";
+      } else if (errorMessage.includes("reverted")) {
+        errorMessage = "Transaction failed on-chain. The contract rejected the transaction.";
+      }
+      
       toast({
         title: "Resolution failed",
-        description: err.message || "Transaction failed",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {

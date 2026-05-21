@@ -32,7 +32,7 @@ export class ContractService {
   async getEscrow(id: number) {
     try {
       const e = await this.contract.read.getEscrow([BigInt(id)]);
-      const escrowData = {
+      return {
         depositor: e.depositor,
         beneficiary: e.beneficiary,
         token: e.token,
@@ -46,32 +46,15 @@ export class ContractService {
         projectTitle: e.projectTitle,
         projectDescription: e.projectDescription,
       };
-      console.log(`getEscrow(${id}) returned:`, {
-        totalAmount: escrowData.totalAmount?.toString(),
-        paidAmount: escrowData.paidAmount?.toString(),
-        status: escrowData.status
-      });
-      return escrowData;
     } catch (error) {
-      console.error(`getEscrow(${id}) failed:`, error);
       return null;
     }
   }
 
   async getMilestones(id: number) {
     try {
-      const milestones = await this.contract.read.getMilestones([BigInt(id)]);
-      console.log(`getMilestones(${id}) returned ${milestones.length} milestones`);
-      if (milestones.length > 0) {
-        console.log(`First milestone:`, {
-          amount: milestones[0].amount?.toString(),
-          status: milestones[0].status,
-          description: milestones[0].description
-        });
-      }
-      return milestones;
+      return await this.contract.read.getMilestones([BigInt(id)]);
     } catch (error) {
-      console.error(`getMilestones(${id}) failed:`, error);
       return [];
     }
   }
@@ -82,11 +65,8 @@ export class ContractService {
 
   async getOwner(): Promise<string | null> {
     try { 
-      const owner = await this.contract.read.owner() as string;
-      console.log("Contract owner fetched:", owner);
-      return owner;
+      return await this.contract.read.owner() as string;
     } catch (error) {
-      console.error("Failed to fetch contract owner:", error);
       return null;
     }
   }

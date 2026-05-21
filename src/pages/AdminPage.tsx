@@ -40,11 +40,8 @@ export default function AdminPage() {
     setIsCheckingOwner(true);
     try {
       const owner = await contractService.getOwner();
-      console.log("Contract owner:", owner);
-      console.log("Current wallet:", wallet.address);
       
       if (!owner) {
-        console.error("Failed to fetch contract owner - RPC might be down");
         toast({
           title: "Connection Issue",
           description: "Failed to verify admin access. Retrying...",
@@ -60,7 +57,6 @@ export default function AdminPage() {
       
       setIsOwner(owner?.toLowerCase() === wallet.address.toLowerCase());
     } catch (error) {
-      console.error("Failed to check ownership:", error);
       toast({
         title: "Connection Error",
         description: "Failed to connect to blockchain. Please refresh the page.",
