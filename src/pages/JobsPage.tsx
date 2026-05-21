@@ -467,11 +467,11 @@ export default function JobsPage() {
   };
 
   const filteredJobs = jobs.filter((job) => {
-    // Search filter
+    // Search filter - check both title and description
     const matchesSearch =
-      job.projectDescription
-        ?.toLowerCase()
-        .includes(searchQuery.toLowerCase()) ||
+      !searchQuery ||
+      job.projectTitle?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.projectDescription?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       job.milestones.some((m) =>
         m.description.toLowerCase().includes(searchQuery.toLowerCase())
       );

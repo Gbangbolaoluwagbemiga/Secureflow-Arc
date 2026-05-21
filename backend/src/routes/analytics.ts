@@ -1,11 +1,14 @@
 import { Router } from "express";
-import { createPublicClient, http, formatEther } from "viem";
+import { createPublicClient, http, formatUnits } from "viem";
 
 const router = Router();
 
 // Arc EVM Testnet configuration
 const ARC_TESTNET_RPC = process.env.ARC_RPC_URL || "https://rpc-testnet.arc.network";
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS as `0x${string}`;
+
+// USDC uses 6 decimals, not 18 like ETH
+const USDC_DECIMALS = 6;
 
 const publicClient = createPublicClient({
   transport: http(ARC_TESTNET_RPC),
@@ -71,6 +74,28 @@ const SECUREFLOW_ABI = [
     stateMutability: "view",
     type: "function",
   },
+  {
+    inputs: [{ name: "escrowId", type: "uint256" }],
+    name: "getMilestones",
+    outputs: [
+      {
+        components: [
+          { name: "description", type: "string" },
+          { name: "amount", type: "uint256" },
+          { name: "status", type: "uint8" },
+          { name: "submittedAt", type: "uint256" },
+          { name: "approvedAt", type: "uint256" },
+          { name: "rejectionReason", type: "string" },
+          { name: "proposedAmount", type: "uint256" },
+          { name: "proposedDescription", type: "string" },
+          { name: "proposalStatus", type: "uint8" },
+        ],
+        type: "tuple[]",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
 ] as const;
 
 /**
@@ -118,13 +143,14 @@ router.get("/platform", async (req, res) => {
         continue;
       }
 
+      // Add total amount to volume (all escrows contribute to volume)
       totalVolume += escrow.totalAmount;
       totalFees += escrow.platformFee;
 
-      // Status: 0=Pending, 1=InProgress, 2=Released, 3=Refunded, 4=Disputed, 5=Expired, 6=Cancelled
-      if (escrow.status === 1) activeEscrows++;
-      if (escrow.status === 2) completedEscrows++;
-      if (escrow.status === 4) disputedEscrows++;
+      // Status: 0=Pending, 1=Active/InProgress, 2=Completed, 3=Refunded, 4=Disputed, 5=Expired, 6=Cancelled
+      if (escrow.status === 1 || escrow.status === 0) activeEscrows++; // Active or Pending with work started
+      if (escrow.status === 2) completedEscrows++; // Completed
+      if (escrow.status === 4) disputedEscrows++; // Disputed
     }
 
     const analytics = {
@@ -132,9 +158,9 @@ router.get("/platform", async (req, res) => {
       activeEscrows,
       completedEscrows,
       disputedEscrows,
-      totalVolume: formatEther(totalVolume),
+      totalVolume: formatUnits(totalVolume, USDC_DECIMALS),
       totalVolumeWei: totalVolume.toString(),
-      totalFees: formatEther(totalFees),
+      totalFees: formatUnits(totalFees, USDC_DECIMALS),
       totalFeesWei: totalFees.toString(),
       completionRate: totalEscrows > 0 ? ((completedEscrows / totalEscrows) * 100).toFixed(2) : "0",
       disputeRate: totalEscrows > 0 ? ((disputedEscrows / totalEscrows) * 100).toFixed(2) : "0",
@@ -229,16 +255,23 @@ router.get("/user/:address", async (req, res) => {
 
       if (isClient) {
         asClient++;
-        totalSpent += escrow.paidAmount;
-        if (escrow.status === 1) activeProjects++;
+        // Client's total spent is the total amount they deposited (including fees)
+        totalSpent += escrow.totalAmount;
+        // Count as active if status is Pending (0) or Active (1)
+        if (escrow.status === 0 || escrow.status === 1) activeProjects++;
       }
 
       if (isFreelancer) {
         asFreelancer++;
+        // Freelancer's earnings are what has been paid out to them
+        console.log(`[Analytics] Escrow for freelancer ${userAddress}: paidAmount=${escrow.paidAmount.toString()}, totalAmount=${escrow.totalAmount.toString()}, status=${escrow.status}`);
         totalEarned += escrow.paidAmount;
-        if (escrow.status === 1) activeProjects++;
+        // Count as active if status is Pending (0) or Active (1)
+        if (escrow.status === 0 || escrow.status === 1) activeProjects++;
       }
     }
+
+    console.log(`[Analytics] User ${userAddress} totals: totalEarned=${totalEarned.toString()} (${formatUnits(totalEarned, USDC_DECIMALS)} USDC), asFreelancer=${asFreelancer}, totalSpent=${totalSpent.toString()}, asClient=${asClient}`);
 
     const userStats = {
       address: userAddress,
@@ -248,9 +281,9 @@ router.get("/user/:address", async (req, res) => {
       ratingCount: Number(ratingCount),
       projectsAsClient: asClient,
       projectsAsFreelancer: asFreelancer,
-      totalEarned: formatEther(totalEarned),
+      totalEarned: formatUnits(totalEarned, USDC_DECIMALS),
       totalEarnedWei: totalEarned.toString(),
-      totalSpent: formatEther(totalSpent),
+      totalSpent: formatUnits(totalSpent, USDC_DECIMALS),
       totalSpentWei: totalSpent.toString(),
       activeProjects,
     };

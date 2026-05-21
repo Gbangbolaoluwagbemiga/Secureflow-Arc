@@ -237,6 +237,7 @@ export default function ApprovalsPage() {
       });
 
       // Add notification for freelancer approval - notify the FREELANCER
+      // Use original case address, not lowercase
       addNotification(
         createApplicationNotification(
           "approved",
@@ -252,7 +253,7 @@ export default function ApprovalsPage() {
               selectedFreelancer.freelancerAddress.slice(-4),
           }
         ),
-        [selectedFreelancer.freelancerAddress] // Notify the freelancer
+        [selectedFreelancer.freelancerAddress] // Use original case, not lowercase
       );
 
       // Close modals first

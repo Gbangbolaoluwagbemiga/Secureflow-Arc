@@ -129,16 +129,23 @@ export default function FreelancersPage() {
         escrowPromises.push(
           svc.getEscrow(i)
             .then((escrow) => {
-              const addr = (escrow as any)?.freelancer as string | undefined;
-              if (addr && typeof addr === "string" && addr.startsWith("G")) {
+              if (!escrow) return;
+              const addr = escrow.beneficiary; // Use beneficiary, not freelancer
+              // Check for valid Ethereum address (0x...) and not zero address
+              if (
+                addr && 
+                typeof addr === "string" && 
+                addr.startsWith("0x") &&
+                addr !== "0x0000000000000000000000000000000000000000"
+              ) {
                 const prev = freelancerMap.get(addr) ?? 0;
-              const rawStatus = (escrow as any)?.status;
-              const isCompleted =
-                rawStatus === 2 ||                        // getEscrow numeric: released/completed
-                rawStatus === "completed" ||
-                rawStatus === "released" ||
-                rawStatus === "Completed" ||
-                rawStatus === "Released";
+                const rawStatus = escrow.status;
+                const isCompleted =
+                  rawStatus === 2 ||                        // Released/Completed status
+                  rawStatus === "completed" ||
+                  rawStatus === "released" ||
+                  rawStatus === "Completed" ||
+                  rawStatus === "Released";
                 freelancerMap.set(addr, prev + (isCompleted ? 1 : 0));
               }
             })

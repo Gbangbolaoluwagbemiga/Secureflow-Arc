@@ -219,7 +219,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     const current = wallet.address?.toLowerCase();
     const shouldNotifyCurrent =
       targets.length === 0 ||
-      (current ? targets.some((a) => a.toLowerCase() === current) : false);
+      (current ? targets.some((a) => a && a.toLowerCase() === current) : false);
 
     if (shouldNotifyCurrent) {
       setNotifications((prev) => [newNotification, ...prev]);
@@ -236,7 +236,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
               sourceAddress: wallet.address,
             };
             postNotification({
-              wallet_address: address, // original case preserved — backend requires G-prefix
+              wallet_address: address, // Use original case address
               type: notification.type,
               title: notification.title,
               message: notification.message,

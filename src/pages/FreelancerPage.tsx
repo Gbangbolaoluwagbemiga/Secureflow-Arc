@@ -402,9 +402,9 @@ export default function FreelancerPage() {
                   0: "pending",
                   1: "submitted",
                   2: "approved",
-                  3: "disputed",
-                  4: "resolved",
-                  5: "rejected",
+                  3: "rejected",      // Fixed: was "disputed"
+                  4: "disputed",      // Fixed: was "resolved"
+                  5: "pending",       // ProposalPending - treat as pending
                 };
                 const status = statusMap[statusNumber] || "pending";
 

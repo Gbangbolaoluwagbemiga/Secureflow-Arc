@@ -60,7 +60,7 @@ export function JobCard({
       <Card className="glass border-primary/20 p-4 md:p-6 hover:border-primary/40 transition-colors">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-3 mb-3 flex-wrap">
               <h3 className="text-xl font-bold">
                 {job.projectTitle || job.projectDescription || `Job #${job.id}`}
               </h3>
@@ -69,6 +69,11 @@ export function JobCard({
                 {job.duration > 0 ? Math.round(job.duration) : 0} days
               </Badge>
               <Badge className={getStatusColor(job.status)}>{job.status}</Badge>
+              {job.isJobCreator && (
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                  Your Project
+                </Badge>
+              )}
             </div>
 
             <p className="text-muted-foreground mb-4 break-words overflow-hidden">
