@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { Clock, MessageSquare } from "lucide-react";
+import { formatEth, formatTokenAmount } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
@@ -29,10 +30,11 @@ interface JobWithApplications {
   token: string;
   totalAmount: string;
   releasedAmount: string;
-  status: "pending" | "active" | "completed" | "disputed";
+  status: "pending" | "active" | "completed" | "disputed" | "cancelled";
   createdAt: number;
   duration: number;
   milestones: any[];
+  projectTitle?: string;
   projectDescription?: string;
   isOpenJob?: boolean;
   applications: Application[];
@@ -71,7 +73,7 @@ export function JobCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-3">
               <h3 className="text-xl font-bold">
-                {job.projectDescription || `Job #${job.id}`}
+                {job.projectTitle || `Job #${job.id}`}
               </h3>
               <Badge variant="secondary" className="gap-1">
                 <Clock className="h-3 w-3" />
@@ -91,8 +93,7 @@ export function JobCard({
               <span>Posted {new Date(job.createdAt).toLocaleDateString()}</span>
               <span>•</span>
               <span>
-                Budget: {(Number.parseFloat(job.totalAmount) / 1e7).toFixed(2)}{" "}
-                tokens
+                Budget: {formatTokenAmount(job.totalAmount, job.token)}
               </span>
             </div>
           </div>
@@ -101,7 +102,7 @@ export function JobCard({
             <div className="text-right w-full lg:w-auto">
               <p className="text-sm text-muted-foreground mb-1">Total Budget</p>
               <p className="text-2xl md:text-3xl font-bold text-primary break-all">
-                {(Number.parseFloat(job.totalAmount) / 1e7).toFixed(2)}
+                {formatTokenAmount(job.totalAmount, job.token)}
               </p>
             </div>
 

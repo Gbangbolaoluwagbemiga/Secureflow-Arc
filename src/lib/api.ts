@@ -94,12 +94,21 @@ export async function postRewriteText(body: { text: string }): Promise<{
 }
 
 /**
- * Submit a user-signed Soroban transaction XDR to the backend which wraps it
- * in a Stellar fee-bump transaction (admin wallet pays), then submits it.
- * Used for gasless operations such as job applications.
+ * Submit a user-signed EIP-2771 meta-transaction to the backend relayer.
+ * The relayer wraps it in a `MinimalForwarder.execute()` call and pays gas.
+ * Used for gasless operations such as job applications on Arc.
  */
 export async function submitGaslessTransaction(body: {
-  signedTxXdr: string;
+  request: {
+    from: string;
+    to: string;
+    value: string;
+    gas: string;
+    nonce: string;
+    data: string;
+  };
+  signature: string;
+  chainId: number;
 }): Promise<{ txHash: string }> {
   return apiFetch("/v1/gasless/apply", {
     method: "POST",

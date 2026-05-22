@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useWriteContract } from "wagmi";
 import { Card } from "@/components/ui/card";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
@@ -28,7 +29,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 
 export default function JobsPage() {
-  const { wallet, getContract } = useWeb3();
+  const { wallet } = useWeb3();
+  const { writeContractAsync } = useWriteContract();
   const { toast } = useToast();
   const { addNotification } = useNotifications();
   const [jobs, setJobs] = useState<Escrow[]>([]);
@@ -52,7 +54,7 @@ export default function JobsPage() {
 
   const getStatusFromNumber = (
     status: number
-  ): "pending" | "disputed" | "active" | "completed" => {
+  ): "pending" | "disputed" | "active" | "completed" | "cancelled" => {
     switch (status) {
       case 0:
         return "pending";
@@ -63,7 +65,11 @@ export default function JobsPage() {
       case 3:
         return "disputed";
       case 4:
-        return "pending"; // Map cancelled to pending
+        return "pending"; // Refunded - map to pending
+      case 5:
+        return "pending"; // Expired - map to pending
+      case 6:
+        return "cancelled";
       default:
         return "pending";
     }
@@ -71,13 +77,13 @@ export default function JobsPage() {
 
   const normalizeJobStatus = (
     raw: unknown
-  ): "pending" | "active" | "completed" | "disputed" => {
+  ): "pending" | "active" | "completed" | "disputed" | "cancelled" => {
     if (typeof raw === "string") {
       const s = raw.toLowerCase().trim();
-      if (s === "pending" || s === "active" || s === "completed" || s === "disputed") {
+      if (s === "pending" || s === "active" || s === "completed" || s === "disputed" || s === "cancelled") {
         return s;
       }
-      if (s === "cancelled" || s === "canceled") return "pending";
+      if (s === "cancelled" || s === "canceled") return "cancelled";
       return "pending";
     }
 
@@ -208,20 +214,8 @@ export default function JobsPage() {
       // Fetch all data from blockchain via contractService.getEscrow()
       // This ensures all displayed data is from the blockchain, not mock data
 
-      // Get current ledger sequence once (needed for timestamp conversion)
-      let currentLedger = 0;
-      try {
-        const { rpc } = await import("@stellar/stellar-sdk");
-        const { getCurrentNetwork } = await import("@/lib/web3/stellar-config");
-        const network = getCurrentNetwork();
-        const rpcServer = new rpc.Server(network.rpcUrl);
-        const latestLedger = await rpcServer.getLatestLedger();
-        currentLedger = latestLedger.sequence;
-      } catch (error) {
-        // Fallback: use current time as approximation
-        const SECONDS_PER_LEDGER = 5;
-        currentLedger = Math.floor(Date.now() / 1000 / SECONDS_PER_LEDGER);
-      }
+      // Current time in seconds (Arc EVM uses Unix timestamps, not ledger sequences)
+      const nowSeconds = Math.floor(Date.now() / 1000);
 
       // Get total number of escrows using contract service
       // NO TIMEOUT - let it complete fully to get accurate count from blockchain
@@ -237,8 +231,8 @@ export default function JobsPage() {
       // Fetch open jobs from the contract
       // escrowCount is the next available ID, so if it's 2, that means 1 escrow exists
       // But if it times out and returns 1, we should still check escrow 1 directly
-      // Limit the number of escrows to fetch to prevent long loading times
-      const maxEscrowsToFetch = 20; // Limit to 20 escrows max
+      // Increased limit to 100 to show more jobs
+      const maxEscrowsToFetch = 100; // Increased from 20 to 100
       const escrowsToCheck = Math.min(
         Math.max(escrowCount - 1, 1),
         maxEscrowsToFetch
@@ -253,21 +247,18 @@ export default function JobsPage() {
               continue;
             }
 
-            // Check if this is an open job (beneficiary is null or zero address)
-            // For Stellar, null beneficiary means it's an open job
-            const zeroAddress =
-              "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
+            // Check if this is an open job
+            const zeroAddress = "0x0000000000000000000000000000000000000000";
             const isOpenJob =
-              !escrowData.freelancer ||
-              escrowData.freelancer === zeroAddress ||
-              escrowData.freelancer === "";
+              escrowData.isOpenJob ||
+              !escrowData.beneficiary ||
+              escrowData.beneficiary === zeroAddress;
 
             if (isOpenJob) {
-              // Check if current user is the job creator (should not be able to apply to own job)
               const isJobCreator =
                 wallet.address &&
-                escrowData.creator &&
-                escrowData.creator.toLowerCase().trim() ===
+                escrowData.depositor &&
+                escrowData.depositor.toLowerCase().trim() ===
                   wallet.address.toLowerCase().trim();
 
               // Check if current user has already applied to this job
@@ -287,41 +278,30 @@ export default function JobsPage() {
                 }
               }
 
-              // IMPORTANT: created_at and deadline are LEDGER SEQUENCE NUMBERS, not timestamps!
-              // Stellar ledgers close approximately every 5 seconds
-              // Duration = (deadline - created_at) * 5 seconds
-              const SECONDS_PER_LEDGER = 5;
-              const ledgerDiff = escrowData.deadline - escrowData.created_at;
-              const durationInSeconds = ledgerDiff * SECONDS_PER_LEDGER;
-              const durationInDays = Math.max(
-                0,
-                Math.round(durationInSeconds / (24 * 60 * 60))
-              );
+              // deadline is a Unix timestamp (seconds) — directly from block.timestamp
+              const deadlineSeconds = Number(escrowData.deadline ?? 0);
+              const remainingSeconds = Math.max(0, deadlineSeconds - nowSeconds);
+              const durationInDays = Math.max(1, Math.round(remainingSeconds / 86400));
+              const approxCreatedAt = Date.now(); // creation time not stored on-chain
 
-              // Calculate approximate timestamp: current time - (current_ledger - created_at) * 5 seconds
-              const ledgersAgo = currentLedger - escrowData.created_at;
-              const secondsAgo = ledgersAgo * SECONDS_PER_LEDGER;
-              const approxCreatedAt = Date.now() - secondsAgo * 1000;
-
-              // Convert contract data to our Escrow type
-              // All data is from blockchain - fetched via contractService.getEscrow()
               const job: Escrow = {
                 id: i.toString(),
-                payer: escrowData.creator, // depositor/creator (from blockchain)
-                beneficiary: escrowData.freelancer || zeroAddress, // beneficiary/freelancer (from blockchain)
-                token: escrowData.token || "", // token (from blockchain)
-                totalAmount: escrowData.amount, // totalAmount (from blockchain)
-                releasedAmount: "0", // paidAmount - would need to calculate from milestones
-                status: getStatusFromNumber(escrowData.status), // status (from blockchain)
-                createdAt: approxCreatedAt, // Approximate timestamp from ledger sequence
-                duration: durationInDays, // Duration in days (calculated correctly from ledger sequence)
-                milestones: [], // Would need to fetch milestones separately
-                projectTitle: escrowData.project_title || "", // projectTitle (from blockchain)
-                projectDescription: escrowData.project_description || "", // projectDescription (from blockchain)
+                payer: escrowData.depositor,
+                beneficiary: escrowData.beneficiary || zeroAddress,
+                token: escrowData.token || "",
+                totalAmount: escrowData.totalAmount?.toString() ?? "0",
+                releasedAmount: escrowData.paidAmount?.toString() ?? "0",
+                status: getStatusFromNumber(escrowData.status),
+                createdAt: approxCreatedAt,
+                duration: durationInDays,
+                deadlineAt: deadlineSeconds * 1000,
+                milestones: [],
+                projectTitle: escrowData.projectTitle || "",
+                projectDescription: escrowData.projectDescription || "",
                 isOpenJob: true,
-                applications: [], // Would need to fetch applications separately
-                applicationCount: applicationCount, // Add real application count
-                isJobCreator: !!isJobCreator, // Add flag to track if current user is the job creator (from blockchain)
+                applications: [],
+                applicationCount,
+                isJobCreator: !!isJobCreator,
               };
 
               // Log blockchain data for debugging
@@ -401,9 +381,6 @@ export default function JobsPage() {
 
     setApplying(true);
     try {
-      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW);
-      if (!contract) return;
-
       // Check if user has already applied to this job using contractService
       // Always check blockchain to prevent double applications
       let userHasApplied = false;
@@ -432,17 +409,17 @@ export default function JobsPage() {
       }
 
       // Apply to the job via the gasless path — admin wallet pays the fee,
-      // so the applicant does not need XLM for gas.
+      // Gasless: relayer pays gas via EIP-2771 forwarder.
       const { ContractService: GaslessCS } = await import(
         "@/lib/web3/contract-service"
       );
       const gaslessService = new GaslessCS(CONTRACTS.SECUREFLOW_ESCROW);
-      await gaslessService.applyToJobGasless({
+      await gaslessService.applyToJob({
         escrow_id: Number.parseInt(job.id, 10),
         cover_letter: coverLetter,
         proposed_timeline: Number.parseInt(proposedTimeline, 10),
         freelancer: wallet.address || "",
-      });
+      }, writeContractAsync);
 
       // Update hasApplied state to prevent double application
       setHasApplied((prev) => ({
@@ -463,7 +440,7 @@ export default function JobsPage() {
           Number(job.id),
           wallet.address!,
           {
-            jobTitle: job.projectDescription || `Job #${job.id}`,
+            jobTitle: job.projectTitle || `Job #${job.id}`,
             freelancerName:
               wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
           }
@@ -494,20 +471,24 @@ export default function JobsPage() {
   };
 
   const filteredJobs = jobs.filter((job) => {
-    // Search filter
+    // Search filter - check both title and description
     const matchesSearch =
-      job.projectDescription
-        ?.toLowerCase()
-        .includes(searchQuery.toLowerCase()) ||
+      !searchQuery ||
+      job.projectTitle?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.projectDescription?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       job.milestones.some((m) =>
         m.description.toLowerCase().includes(searchQuery.toLowerCase())
       );
 
-    // Status filter
+    // Status filter - normalize both sides for comparison
     const jobStatus = normalizeJobStatus(job.status);
     const matchesStatus = statusFilter === "all" || jobStatus === statusFilter;
 
-    return matchesSearch && matchesStatus;
+    // Don't show cancelled jobs
+    const isNotCancelled = jobStatus !== "cancelled";
+
+    // Show all jobs including user's own jobs (apply button will be disabled for own jobs)
+    return matchesSearch && matchesStatus && isNotCancelled;
   });
 
   if (!wallet.isConnected || loading) {
@@ -531,8 +512,8 @@ export default function JobsPage() {
           </Alert>
         )}
         <JobsStats
-          jobs={jobs}
-          openJobsCount={totalEscrowsCount}
+          jobs={filteredJobs}
+          openJobsCount={filteredJobs.length}
           ongoingProjectsCount={ongoingProjectsCount}
         />
 
@@ -553,8 +534,6 @@ export default function JobsPage() {
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="pending">Pending</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="disputed">Disputed</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -565,25 +544,42 @@ export default function JobsPage() {
           {filteredJobs.length === 0 ? (
             <Card className="glass border-muted p-12 text-center">
               <Briefcase className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <p className="text-muted-foreground">
-                No jobs found matching your search
-              </p>
+              {jobs.length === 0 ? (
+                <>
+                  <h3 className="text-xl font-semibold mb-2">No Open Jobs Available</h3>
+                  <p className="text-muted-foreground">
+                    There are currently no open jobs on the platform. Check back later for new opportunities!
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-xl font-semibold mb-2">No Jobs Match Your Filters</h3>
+                  <p className="text-muted-foreground">
+                    Try adjusting your search or filter criteria to find more jobs.
+                  </p>
+                </>
+              )}
             </Card>
           ) : (
-            filteredJobs.map((job, index) => {
-              const jobHasApplied = hasApplied[job.id] || false;
-              return (
-                <JobCard
-                  key={job.id}
-                  job={job}
-                  index={index}
-                  hasApplied={jobHasApplied}
-                  isContractPaused={isContractPaused}
-                  ongoingProjectsCount={ongoingProjectsCount}
-                  onApply={setSelectedJob}
-                />
-              );
-            })
+            <>
+              <div className="text-sm text-muted-foreground">
+                Showing {filteredJobs.length} {filteredJobs.length === 1 ? 'job' : 'jobs'}
+              </div>
+              {filteredJobs.map((job, index) => {
+                const jobHasApplied = hasApplied[job.id] || false;
+                return (
+                  <JobCard
+                    key={job.id}
+                    job={job}
+                    index={index}
+                    hasApplied={jobHasApplied}
+                    isContractPaused={isContractPaused}
+                    ongoingProjectsCount={ongoingProjectsCount}
+                    onApply={setSelectedJob}
+                  />
+                );
+              })}
+            </>
           )}
         </div>
 

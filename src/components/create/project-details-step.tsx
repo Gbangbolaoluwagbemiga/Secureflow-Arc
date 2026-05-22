@@ -24,7 +24,7 @@ const USDC_TOKEN_CONTRACT =
 
 export const WHITELISTED_TOKENS: WhitelistedToken[] = [
   { symbol: "USDC", address: USDC_TOKEN_CONTRACT },
-].filter((t) => /^C[A-Z2-7]{55}$/.test(t.address));
+].filter((t) => /^0x[0-9a-fA-F]{40}$/.test(t.address));
 
 interface ProjectDetailsStepProps {
   formData: {
@@ -199,7 +199,7 @@ export function ProjectDetailsStep({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <Label htmlFor="totalBudget" className="mb-2 block">
-              Total Budget (tokens) *
+              Total Budget (USDC) *
             </Label>
             <Input
               id="totalBudget"
@@ -218,7 +218,7 @@ export function ProjectDetailsStep({
               <p className="text-red-500 text-sm mt-1">{errors.totalBudget}</p>
             ) : (
               <p className="text-xs text-muted-foreground mt-1">
-                Minimum 0.01 tokens required
+                Minimum 0.0001 USDC required
               </p>
             )}
           </div>
@@ -245,7 +245,7 @@ export function ProjectDetailsStep({
               <p className="text-xs text-muted-foreground mt-1">
                 {formData.isOpenJob
                   ? "Leave empty for open job applications"
-                  : "Valid Stellar address required for direct escrow"}
+                  : "Valid Arc EVM address (0x…) required for direct escrow"}
               </p>
             )}
           </div>
@@ -261,7 +261,7 @@ export function ProjectDetailsStep({
               className="rounded w-4 h-4"
             />
             <Label htmlFor="useNativeToken" className="cursor-pointer ml-1">
-              Use Native Token (XLM)
+              Use Arc Testnet USDC (Recommended)
             </Label>
           </div>
 

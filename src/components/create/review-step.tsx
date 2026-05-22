@@ -1,7 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, Clock, DollarSign, User, Zap } from "lucide-react";
+import { AlertTriangle, Clock, DollarSign, User } from "lucide-react";
 import { WHITELISTED_TOKENS } from "./project-details-step";
-// Stellar doesn't use smart accounts - removed useSmartAccount import
 
 interface Milestone {
   description: string;
@@ -35,8 +34,6 @@ export function ReviewStep({
   isOnCorrectNetwork = true,
   walletBalance,
 }: ReviewStepProps) {
-  // Stellar doesn't use smart accounts
-  const isSmartAccountReady = false;
   const totalMilestoneAmount = formData.milestones.reduce(
     (sum, milestone) => sum + Number.parseFloat(milestone.amount || "0"),
     0
@@ -51,8 +48,8 @@ export function ReviewStep({
   const hasInsufficientBalance =
     formData.useNativeToken && balance > 0 && budget > balance;
 
-  const tokenSymbol = formData.useNativeToken 
-    ? "Native XLM" 
+  const tokenSymbol = formData.useNativeToken
+    ? "Native USDC"
     : WHITELISTED_TOKENS.find(t => t.address === formData.token)?.symbol || formData.token || "Not selected";
 
   return (
@@ -136,7 +133,7 @@ export function ReviewStep({
             {hasInsufficientBalance && (
               <p className="text-sm text-destructive mt-3 flex items-center gap-1">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-                Insufficient balance — you have {balance.toFixed(2)} XLM but need {budget.toFixed(2)} XLM
+                Insufficient balance — you have {balance.toFixed(6)} USDC but need {budget.toFixed(6)} USDC (plus platform fee)
               </p>
             )}
           </div>
@@ -170,16 +167,7 @@ export function ReviewStep({
             }
             className="flex-1 bg-primary text-primary-foreground px-6 py-3 rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            {isSubmitting ? (
-              "Creating Escrow..."
-            ) : isSmartAccountReady ? (
-              <>
-                <Zap className="h-4 w-4" />
-                Create Gasless Escrow
-              </>
-            ) : (
-              "Create Escrow"
-            )}
+            {isSubmitting ? "Creating Escrow…" : "Create Escrow"}
           </button>
         </div>
       </CardContent>

@@ -157,7 +157,7 @@ export function useEscrowActions() {
 
   const handleExtendDeadline = async (params: {
     escrow_id: number;
-    extra_seconds: number;
+    extra_days: number;
   }) => {
     setIsLoading(true);
     try {

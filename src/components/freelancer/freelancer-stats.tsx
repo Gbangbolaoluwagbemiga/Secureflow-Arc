@@ -8,6 +8,7 @@ import {
   Award,
 } from "lucide-react";
 import type { Badge as BadgeType } from "@/lib/web3/types";
+import { formatEth, formatTokenAmount } from "@/lib/utils";
 
 interface FreelancerStatsProps {
   escrows: Array<{
@@ -39,7 +40,7 @@ export function FreelancerStats({
     0
   );
 
-  // Helper function to check if an escrow is terminated
+  // Helper function to check if an escrow has issues (disputed or rejected milestones)
   const isEscrowTerminated = (escrow: any) => {
     return escrow.milestones.some(
       (milestone: any) =>
@@ -55,7 +56,7 @@ export function FreelancerStats({
     );
   }).length;
 
-  // Count terminated projects (disputed/rejected milestones)
+  // Count projects with issues (disputed/rejected milestones)
   const terminatedProjects = escrows.filter((escrow) => {
     return isEscrowTerminated(escrow);
   }).length;
@@ -71,9 +72,9 @@ export function FreelancerStats({
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">
-            {(totalEarnings / 1e7).toFixed(2)}
+            {formatEth(totalEarnings)}
           </div>
-          <p className="text-xs text-muted-foreground">tokens earned</p>
+          <p className="text-xs text-muted-foreground">USDC earned</p>
         </CardContent>
       </Card>
 
@@ -84,9 +85,9 @@ export function FreelancerStats({
         </CardHeader>
         <CardContent>
           <div className="text-2xl font-bold">
-            {(totalValue / 1e7).toFixed(2)}
+            {formatEth(totalValue)}
           </div>
-          <p className="text-xs text-muted-foreground">tokens in projects</p>
+          <p className="text-xs text-muted-foreground">USDC in projects</p>
         </CardContent>
       </Card>
 
@@ -103,7 +104,7 @@ export function FreelancerStats({
 
       <Card className="glass border-destructive/20 p-4 md:p-6">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Terminated</CardTitle>
+          <CardTitle className="text-sm font-medium">Issues</CardTitle>
           <AlertTriangle className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>

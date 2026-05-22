@@ -1,35 +1,19 @@
-// Re-export Stellar config for compatibility
 export {
   CONTRACTS,
   getCurrentNetwork,
-  STELLAR_NETWORKS,
-} from "./stellar-config";
+  ARC_NETWORKS,
+} from "./arc-config";
 
-// Stellar doesn't use addresses like Ethereum, but we keep this for compatibility
-export const GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF =
-  "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
+export const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-// Legacy exports for backward compatibility (deprecated - use stellar-config instead)
-export const BASE_MAINNET = {
-  chainId: null,
-  chainName: "Stellar Mainnet",
+export const ARC_TESTNET = {
+  chainId: 5042002,
+  chainName: "Arc Testnet",
   nativeCurrency: {
-    name: "Lumen",
-    symbol: "XLM",
-    decimals: 7,
+    name: "USDC",
+    symbol: "USDC",
+    decimals: 6,
   },
-  rpcUrls: ["https://soroban-mainnet.stellar.org:443"],
-  blockExplorerUrls: ["https://stellar.expert/explorer/public"],
-};
-
-export const BASE_TESTNET = {
-  chainId: null,
-  chainName: "Stellar Testnet",
-  nativeCurrency: {
-    name: "Lumen",
-    symbol: "XLM",
-    decimals: 7,
-  },
-  rpcUrls: ["https://soroban-testnet.stellar.org:443"],
-  blockExplorerUrls: ["https://stellar.expert/explorer/testnet"],
+  rpcUrls: ["https://rpc.drpc.testnet.arc.network"],
+  blockExplorerUrls: ["https://testnet.arcscan.app"],
 };

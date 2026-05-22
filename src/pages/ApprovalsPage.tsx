@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useWriteContract } from "wagmi";
 import { Card } from "@/components/ui/card";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
@@ -39,10 +40,11 @@ interface JobWithApplications extends Escrow {
 
 export default function ApprovalsPage() {
   const { wallet } = useWeb3();
+  const { writeContractAsync } = useWriteContract();
   const { toast } = useToast();
   const { isJobCreator, loading: isJobCreatorLoading } = useJobCreatorStatus();
   const { refreshApprovals } = usePendingApprovals();
-  const { addNotification } = useNotifications();
+  const { addNotification, addCrossWalletNotification } = useNotifications();
   const [jobs, setJobs] = useState<JobWithApplications[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<JobWithApplications | null>(
@@ -85,20 +87,7 @@ export default function ApprovalsPage() {
 
     setLoading(true);
     try {
-      // Get current ledger sequence once (needed for timestamp conversion)
-      let currentLedger = 0;
-      try {
-        const { rpc } = await import("@stellar/stellar-sdk");
-        const { getCurrentNetwork } = await import("@/lib/web3/stellar-config");
-        const network = getCurrentNetwork();
-        const rpcServer = new rpc.Server(network.rpcUrl);
-        const latestLedger = await rpcServer.getLatestLedger();
-        currentLedger = latestLedger.sequence;
-      } catch (error) {
-        // Fallback: use current time as approximation
-        const SECONDS_PER_LEDGER = 5;
-        currentLedger = Math.floor(Date.now() / 1000 / SECONDS_PER_LEDGER);
-      }
+      const nowSeconds = Math.floor(Date.now() / 1000);
 
       // Use ContractService instead of contract.call - it reads from blockchain
       const { ContractService } = await import("@/lib/web3/contract-service");
@@ -119,91 +108,69 @@ export default function ApprovalsPage() {
             continue;
           }
 
-          // Check if this is my job
           const isMyJob =
             wallet.address &&
-            escrow.creator &&
-            escrow.creator.toLowerCase().trim() ===
+            escrow.depositor &&
+            escrow.depositor.toLowerCase().trim() ===
               wallet.address.toLowerCase().trim();
 
-
           if (isMyJob) {
-            // Check if it's an open job (beneficiary is zero address)
+            const zeroAddress = "0x0000000000000000000000000000000000000000";
             const isOpenJob =
-              !escrow.freelancer ||
-              escrow.freelancer ===
-                "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF" ||
-              escrow.freelancer === "";
+              escrow.isOpenJob ||
+              !escrow.beneficiary ||
+              escrow.beneficiary === zeroAddress;
 
 
             if (isOpenJob) {
               let applicationCount = 0;
               const applications: Application[] = [];
 
-              // Get applications from storage
+              // Get applications from on-chain transaction data
               try {
-                const apps = await contractService.getApplications(i);
+                const apps = await contractService.getApplicationDetails(i);
                 applicationCount = apps.length;
 
-                // Convert to Application format
-                // IMPORTANT: applied_at is also a LEDGER SEQUENCE NUMBER, not a Unix timestamp!
-                // Calculate approximate timestamp: current time - (current_ledger - applied_at) * 5 seconds
-                const SECONDS_PER_LEDGER = 5;
                 for (const app of apps) {
-                  const appliedAtLedger = app.applied_at || 0;
-                  const ledgersAgo = currentLedger - appliedAtLedger;
-                  const secondsAgo = ledgersAgo * SECONDS_PER_LEDGER;
-                  const approxAppliedAt = Date.now() - secondsAgo * 1000;
-
+                  // Get reputation data for each freelancer
+                  const badge = await contractService.getBadge(app.freelancer);
+                  const { averageX100, count } = await contractService.getAverageRating(app.freelancer);
+                  
                   applications.push({
                     freelancerAddress: app.freelancer,
-                    coverLetter: app.cover_letter,
-                    proposedTimeline: app.proposed_timeline,
-                    appliedAt: approxAppliedAt, // Approximate timestamp from ledger sequence
+                    coverLetter: app.coverLetter || "",
+                    proposedTimeline: app.proposedTimeline || 0,
+                    appliedAt: Date.now(),
                     status: "pending" as const,
-                    badge: app.badge,
-                    averageRating: app.averageRating,
-                    ratingCount: app.ratingCount,
+                    badge: badge as "Beginner" | "Intermediate" | "Advanced" | "Expert" | undefined,
+                    averageRating: averageX100 / 100,
+                    ratingCount: count,
                   });
                 }
 
               } catch (error) {
+                console.error('Error fetching applications:', error);
                 applicationCount = 0;
               }
 
-              // IMPORTANT: created_at and deadline are LEDGER SEQUENCE NUMBERS, not timestamps!
-              // Stellar ledgers close approximately every 5 seconds
-              // Duration = (deadline - created_at) * 5 seconds
-              const SECONDS_PER_LEDGER = 5;
-              const ledgerDiff = escrow.deadline - escrow.created_at;
-              const durationInSeconds = ledgerDiff * SECONDS_PER_LEDGER;
-              const durationInDays = Math.max(
-                0,
-                durationInSeconds / (24 * 60 * 60)
-              );
-
-              // Calculate approximate timestamp: current time - (current_ledger - created_at) * 5 seconds
-              const ledgersAgo = currentLedger - escrow.created_at;
-              const secondsAgo = ledgersAgo * SECONDS_PER_LEDGER;
-              const approxCreatedAt = Date.now() - secondsAgo * 1000;
+              const deadlineSeconds = Number(escrow.deadline ?? 0);
+              const remainingSeconds = Math.max(0, deadlineSeconds - nowSeconds);
+              const durationInDays = Math.max(1, Math.round(remainingSeconds / 86400));
 
               const job: JobWithApplications = {
                 id: i.toString(),
-                payer: escrow.creator,
-                beneficiary:
-                  escrow.freelancer ||
-                  "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
-                token: escrow.token || "native",
-                totalAmount: escrow.amount || "0",
-                releasedAmount: "0", // TODO: Get from escrow if available
+                payer: escrow.depositor,
+                beneficiary: escrow.beneficiary || zeroAddress,
+                token: escrow.token || "",
+                totalAmount: escrow.totalAmount?.toString() ?? "0",
+                releasedAmount: escrow.paidAmount?.toString() ?? "0",
                 status: getStatusFromNumber(escrow.status || 0),
-                createdAt: approxCreatedAt, // Approximate timestamp from ledger sequence
-                duration: durationInDays, // Duration in days (calculated correctly from ledger sequence)
-                milestones: escrow.milestones || [],
-                projectDescription:
-                  escrow.project_title ||
-                  escrow.project_description ||
-                  "No description",
+                createdAt: Date.now(),
+                duration: durationInDays,
+                deadlineAt: deadlineSeconds * 1000,
+                milestones: [],
+                projectTitle: escrow.projectTitle || "",
+                projectDescription: escrow.projectDescription || "",
                 isOpenJob: true,
                 applications,
                 applicationCount: Number(applicationCount),
@@ -252,41 +219,87 @@ export default function ApprovalsPage() {
     setApproving(true);
 
     try {
-      // Use ContractService instead of contract.send - it handles address conversion and auth properly
       const { ContractService } = await import("@/lib/web3/contract-service");
-      const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
 
-
-      await contractService.acceptFreelancer({
+      await cs.acceptFreelancer({
         escrow_id: Number(selectedJobForApproval.id),
         freelancer: selectedFreelancer.freelancerAddress,
         depositor: wallet.address,
-      });
-
+      }, writeContractAsync);
 
       toast({
         title: "Freelancer Approved",
         description: "The freelancer has been approved for this job",
       });
 
-      // Add notification for freelancer approval - notify the FREELANCER
-      addNotification(
-        createApplicationNotification(
-          "approved",
-          Number(selectedJobForApproval.id),
-          selectedFreelancer.freelancerAddress,
-          {
-            jobTitle:
-              selectedJobForApproval.projectDescription ||
-              `Job #${selectedJobForApproval.id}`,
-            freelancerName:
-              selectedFreelancer.freelancerAddress.slice(0, 6) +
-              "..." +
-              selectedFreelancer.freelancerAddress.slice(-4),
-          }
-        ),
-        [selectedFreelancer.freelancerAddress] // Notify the freelancer
+      // 1. Notify the APPROVED freelancer using cross-wallet notification
+      addCrossWalletNotification(
+        {
+          type: "application",
+          title: "🎉 You've Been Accepted!",
+          message: `Congratulations! You've been accepted for "${selectedJobForApproval.projectTitle || `Job #${selectedJobForApproval.id}`}". Work is ready to start!`,
+          actionUrl: `/freelancer?escrow=${selectedJobForApproval.id}`,
+          data: {
+            escrowId: selectedJobForApproval.id,
+            projectTitle: selectedJobForApproval.projectTitle || `Job #${selectedJobForApproval.id}`,
+            clientAddress: wallet.address,
+            action: "freelancer_accepted",
+          },
+        },
+        undefined, // clientAddress (not needed here)
+        selectedFreelancer.freelancerAddress // freelancerAddress
       );
+
+      // Dispatch event for freelancer acceptance notification (real-time)
+      window.dispatchEvent(new CustomEvent("freelancerAccepted", {
+        detail: {
+          escrowId: selectedJobForApproval.id,
+          projectTitle: selectedJobForApproval.projectTitle || `Job #${selectedJobForApproval.id}`,
+          clientAddress: wallet.address,
+          freelancerAddress: selectedFreelancer.freelancerAddress,
+          jobTitle: selectedJobForApproval.projectTitle || `Job #${selectedJobForApproval.id}`,
+        }
+      }));
+
+      // 2. Notify the CLIENT (confirming their approval action)
+      addNotification(
+        {
+          type: "application",
+          title: "Freelancer Approved",
+          message: `You approved ${selectedFreelancer.freelancerAddress.slice(0, 6)}...${selectedFreelancer.freelancerAddress.slice(-4)} for "${selectedJobForApproval.projectTitle || `Job #${selectedJobForApproval.id}`}"`,
+          actionUrl: `/dashboard?job=${selectedJobForApproval.id}`,
+          data: {
+            jobId: Number(selectedJobForApproval.id),
+            freelancerAddress: selectedFreelancer.freelancerAddress,
+            action: "client_approved",
+          },
+        },
+        [wallet.address]
+      );
+
+      // 3. Notify ALL OTHER freelancers who applied (job was given to someone else)
+      const otherApplicants = selectedJobForApproval.applications.filter(
+        (app) => app.freelancerAddress.toLowerCase() !== selectedFreelancer.freelancerAddress.toLowerCase()
+      );
+
+      for (const applicant of otherApplicants) {
+        addCrossWalletNotification(
+          {
+            type: "application",
+            title: "Job Position Filled",
+            message: `The position for "${selectedJobForApproval.projectTitle || `Job #${selectedJobForApproval.id}`}" has been filled. Thank you for your application!`,
+            actionUrl: `/browse-jobs`,
+            data: {
+              jobId: Number(selectedJobForApproval.id),
+              freelancerAddress: applicant.freelancerAddress,
+              action: "position_filled",
+              selectedFreelancer: selectedFreelancer.freelancerAddress,
+            },
+          },
+          applicant.freelancerAddress
+        );
+      }
 
       // Close modals first
       setSelectedJob(null);
@@ -374,7 +387,7 @@ export default function ApprovalsPage() {
   //   0
   // ); // Unused
   // const totalValue = jobs.reduce(
-  //   (sum, job) => sum + Number(job.totalAmount) / 1e7,
+  //   (sum, job) => sum + Number(job.totalAmount) / 1e18,
   //   0
   // ); // Unused
 
@@ -458,7 +471,7 @@ export default function ApprovalsPage() {
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold">
-                  Review Applications - {selectedJob.projectDescription}
+                  Review Applications - {selectedJob.projectTitle}
                 </h3>
                 <button
                   onClick={() => {

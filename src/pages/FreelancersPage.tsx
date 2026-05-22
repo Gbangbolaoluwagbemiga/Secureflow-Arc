@@ -129,16 +129,23 @@ export default function FreelancersPage() {
         escrowPromises.push(
           svc.getEscrow(i)
             .then((escrow) => {
-              const addr = (escrow as any)?.freelancer as string | undefined;
-              if (addr && typeof addr === "string" && addr.startsWith("G")) {
+              if (!escrow) return;
+              const addr = escrow.beneficiary; // Use beneficiary, not freelancer
+              // Check for valid Ethereum address (0x...) and not zero address
+              if (
+                addr && 
+                typeof addr === "string" && 
+                addr.startsWith("0x") &&
+                addr !== "0x0000000000000000000000000000000000000000"
+              ) {
                 const prev = freelancerMap.get(addr) ?? 0;
-              const rawStatus = (escrow as any)?.status;
-              const isCompleted =
-                rawStatus === 2 ||                        // getEscrow numeric: released/completed
-                rawStatus === "completed" ||
-                rawStatus === "released" ||
-                rawStatus === "Completed" ||
-                rawStatus === "Released";
+                const rawStatus = escrow.status;
+                const isCompleted =
+                  rawStatus === 2 ||                        // Released/Completed status
+                  rawStatus === "completed" ||
+                  rawStatus === "released" ||
+                  rawStatus === "Completed" ||
+                  rawStatus === "Released";
                 freelancerMap.set(addr, prev + (isCompleted ? 1 : 0));
               }
             })
@@ -157,11 +164,12 @@ export default function FreelancersPage() {
               svc.getReputation(address).catch(() => 0),
             ]);
 
+            const rData = ratingData as any;
             return {
               address,
-              badge,
-              avgRating: Math.round((ratingData.average ?? 0) * 10) / 10,
-              ratingCount: Number(ratingData.count ?? 0),
+              badge: badge ?? "Beginner",
+              avgRating: Math.round(((rData.averageX100 ?? 0) / 100) * 10) / 10,
+              ratingCount: Number(rData.count ?? 0),
               completedProjects: completedCount,
               reputation: Number(rep),
             };
@@ -222,7 +230,7 @@ export default function FreelancersPage() {
           <p className="text-muted-foreground max-w-xl mx-auto">
             Discover verified on-chain freelancers. Every profile shows real
             completed projects and ratings — no fake reviews, all verifiable on
-            the Stellar blockchain.
+            the Arc blockchain.
           </p>
         </motion.div>
 

@@ -10,12 +10,14 @@ import { useWeb3 } from "@/contexts/web3-context";
 import { useState } from "react";
 import { Copy, LogOut, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAppKit } from "@reown/appkit/react";
 
 export function WalletButton() {
   const { wallet, connectWallet, disconnectWallet, refreshBalance } = useWeb3();
   const [networkIconError, setNetworkIconError] = useState(false);
   const [walletIconError, setWalletIconError] = useState(false);
   const { toast } = useToast();
+  const { open } = useAppKit();
 
   const handleConnect = () => {
     void connectWallet();
@@ -67,12 +69,12 @@ export function WalletButton() {
         >
           {/* Desktop/tablet: show network + balance + avatar */}
           <div className="hidden md:flex items-center gap-2">
-            {/* XLM (Stellar Lumens) icon */}
+            {/* Arc network icon */}
             <div className="w-4 h-4 rounded-full overflow-hidden flex items-center justify-center">
               {!networkIconError ? (
                 <img
-                  src="/xlm-icon.svg"
-                  alt="XLM"
+                  src="/arc-icon.svg"
+                  alt="Arc"
                   className="w-full h-full object-contain"
                   onError={() => setNetworkIconError(true)}
                 />
@@ -94,7 +96,7 @@ export function WalletButton() {
               )}
             </div>
 
-            <span>{Number(wallet.balance || 0).toFixed(2)} XLM</span>
+            <span>{Number(wallet.balance || 0).toFixed(2)} USDC</span>
             <span className="text-muted-foreground">·</span>
 
             {/* Dynamic wallet avatar */}
@@ -125,7 +127,7 @@ export function WalletButton() {
             {wallet.address}
           </div>
           <div className="text-xs text-muted-foreground mt-1">
-            Balance: {Number(wallet.balance || 0).toFixed(2)} XLM
+            Balance: {Number(wallet.balance || 0).toFixed(2)} USDC
           </div>
         </div>
         <DropdownMenuSeparator />

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useWriteContract } from "wagmi";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,6 +26,7 @@ import {
   XCircle,
 } from "lucide-react";
 import type { Milestone } from "@/lib/web3/types";
+import { formatEth, formatTokenAmount } from "@/lib/utils";
 
 interface MilestoneActionsProps {
   escrowId: string;
@@ -55,7 +57,8 @@ export function MilestoneActions({
   escrowReleasedAmount,
   escrowTotalAmount,
 }: MilestoneActionsProps) {
-  const { wallet, getContract } = useWeb3();
+  const { wallet } = useWeb3();
+  const { writeContractAsync } = useWriteContract();
   const { addNotification } = useNotifications();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -88,7 +91,7 @@ export function MilestoneActions({
     );
   };
 
-  const isProjectTerminated =
+  const isProjectDisputed =
     milestone.status === "disputed" || escrowStatus === "disputed";
 
   const openDialog = (type: typeof actionType) => {
@@ -100,28 +103,28 @@ export function MilestoneActions({
     if (!actionType) return;
 
     setIsLoading(true);
-    const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW);
 
     try {
       let txHash: string | undefined;
 
       switch (actionType) {
-        case "start":
-          txHash = await contract.send(
-            "start_work",
-            Number(escrowId),
-            wallet.address
-          );
+        case "start": {
+          const { ContractService: StartCS } = await import("@/lib/web3/contract-service");
+          const startSvc = new StartCS(CONTRACTS.SECUREFLOW_ESCROW);
+          txHash = await startSvc.startWork(Number(escrowId), wallet.address || "", writeContractAsync);
           break;
-        case "submit":
-          txHash = await contract.send(
-            "submit_milestone",
-            Number(escrowId),
-            milestoneIndex,
-            milestone.description,
-            wallet.address
-          );
+        }
+        case "submit": {
+          const { ContractService: SubCS } = await import("@/lib/web3/contract-service");
+          const subSvc = new SubCS(CONTRACTS.SECUREFLOW_ESCROW);
+          txHash = await subSvc.submitMilestone({
+            escrow_id: Number(escrowId),
+            milestone_index: milestoneIndex,
+            description: milestone.description,
+            beneficiary: wallet.address || "",
+          }, writeContractAsync);
           break;
+        }
         case "approve":
           // Use ContractService instead of contract.send - it handles the correct format
           const { ContractService } = await import(
@@ -134,7 +137,7 @@ export function MilestoneActions({
             escrow_id: Number(escrowId),
             milestone_index: milestoneIndex,
             depositor: wallet.address || "",
-          });
+          }, writeContractAsync);
           break;
         case "reject":
           // Use ContractService instead of contract.send - it handles the correct format
@@ -149,7 +152,7 @@ export function MilestoneActions({
             milestone_index: milestoneIndex,
             reason: disputeReason,
             depositor: wallet.address || "",
-          });
+          }, writeContractAsync);
           break;
         case "dispute":
           // Use ContractService instead of contract.send - it handles the correct format
@@ -169,17 +172,19 @@ export function MilestoneActions({
             milestone_index: milestoneIndex,
             reason: disputeReason,
             disputer: disputerAddress,
-          });
+          }, writeContractAsync);
           break;
-        case "resubmit":
-          txHash = await contract.send(
-            "submit_milestone",
-            Number(escrowId),
-            milestoneIndex,
-            resubmitMessage || milestone.description,
-            wallet.address
-          );
+        case "resubmit": {
+          const { ContractService: ResubmitCS } = await import("@/lib/web3/contract-service");
+          const resubmitCS = new ResubmitCS(CONTRACTS.SECUREFLOW_ESCROW);
+          txHash = await resubmitCS.submitMilestone({
+            escrow_id: Number(escrowId),
+            milestone_index: milestoneIndex,
+            description: resubmitMessage || milestone.description,
+            beneficiary: wallet.address || "",
+          }, writeContractAsync);
           break;
+        }
       }
 
       if (txHash) {
@@ -246,14 +251,22 @@ export function MilestoneActions({
         if (actionType === "submit" || actionType === "resubmit") {
           window.dispatchEvent(
             new CustomEvent("milestoneSubmitted", {
-              detail: { escrowId: Number(escrowId), milestoneIndex },
+              detail: { 
+                escrowId: Number(escrowId), 
+                milestoneIndex,
+                sourceAddress: wallet.address // Add source address
+              },
             }),
           );
         }
         if (actionType === "approve") {
           window.dispatchEvent(
             new CustomEvent("milestoneApproved", {
-              detail: { escrowId: Number(escrowId), milestoneIndex },
+              detail: { 
+                escrowId: Number(escrowId), 
+                milestoneIndex,
+                sourceAddress: wallet.address // Add source address
+              },
             }),
           );
         }
@@ -292,6 +305,17 @@ export function MilestoneActions({
         }
 
         if (actionType === "dispute") {
+          // Dispatch event for dispute raised
+          window.dispatchEvent(new CustomEvent("disputeRaised", {
+            detail: {
+              escrowId: Number(escrowId),
+              milestoneIndex,
+              clientAddress: payerAddress,
+              freelancerAddress: beneficiaryAddress,
+              reason: disputeReason,
+            }
+          }));
+
           // Notify the other party about the dispute
           const otherParty = isPayer ? beneficiaryAddress : payerAddress;
           if (otherParty) {
@@ -301,6 +325,27 @@ export function MilestoneActions({
               }),
               [otherParty],
             );
+          }
+
+          // Notify admin/contract owner about the new dispute
+          try {
+            const { ContractService: AdminCS } = await import("@/lib/web3/contract-service");
+            const adminCS = new AdminCS(CONTRACTS.SECUREFLOW_ESCROW);
+            const ownerAddress = await adminCS.getOwner();
+            if (ownerAddress) {
+              addNotification(
+                {
+                  type: "dispute",
+                  title: "New Dispute Raised",
+                  message: `Escrow #${escrowId}, Milestone ${milestoneIndex}: ${disputeReason}`,
+                  actionUrl: `/admin`,
+                  data: { escrowId, milestoneIndex, reason: disputeReason },
+                },
+                [ownerAddress],
+              );
+            }
+          } catch (error) {
+            console.error("Failed to notify admin:", error);
           }
         }
 
@@ -378,14 +423,14 @@ export function MilestoneActions({
 
   return (
     <>
-      <div className="flex items-center gap-2">
-        {/* Approve Milestone - Only payer for submitted milestones (disabled if terminated) */}
-        {canApproveMilestone() && !isProjectTerminated && (
+      <div className="flex flex-col gap-2">
+        {/* Approve Milestone - Only payer for submitted milestones (disabled if disputed) */}
+        {canApproveMilestone() && !isProjectDisputed && (
           <Button
             onClick={() => openDialog("approve")}
             size="sm"
             variant="default"
-            className="gap-2 bg-green-600 hover:bg-green-700 text-white"
+            className="gap-2 bg-green-600 hover:bg-green-700 text-white w-full justify-center"
             disabled={isLoading}
           >
             <CheckCircle2 className="h-4 w-4" />
@@ -393,13 +438,13 @@ export function MilestoneActions({
           </Button>
         )}
 
-        {/* Reject Milestone - Only payer for submitted milestones (disabled if terminated) */}
-        {canApproveMilestone() && !isProjectTerminated && (
+        {/* Reject Milestone - Only payer for submitted milestones (disabled if disputed) */}
+        {canApproveMilestone() && !isProjectDisputed && (
           <Button
             onClick={() => openDialog("reject")}
             size="sm"
             variant="outline"
-            className="gap-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+            className="gap-2 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 w-full justify-center"
             disabled={isLoading}
           >
             <XCircle className="h-4 w-4" />
@@ -407,15 +452,15 @@ export function MilestoneActions({
           </Button>
         )}
 
-        {/* Dispute Milestone - Only payer for submitted milestones (disabled if terminated) */}
+        {/* Dispute Milestone - Only payer for submitted milestones (disabled if disputed) */}
         {milestone.status === "submitted" &&
           isPayer &&
-          !isProjectTerminated && (
+          !isProjectDisputed && (
             <Button
               onClick={() => openDialog("dispute")}
               size="sm"
               variant="destructive"
-              className="gap-2"
+              className="gap-2 w-full justify-center"
               disabled={isLoading}
             >
               <Gavel className="h-4 w-4" />
@@ -425,7 +470,7 @@ export function MilestoneActions({
 
         {/* Approved Status - Show approved badge */}
         {milestone.status === "approved" && (
-          <div className="flex items-center gap-2 text-green-600">
+          <div className="flex items-center justify-center gap-2 text-green-600 py-2">
             <CheckCircle2 className="h-4 w-4" />
             <span className="text-sm font-medium">Approved</span>
           </div>
@@ -433,8 +478,8 @@ export function MilestoneActions({
 
         {/* Rejected Status - Show rejected badge and resubmit button */}
         {milestone.status === "rejected" && (
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 text-red-600">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-center gap-2 text-red-600 py-2">
               <AlertTriangle className="h-4 w-4" />
               <span className="text-sm font-medium">Rejected</span>
             </div>
@@ -443,7 +488,7 @@ export function MilestoneActions({
                 onClick={() => openDialog("resubmit")}
                 size="sm"
                 variant="default"
-                className="gap-2"
+                className="gap-2 w-full justify-center"
                 disabled={isLoading}
                 data-action="resubmit"
               >
@@ -457,12 +502,12 @@ export function MilestoneActions({
         {/* Disputed Status - Show disputed badge with reason */}
         {milestone.status === "disputed" && (
           <div className="flex flex-col gap-2 text-orange-600">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-center gap-2 py-2">
               <Gavel className="h-4 w-4" />
               <span className="text-sm font-medium">Disputed</span>
             </div>
             {milestone.disputeReason && (
-              <div className="text-xs text-orange-700 bg-orange-50 p-2 rounded border">
+              <div className="text-xs text-orange-700 bg-orange-50 p-2 rounded border border-orange-200">
                 <strong>Reason:</strong> {milestone.disputeReason}
               </div>
             )}
@@ -471,65 +516,111 @@ export function MilestoneActions({
 
         {/* Resolved Status - Show resolved badge with winner info */}
         {milestone.status === "resolved" && (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2 text-blue-600">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-center gap-2 text-blue-600 py-2">
               <CheckCircle2 className="h-4 w-4" />
-              <span className="text-sm font-medium">Resolved</span>
+              <span className="text-sm font-medium">Dispute Resolved</span>
             </div>
-            {/* Determine winner based on resolution amount or escrow state */}
+            
+            {/* Resolution Details */}
             {(() => {
-              // If we have resolution amount, use it directly
-              if (milestone.resolutionAmount !== undefined) {
-                const resolutionAmount = Number(milestone.resolutionAmount);
-                return (
-                  <div className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-900/20 p-2 rounded border">
-                    {resolutionAmount > 0 ? (
-                      <span className="text-green-600 dark:text-green-400">
-                        <strong>Freelancer won:</strong>{" "}
-                        {(resolutionAmount / 1e7).toFixed(2)} tokens awarded
+              const freelancerAmount = milestone.resolutionAmount ? Number(milestone.resolutionAmount) : 0;
+              const clientAmount = milestone.resolutionClientAmount ? Number(milestone.resolutionClientAmount) : 0;
+              const milestoneAmount = Number(milestone.amount);
+              
+              // Try multiple ways to get the resolution reason
+              const resolutionReasonKey = `resolution_${escrowId}_${milestoneIndex}`;
+              let resolutionReason = localStorage.getItem(resolutionReasonKey);
+              
+              // Also try with string escrowId (in case it was stored differently)
+              if (!resolutionReason) {
+                resolutionReason = localStorage.getItem(`resolution_${String(escrowId)}_${milestoneIndex}`);
+              }
+              
+              // Fallback to milestone property
+              if (!resolutionReason && milestone.resolutionReason) {
+                resolutionReason = milestone.resolutionReason;
+              }
+              
+              // Get the original dispute reason
+              const disputeReason = milestone.disputeReason;
+              
+              // Get the token address from the escrow (we need to pass this as a prop)
+              // For now, use address(0) which represents USDC on Arc Testnet
+              const tokenAddress = "0x0000000000000000000000000000000000000000";
+              
+              return (
+                <div className="space-y-2 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                    Admin Resolution Decision:
+                  </div>
+                  
+                  {/* Original Dispute Reason */}
+                  {disputeReason && (
+                    <div className="p-2 bg-orange-50 dark:bg-orange-950 rounded border border-orange-200 dark:border-orange-800">
+                      <p className="text-xs text-muted-foreground mb-1">Original Dispute Reason:</p>
+                      <p className="text-sm text-orange-900 dark:text-orange-100">{disputeReason}</p>
+                    </div>
+                  )}
+                  
+                  {/* Admin's Resolution Reason */}
+                  {resolutionReason && (
+                    <div className="p-2 bg-white dark:bg-blue-950 rounded border border-blue-100 dark:border-blue-800">
+                      <p className="text-xs text-muted-foreground mb-1">Admin's Resolution Reason:</p>
+                      <p className="text-sm text-blue-900 dark:text-blue-100">{resolutionReason}</p>
+                    </div>
+                  )}
+                  
+                  {/* Money Split */}
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between items-center p-2 bg-white dark:bg-blue-950 rounded border border-blue-100 dark:border-blue-800">
+                      <span className="text-muted-foreground">Freelancer receives:</span>
+                      <span className="font-semibold text-green-600 dark:text-green-400">
+                        {formatTokenAmount(freelancerAmount, tokenAddress)}
                       </span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center p-2 bg-white dark:bg-blue-950 rounded border border-blue-100 dark:border-blue-800">
+                      <span className="text-muted-foreground">Client receives:</span>
+                      <span className="font-semibold text-orange-600 dark:text-orange-400">
+                        {formatTokenAmount(clientAmount, tokenAddress)}
+                      </span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center p-2 bg-white dark:bg-blue-950 rounded border border-blue-100 dark:border-blue-800">
+                      <span className="text-muted-foreground">Total milestone:</span>
+                      <span className="font-semibold text-blue-600 dark:text-blue-400">
+                        {formatTokenAmount(milestoneAmount, tokenAddress)}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Resolution Summary */}
+                  <div className="pt-2 border-t border-blue-200 dark:border-blue-800">
+                    {freelancerAmount > 0 && clientAmount > 0 ? (
+                      <p className="text-xs text-blue-700 dark:text-blue-300">
+                        ✅ <strong>Split Decision:</strong> The admin awarded {formatTokenAmount(freelancerAmount, tokenAddress)} to the freelancer and {formatTokenAmount(clientAmount, tokenAddress)} back to the client.
+                      </p>
+                    ) : freelancerAmount > 0 ? (
+                      <p className="text-xs text-green-700 dark:text-green-300">
+                        ✅ <strong>Freelancer Won:</strong> The admin awarded the full {formatTokenAmount(freelancerAmount, tokenAddress)} to the freelancer.
+                      </p>
                     ) : (
-                      <span className="text-orange-600 dark:text-orange-400">
-                        <strong>Client won:</strong> Full refund issued
-                      </span>
+                      <p className="text-xs text-orange-700 dark:text-orange-300">
+                        ✅ <strong>Client Won:</strong> The admin refunded the full {formatTokenAmount(clientAmount, tokenAddress)} to the client.
+                      </p>
                     )}
                   </div>
-                );
-              }
-              // Otherwise, infer from escrow state
-              if (escrowReleasedAmount && escrowTotalAmount) {
-                const released = Number(escrowReleasedAmount);
-                const milestoneAmount = Number(milestone.amount);
-                // If released amount is close to milestone amount, freelancer likely won
-                // If escrow was refunded (released < milestone), client won
-                if (released >= milestoneAmount * 0.9) {
-                  return (
-                    <div className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-900/20 p-2 rounded border">
-                      <span className="text-green-600 dark:text-green-400">
-                        <strong>Freelancer won:</strong> Payment released
-                      </span>
+                  
+                  {/* Resolution Timestamp */}
+                  {milestone.resolvedAt && (
+                    <div className="text-xs text-muted-foreground pt-2 border-t border-blue-200 dark:border-blue-800">
+                      Resolved on {new Date(milestone.resolvedAt).toLocaleDateString()} at {new Date(milestone.resolvedAt).toLocaleTimeString()}
                     </div>
-                  );
-                } else {
-                  return (
-                    <div className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-900/20 p-2 rounded border">
-                      <span className="text-orange-600 dark:text-orange-400">
-                        <strong>Client won:</strong> Refund issued
-                      </span>
-                    </div>
-                  );
-                }
-              }
-              return null;
+                  )}
+                </div>
+              );
             })()}
-          </div>
-        )}
-
-        {/* Terminated Project Status - Show terminated badge */}
-        {isProjectTerminated && (
-          <div className="flex items-center gap-2 text-gray-600">
-            <AlertTriangle className="h-4 w-4" />
-            <span className="text-sm font-medium">Project Terminated</span>
           </div>
         )}
 
@@ -566,15 +657,7 @@ export function MilestoneActions({
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Amount:</span>
                 <span className="font-bold text-primary">
-                  {(() => {
-                    try {
-                      const amount = Number.parseFloat(milestone.amount);
-                      if (isNaN(amount)) return "0.00";
-                      return (amount / 1e7).toFixed(2);
-                    } catch (e) {
-                      return "0.00";
-                    }
-                  })()}
+                  {formatEth(milestone.amount)}
                 </span>
               </div>
             </div>

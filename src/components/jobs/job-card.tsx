@@ -7,6 +7,7 @@ import { Clock, AlertCircle, Star } from "lucide-react";
 import type { Escrow } from "@/lib/web3/types";
 import { ContractService } from "@/lib/web3/contract-service";
 import { CONTRACTS } from "@/lib/web3/config";
+import { formatEth, formatTokenAmount } from "@/lib/utils";
 
 interface JobCardProps {
   job: Escrow;
@@ -31,7 +32,7 @@ export function JobCard({
     if (!job.payer) return;
     const svc = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
     svc.getAverageClientRating(job.payer)
-      .then((r) => { if (r.count > 0) setClientRating(r); })
+      .then((r: any) => { if (r.count > 0) setClientRating({ average: r.averageX100 / 100, count: r.count }); })
       .catch(() => {});
   }, [job.payer]);
 
@@ -45,6 +46,8 @@ export function JobCard({
         return "bg-green-100 text-green-800";
       case "disputed":
         return "bg-red-100 text-red-800";
+      case "resolved":
+        return "bg-purple-100 text-purple-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -59,7 +62,7 @@ export function JobCard({
       <Card className="glass border-primary/20 p-4 md:p-6 hover:border-primary/40 transition-colors">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-3 mb-3 flex-wrap">
               <h3 className="text-xl font-bold">
                 {job.projectTitle || job.projectDescription || `Job #${job.id}`}
               </h3>
@@ -78,8 +81,7 @@ export function JobCard({
               <span>Posted {new Date(job.createdAt).toLocaleDateString()}</span>
               <span>•</span>
               <span>
-                Budget: {(Number.parseFloat(job.totalAmount) / 1e7).toFixed(2)}{" "}
-                tokens
+                Budget: {formatTokenAmount(job.totalAmount, job.token)}
               </span>
               {clientRating && (
                 <>
@@ -98,7 +100,7 @@ export function JobCard({
             <div className="text-right w-full lg:w-auto">
               <p className="text-sm text-muted-foreground mb-1">Total Budget</p>
               <p className="text-2xl md:text-3xl font-bold text-primary break-all">
-                {(Number.parseFloat(job.totalAmount) / 1e7).toFixed(2)}
+                {formatTokenAmount(job.totalAmount, job.token)}
               </p>
             </div>
 

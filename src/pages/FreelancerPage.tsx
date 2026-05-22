@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useWriteContract } from "wagmi";
 import {
   uploadMilestoneFile,
   isApiConfigured,
@@ -41,6 +42,9 @@ import { Badge } from "@/components/ui/badge";
 // } from "@/components/ui/dialog"; // Unused
 // import { Alert, AlertDescription } from "@/components/ui/alert"; // Unused
 // import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Unused
+import { EvidenceSubmissionButton } from "@/components/evidence-submission-button";
+import { ViewEvidenceButton } from "@/components/view-evidence-button";
+import { MilestoneNegotiation } from "@/components/milestone-negotiation";
 import {
   FileText,
   User,
@@ -67,6 +71,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { RefreshCw, MessageCircle as MessageCircleFreelancer } from "lucide-react";
 import { Link } from "react-router-dom";
+import { formatEth, formatTokenAmount } from "@/lib/utils";
 
 interface Escrow {
   id: string;
@@ -162,8 +167,9 @@ function OverdueFreelancerBanner({
 
 export default function FreelancerPage() {
   const { wallet, getContract } = useWeb3();
+  const { writeContractAsync } = useWriteContract();
   const { addNotification } = useNotifications();
-  // Stellar doesn't use smart accounts
+  // Arc EVM uses standard EOA wallets
   // const { executeTransaction, isSmartAccountReady } = useSmartAccount();
   const [escrows, setEscrows] = useState<Escrow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -177,7 +183,7 @@ export default function FreelancerPage() {
   const [averageRating, setAverageRating] = useState<number>(0);
   const [ratingCount, setRatingCount] = useState<number>(0);
   const [badge, setBadge] = useState<
-    "Beginner" | "Intermediate" | "Advanced" | "Expert"
+    "Beginner" | "Intermediate" | "Advanced" | "Expert" | null
   >("Beginner");
   const [escrowRatings, setEscrowRatings] = useState<
     Record<string, { rating: number; review: string }>
@@ -244,10 +250,16 @@ export default function FreelancerPage() {
 
     window.addEventListener("escrowUpdated", handleEscrowUpdated);
     window.addEventListener("milestoneApproved", handleEscrowUpdated);
+    window.addEventListener("milestoneSubmitted", handleEscrowUpdated);
+    window.addEventListener("milestoneRejected", handleEscrowUpdated);
+    window.addEventListener("disputeResolved", handleEscrowUpdated);
 
     return () => {
       window.removeEventListener("escrowUpdated", handleEscrowUpdated);
       window.removeEventListener("milestoneApproved", handleEscrowUpdated);
+      window.removeEventListener("milestoneSubmitted", handleEscrowUpdated);
+      window.removeEventListener("milestoneRejected", handleEscrowUpdated);
+      window.removeEventListener("disputeResolved", handleEscrowUpdated);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet.address]);
@@ -297,20 +309,7 @@ export default function FreelancerPage() {
       // Get next escrow ID from blockchain (not hardcoded)
       const nextEscrowId = await contractService.getNextEscrowId();
 
-      // Get current ledger sequence once (needed for timestamp conversion)
-      let currentLedger = 0;
-      try {
-        const { rpc } = await import("@stellar/stellar-sdk");
-        const { getCurrentNetwork } = await import("@/lib/web3/stellar-config");
-        const network = getCurrentNetwork();
-        const rpcServer = new rpc.Server(network.rpcUrl);
-        const latestLedger = await rpcServer.getLatestLedger();
-        currentLedger = latestLedger.sequence;
-      } catch (error) {
-        // Fallback: use current time as approximation
-        const SECONDS_PER_LEDGER = 5;
-        currentLedger = Math.floor(Date.now() / 1000 / SECONDS_PER_LEDGER);
-      }
+      const nowSeconds = Math.floor(Date.now() / 1000);
 
       const freelancerEscrows: Escrow[] = [];
 
@@ -324,28 +323,20 @@ export default function FreelancerPage() {
             continue;
           }
 
-          // Check if current user is the beneficiary
           const isBeneficiary =
-            escrowData.freelancer &&
-            escrowData.freelancer.toLowerCase().trim() ===
+            escrowData.beneficiary &&
+            escrowData.beneficiary.toLowerCase().trim() ===
               wallet.address.toLowerCase().trim();
 
-
           if (isBeneficiary) {
-            // Convert ledger sequence to approximate timestamp
-            const SECONDS_PER_LEDGER = 5;
-            const createdAtLedger = escrowData.created_at || 0;
-            const ledgersAgo = currentLedger - createdAtLedger;
-            const secondsAgo = ledgersAgo * SECONDS_PER_LEDGER;
-            const approxCreatedAt = Date.now() - secondsAgo * 1000;
-
-            // Calculate duration in seconds (deadline - created_at are both ledger sequences)
-            const deadlineLedger = escrowData.deadline || 0;
-            const durationInSeconds =
-              (deadlineLedger - createdAtLedger) * SECONDS_PER_LEDGER;
+            const approxCreatedAt = Date.now();
+            const deadlineSeconds = Number(escrowData.deadline ?? 0);
+            const remainingSeconds = Math.max(0, deadlineSeconds - nowSeconds);
+            const durationInSeconds = remainingSeconds;
 
             // Fetch milestones for this escrow
             const milestonesData = await contractService.getMilestones(i);
+
             const allMilestones = milestonesData.map(
               (m: any, index: number) => {
                 // Convert milestone status to number first (might be string enum or number)
@@ -417,34 +408,27 @@ export default function FreelancerPage() {
                   | "rejected"
                   | "disputed"
                   | "resolved"
+                  | "proposal_pending"
                 > = {
-                  0: "pending",
-                  1: "submitted",
-                  2: "approved",
-                  3: "disputed",
-                  4: "resolved",
-                  5: "rejected",
+                  0: "pending",           // NotStarted
+                  1: "submitted",         // Submitted
+                  2: "approved",          // Approved (also used for resolved disputes)
+                  3: "rejected",          // Rejected
+                  4: "disputed",          // Disputed
+                  5: "proposal_pending",  // ProposalPending
                 };
-                const status = statusMap[statusNumber] || "pending";
+                
+                let status = statusMap[statusNumber] || "pending";
+
+                // If milestone is approved AND has resolution amounts, it was a resolved dispute
+                if (status === "approved" && m.resolutionFreelancerAmount && BigInt(m.resolutionFreelancerAmount) > 0n) {
+                  status = "resolved";
+                }
 
 
-                // Convert ledger sequences to timestamps
-                const submittedAtLedger = m.submitted_at || 0;
-                const approvedAtLedger = m.approved_at || 0;
-                const submittedAt =
-                  submittedAtLedger > 0
-                    ? Date.now() -
-                      (currentLedger - submittedAtLedger) *
-                        SECONDS_PER_LEDGER *
-                        1000
-                    : undefined;
-                const approvedAt =
-                  approvedAtLedger > 0
-                    ? Date.now() -
-                      (currentLedger - approvedAtLedger) *
-                        SECONDS_PER_LEDGER *
-                        1000
-                    : undefined;
+                // milestone timestamps are Unix seconds from block.timestamp
+                const submittedAt = m.submittedAt > 0 ? Number(m.submittedAt) * 1000 : undefined;
+                const approvedAt = m.approvedAt > 0 ? Number(m.approvedAt) * 1000 : undefined;
 
                 // Track milestone states for submission prevention
                 const milestoneKey = `${i}-${index}`;
@@ -464,8 +448,13 @@ export default function FreelancerPage() {
                   status,
                   submittedAt,
                   approvedAt,
-                  disputeReason: m.dispute_reason || undefined,
-                  rejectionReason: m.rejection_reason || undefined,
+                  disputeReason: m.disputeReason || undefined,
+                  rejectionReason: m.rejectionReason || undefined,
+                  resolutionAmount: m.resolutionFreelancerAmount?.toString() || undefined,
+                  resolutionClientAmount: m.resolutionClientAmount?.toString() || undefined,
+                  resolutionReason: m.resolutionReason || undefined,
+                  proposedAmount: m.proposedAmount?.toString() || undefined,
+                  proposedDescription: m.proposedDescription || undefined,
                 };
               }
             );
@@ -474,27 +463,22 @@ export default function FreelancerPage() {
             const statusNumber = escrowData.status || 0;
             const statusString = getStatusFromNumber(statusNumber);
 
-            const deadlineLedgerFL = escrowData.deadline || 0;
-            const deadlineAtFL =
-              deadlineLedgerFL > 0
-                ? Date.now() +
-                  (deadlineLedgerFL - currentLedger) * SECONDS_PER_LEDGER * 1000
-                : undefined;
+            const deadlineAtFL = deadlineSeconds > 0 ? deadlineSeconds * 1000 : undefined;
 
             const escrow: Escrow = {
               id: i.toString(),
-              payer: escrowData.creator || "",
-              beneficiary: escrowData.freelancer || "",
-              token: escrowData.token || "native",
-              totalAmount: escrowData.amount || "0",
-              releasedAmount: escrowData.paid_amount || "0",
+              payer: escrowData.depositor || "",
+              beneficiary: escrowData.beneficiary || "",
+              token: escrowData.token || "",
+              totalAmount: escrowData.totalAmount?.toString() ?? "0",
+              releasedAmount: escrowData.paidAmount?.toString() ?? "0",
               status: statusString,
               createdAt: approxCreatedAt,
               duration: durationInSeconds,
               deadlineAt: deadlineAtFL,
               milestones: allMilestones,
-              projectTitle: escrowData.project_title || "",
-              projectDescription: escrowData.project_description || "",
+              projectTitle: escrowData.projectTitle || "",
+              projectDescription: escrowData.projectDescription || "",
               isOpenJob: false,
               milestoneCount: allMilestones.length,
             };
@@ -512,12 +496,13 @@ export default function FreelancerPage() {
       if (wallet.address) {
         try {
           const badgeData = await contractService.getBadge(wallet.address);
-          setBadge(badgeData);
+          setBadge(badgeData as "Expert" | "Advanced" | "Intermediate" | "Beginner" | null);
 
           const ratingData = await contractService.getAverageRating(
             wallet.address
           );
-          setAverageRating(ratingData.average);
+          // averageX100 = 450 means 4.50; divide by 100 for display
+          setAverageRating(ratingData.averageX100 / 100);
           setRatingCount(ratingData.count);
         } catch (error) {
         }
@@ -529,12 +514,13 @@ export default function FreelancerPage() {
         if (escrow.status === "completed") {
           try {
             const rating = await contractService.getRating(
-              Number.parseInt(escrow.id, 10)
+              Number.parseInt(escrow.id, 10),
+              wallet.address || undefined
             );
-            if (rating) {
+            if (rating && (rating as any).score) {
               ratings[escrow.id] = {
-                rating: rating.rating,
-                review: rating.review,
+                rating: (rating as any).score,
+                review: (rating as any).review || "",
               };
             }
           } catch (error) {
@@ -593,11 +579,10 @@ export default function FreelancerPage() {
         description: "Submitting transaction to start work on this escrow",
       });
 
-      // Use ContractService instead of contract.send - it handles the correct format
       const { ContractService } = await import("@/lib/web3/contract-service");
-      const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
 
-      await contractService.startWork(Number(escrowId), wallet.address);
+      await cs.startWork(Number(escrowId), wallet.address, writeContractAsync);
 
       toast({
         title: "Work started!",
@@ -837,19 +822,17 @@ export default function FreelancerPage() {
 
     // Additional check: Get the current milestone status from contract
     try {
-      const contract = getContract(CONTRACTS.SECUREFLOW_ESCROW);
-      const milestones = await contract.call("get_milestones", escrowId);
+      const { ContractService: MilCS } = await import("@/lib/web3/contract-service");
+      const milCS = new MilCS(CONTRACTS.SECUREFLOW_ESCROW);
+      const milestones: any[] = await milCS.getMilestones(Number(escrowId)) as any[];
 
       if (milestones && milestones.length > milestoneIndex) {
         const milestone = milestones[milestoneIndex];
-
-        // Check if milestone has been submitted (status 1) or approved (status 2)
-        if (milestone && milestone[2] && Number(milestone[2]) > 0) {
+        const status = Number(milestone?.status ?? 0);
+        if (milestone && status > 0 && status !== 3 /* Rejected */) {
           toast({
             title: "Milestone already processed",
-            description: `This milestone has already been ${
-              Number(milestone[2]) === 2 ? "approved" : "submitted"
-            } and cannot be submitted again`,
+            description: `This milestone has already been ${status === 2 ? "approved" : "submitted"} and cannot be submitted again`,
             variant: "destructive",
           });
           return;
@@ -885,19 +868,18 @@ export default function FreelancerPage() {
         description: "Submitting transaction to submit your milestone",
       });
 
-      // Use ContractService instead of contract.send - it handles the correct format
       const { ContractService } = await import("@/lib/web3/contract-service");
-      const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+      const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
 
-      await contractService.submitMilestone({
+      await cs.submitMilestone({
         escrow_id: Number(escrowId),
         milestone_index: milestoneIndex,
         description: description,
         beneficiary: wallet.address,
-      });
+      }, writeContractAsync);
 
       // Transaction is already confirmed via waitForConfirmation in web3-context
-      // For Stellar, we don't need to poll for receipts like Ethereum
+      // Wait for tx confirmation
       // The transaction hash is returned after confirmation
       toast({
         title: "Milestone submitted!",
@@ -946,7 +928,13 @@ export default function FreelancerPage() {
       await fetchFreelancerEscrows();
 
       // Dispatch event to notify other components
-      window.dispatchEvent(new CustomEvent("milestoneSubmitted"));
+      window.dispatchEvent(new CustomEvent("milestoneSubmitted", {
+        detail: { 
+          escrowId: Number(escrowId), 
+          milestoneIndex,
+          sourceAddress: wallet.address // Add source to prevent self-refresh
+        }
+      }));
     } catch (error) {
       toast({
         title: "Failed to submit milestone",
@@ -989,10 +977,10 @@ export default function FreelancerPage() {
         milestone_index: milestoneIndex,
         description: description,
         beneficiary: wallet.address || "",
-      });
+      }, writeContractAsync);
 
       // Transaction is already confirmed via waitForConfirmation in web3-context
-      // For Stellar, we don't need to poll for receipts like Ethereum
+      // Wait for tx confirmation
       // The transaction hash is returned after confirmation
       toast({
         title: "Milestone resubmitted!",
@@ -1066,7 +1054,7 @@ export default function FreelancerPage() {
         milestone_index: milestoneIndex,
         reason: reason,
         disputer: wallet.address || "",
-      });
+      }, writeContractAsync);
 
       toast({
         title: "Dispute Opened!",
@@ -1081,6 +1069,25 @@ export default function FreelancerPage() {
             wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
         })
       );
+
+      // Notify admin about the new dispute
+      try {
+        const ownerAddress = await contractService.getOwner();
+        if (ownerAddress) {
+          addNotification(
+            {
+              type: "dispute",
+              title: "New Dispute Raised",
+              message: `Escrow #${escrowId}, Milestone ${milestoneIndex}: ${reason}`,
+              actionUrl: `/admin`,
+              data: { escrowId, milestoneIndex, reason },
+            },
+            [ownerAddress],
+          );
+        }
+      } catch (error) {
+        console.error("Failed to notify admin:", error);
+      }
 
       // Refresh escrows
       await fetchFreelancerEscrows();
@@ -1107,16 +1114,16 @@ export default function FreelancerPage() {
         escrow_id: Number(escrowId),
         requester: wallet.address || "",
         reason,
-      });
+      }, writeContractAsync);
       toast({
         title: "Dispute submitted",
         description: "Arbiters have been notified and will review both sides fairly",
       });
 
-      // Notify arbiters
+      // Notify arbiters (arbiter list not enumerable on-chain)
       const escrow = escrows.find((e) => e.id === escrowId);
       try {
-        const authorizedArbiters = await contractService.getAuthorizedArbiters();
+        const authorizedArbiters: string[] = [];
         for (const arbAddr of authorizedArbiters) {
           addNotification(
             {
@@ -1156,7 +1163,7 @@ export default function FreelancerPage() {
 
   const getStatusFromNumber = (
     status: number
-  ): "pending" | "active" | "completed" | "disputed" => {
+  ): "pending" | "active" | "completed" | "disputed" | "cancelled" | "refunded" | "expired" => {
     switch (status) {
       case 0:
         return "pending";
@@ -1165,9 +1172,13 @@ export default function FreelancerPage() {
       case 2:
         return "completed";
       case 3:
-        return "disputed";
+        return "refunded";
       case 4:
-        return "active"; // Map cancelled to active
+        return "disputed";
+      case 5:
+        return "expired";
+      case 6:
+        return "cancelled";
       default:
         return "pending";
     }
@@ -1206,6 +1217,10 @@ export default function FreelancerPage() {
         return "bg-blue-100 text-blue-800";
       case "approved":
         return "bg-green-100 text-green-800";
+      case "resolved":
+        return "bg-purple-100 text-purple-800";
+      case "disputed":
+        return "bg-red-100 text-red-800";
       case "terminated":
         return "bg-gray-100 text-gray-800";
       default:
@@ -1214,15 +1229,7 @@ export default function FreelancerPage() {
   };
 
   const formatAmount = (amount: string) => {
-    try {
-      const num = Number(amount) / 1e7;
-      if (isNaN(num) || num < 0) {
-        return "0.00";
-      }
-      return num.toFixed(2);
-    } catch (error) {
-      return "0.00";
-    }
+    return formatEth(amount);
   };
 
   const calculateDaysLeft = (createdAt: number, duration: number): number => {
@@ -1335,7 +1342,7 @@ export default function FreelancerPage() {
               escrows={escrows}
               averageRating={averageRating}
               ratingCount={ratingCount}
-              badge={badge}
+              badge={badge ?? undefined}
             />
 
             {/* Search and Filters */}
@@ -1498,7 +1505,7 @@ export default function FreelancerPage() {
                                 Total Value
                               </p>
                               <p className="font-semibold text-green-700 dark:text-green-400">
-                                {formatAmount(escrow.totalAmount)} tokens
+                                {formatAmount(escrow.totalAmount)}
                               </p>
                             </div>
                           </div>
@@ -1509,7 +1516,7 @@ export default function FreelancerPage() {
                                 Released
                               </p>
                               <p className="font-semibold text-blue-700 dark:text-blue-400">
-                                {formatAmount(escrow.releasedAmount)} tokens
+                                {formatAmount(escrow.releasedAmount)}
                               </p>
                             </div>
                           </div>
@@ -1748,7 +1755,7 @@ export default function FreelancerPage() {
                                       )}
 
                                     <div className="text-sm font-semibold text-green-600 dark:text-green-400">
-                                      {formatAmount(milestone.amount)} tokens
+                                      {formatAmount(milestone.amount)}
                                     </div>
 
                                     {/* Show rejected status if milestone is rejected */}
@@ -1778,7 +1785,7 @@ export default function FreelancerPage() {
                                           above and resubmit with improvements.
                                         </p>
 
-                                        <div className="flex gap-2">
+                                        <div className="flex flex-wrap gap-2">
                                           <Button
                                             size="sm"
                                             className="bg-red-600 hover:bg-red-700 text-white"
@@ -1794,6 +1801,20 @@ export default function FreelancerPage() {
                                             }}
                                           >
                                             Resubmit Work
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="gap-1.5 border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                            onClick={() => {
+                                              setSelectedEscrowId(escrow.id);
+                                              setSelectedMilestoneIndex(index);
+                                              setDisputeReason("");
+                                              setShowDisputeDialog(true);
+                                            }}
+                                          >
+                                            <Scale className="h-3.5 w-3.5" />
+                                            Raise Dispute
                                           </Button>
                                         </div>
                                       </div>
@@ -1821,10 +1842,7 @@ export default function FreelancerPage() {
                                                 {resolutionAmount > 0 ? (
                                                   <p className="text-green-600 dark:text-green-400 font-medium">
                                                     ✅ You won!{" "}
-                                                    {(
-                                                      resolutionAmount / 1e7
-                                                    ).toFixed(2)}{" "}
-                                                    tokens awarded
+                                                    {formatEth(resolutionAmount)} awarded
                                                   </p>
                                                 ) : (
                                                   <p className="text-orange-600 dark:text-orange-400 font-medium">
@@ -1872,8 +1890,96 @@ export default function FreelancerPage() {
                                       </div>
                                     )}
 
-                                    {/* Show disputed status if milestone is disputed */}
-                                    {milestone.status === "disputed" && (
+                                    {/* Show milestone negotiation component for pending milestones */}
+                                    {milestone.status === "pending" && (
+                                      <div className="mt-3">
+                                        <MilestoneNegotiation
+                                          escrowId={escrow.id}
+                                          milestoneIndex={index}
+                                          milestone={milestone}
+                                          isFreelancer={true}
+                                          isClient={false}
+                                          totalBudget={escrow.totalAmount}
+                                          onUpdate={() => fetchFreelancerEscrows()}
+                                        />
+                                      </div>
+                                    )}
+
+                                    {/* Show proposal pending status for freelancers */}
+                                    {milestone.status === "proposal_pending" && (
+                                      <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                                        <div className="flex items-center gap-2">
+                                          <Clock className="h-4 w-4 text-yellow-500" />
+                                          <span className="text-sm text-yellow-700 dark:text-yellow-300 font-medium">
+                                            Proposal pending client review
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Show resolved status if milestone was disputed and is now resolved */}
+                                    {milestone.status === "disputed" && (milestone as any).resolvedAt && (
+                                      <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <Badge className="bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200">
+                                            Dispute Resolved
+                                          </Badge>
+                                        </div>
+                                        {(() => {
+                                          // Check resolution details
+                                          if ((milestone as any).resolutionAmount !== undefined) {
+                                            const resolutionAmt = Number((milestone as any).resolutionAmount);
+                                            const milestoneAmt = Number(milestone.amount);
+                                            if (resolutionAmt === 0) {
+                                              return (
+                                                <p className="text-orange-600 dark:text-orange-400 font-medium">
+                                                  ❌ Client won - Full refund issued
+                                                </p>
+                                              );
+                                            } else if (resolutionAmt >= milestoneAmt) {
+                                              return (
+                                                <p className="text-green-600 dark:text-green-400 font-medium">
+                                                  ✅ You won! Full payment released
+                                                </p>
+                                              );
+                                            } else {
+                                              const percentage = Math.round((resolutionAmt / milestoneAmt) * 100);
+                                              return (
+                                                <p className="text-blue-600 dark:text-blue-400 font-medium">
+                                                  ⚖️ Split decision - You received {percentage}% of milestone amount
+                                                </p>
+                                              );
+                                            }
+                                          }
+                                          // Infer from escrow state
+                                          if (escrow.releasedAmount && escrow.totalAmount) {
+                                            const released = Number(escrow.releasedAmount);
+                                            const milestoneAmount = Number(milestone.amount);
+                                            if (released >= milestoneAmount * 0.9) {
+                                              return (
+                                                <p className="text-green-600 dark:text-green-400 font-medium text-sm">
+                                                  ✅ You won! Payment released
+                                                </p>
+                                              );
+                                            } else {
+                                              return (
+                                                <p className="text-orange-600 dark:text-orange-400 font-medium text-sm">
+                                                  ❌ Client won - Refund issued
+                                                </p>
+                                              );
+                                            }
+                                          }
+                                          return (
+                                            <p className="text-sm text-blue-700 dark:text-blue-300">
+                                              Dispute has been resolved by admin
+                                            </p>
+                                          );
+                                        })()}
+                                      </div>
+                                    )}
+
+                                    {/* Show disputed status if milestone is disputed AND NOT resolved */}
+                                    {milestone.status === "disputed" && !(milestone as any).resolvedAt && (
                                       <div className="mt-3 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
                                         <div className="flex items-center gap-2 mb-2">
                                           <Badge className="bg-orange-100 dark:bg-orange-800 text-orange-800 dark:text-orange-200">
@@ -1895,15 +2001,29 @@ export default function FreelancerPage() {
                                             </p>
                                           </div>
                                         )}
-                                        <div className="flex gap-2">
-                                          <Button
-                                            size="sm"
+                                        <div className="flex gap-2 mt-3">
+                                          <ViewEvidenceButton
+                                            escrowId={escrow.id}
+                                            milestoneIndex={index}
+                                            clientAddress={escrow.payer}
+                                            freelancerAddress={escrow.beneficiary}
                                             variant="outline"
-                                            disabled
-                                            className="border-orange-300 dark:border-orange-600 text-orange-700 dark:text-orange-300"
-                                          >
-                                            Under Review
-                                          </Button>
+                                            size="sm"
+                                            className="flex-1"
+                                          />
+                                          <EvidenceSubmissionButton
+                                            escrowId={escrow.id}
+                                            milestoneIndex={index}
+                                            onEvidenceSubmitted={() => {
+                                              toast({
+                                                title: "Evidence submitted",
+                                                description: "Your evidence has been recorded",
+                                              });
+                                            }}
+                                            variant="default"
+                                            size="sm"
+                                            className="flex-1"
+                                          />
                                         </div>
                                       </div>
                                     )}

@@ -10,6 +10,7 @@ import { Clock, DollarSign, Calendar, Play, Send, Star } from "lucide-react";
 import { ClientRatingDialog } from "@/components/rating/client-rating-dialog";
 import { ContractService } from "@/lib/web3/contract-service";
 import { CONTRACTS } from "@/lib/web3/config";
+import { formatEth, formatTokenAmount } from "@/lib/utils";
 
 interface Milestone {
   description: string;
@@ -55,13 +56,14 @@ export function EscrowCard({
   const isCompleted =
     escrow.status === "completed" ||
     escrow.status === "released" ||
-    escrow.status === "Released";
+    escrow.status === "Released" ||
+    escrow.status === "resolved";
 
   useEffect(() => {
     if (!isCompleted || !escrow.payer) return;
     const svc = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
     svc.getClientRating(Number(escrow.id))
-      .then((r) => setHasClientRating(!!r))
+      .then((r: any) => setHasClientRating(!!(r && r.score)))
       .catch(() => {});
   }, [escrow.id, isCompleted, escrow.payer]);
 
@@ -75,6 +77,8 @@ export function EscrowCard({
         return "bg-green-100 text-green-800";
       case "disputed":
         return "bg-red-100 text-red-800";
+      case "resolved":
+        return "bg-purple-100 text-purple-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -132,8 +136,7 @@ export function EscrowCard({
                 <div className="flex items-center gap-1">
                   <DollarSign className="h-4 w-4" />
                   <span>
-                    {(Number.parseFloat(escrow.totalAmount) / 1e7).toFixed(2)}{" "}
-                    tokens
+                    {formatTokenAmount(escrow.totalAmount, escrow.token)}
                   </span>
                 </div>
                 <div className="flex items-center gap-1">
@@ -166,15 +169,13 @@ export function EscrowCard({
               <div>
                 <span className="text-gray-600">Total Amount:</span>
                 <div className="font-semibold">
-                  {(Number.parseFloat(escrow.totalAmount) / 1e7).toFixed(2)}{" "}
-                  tokens
+                  {formatTokenAmount(escrow.totalAmount, escrow.token)}
                 </div>
               </div>
               <div>
                 <span className="text-gray-600">Released:</span>
                 <div className="font-semibold">
-                  {(Number.parseFloat(escrow.releasedAmount) / 1e7).toFixed(2)}{" "}
-                  tokens
+                  {formatTokenAmount(escrow.releasedAmount, escrow.token)}
                 </div>
               </div>
             </div>
@@ -191,8 +192,7 @@ export function EscrowCard({
                       {milestone.description}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {(Number.parseFloat(milestone.amount) / 1e7).toFixed(2)}{" "}
-                      tokens
+                      {formatTokenAmount(milestone.amount, escrow.token)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">

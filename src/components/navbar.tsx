@@ -74,7 +74,7 @@ export function Navbar() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-2">
           <Link to="/" className="flex items-center gap-2 font-bold text-xl">
             <img
-              src="/secureflow-favicon.svg"
+              src="/secureflow-favicon-v2.svg"
               alt="SecureFlow"
               className="h-7 w-7 shrink-0"
             />
@@ -124,6 +124,16 @@ export function Navbar() {
               }`}
             >
               Dashboard
+            </Link>
+            <Link
+              to="/analytics"
+              className={`text-sm font-medium transition-colors ${
+                isActive("/analytics")
+                  ? "text-primary bg-primary/10 px-3 py-2 rounded-md"
+                  : "hover:text-primary"
+              }`}
+            >
+              Analytics
             </Link>
 
             {isJobCreator && hasPendingApprovals && (
@@ -252,6 +262,17 @@ export function Navbar() {
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   Dashboard
+                </Link>
+                <Link
+                  to="/analytics"
+                  className={`text-sm font-medium transition-colors py-2 ${
+                    isActive("/analytics")
+                      ? "text-primary bg-primary/10 px-3 py-2 rounded-md"
+                      : "hover:text-primary"
+                  }`}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Analytics
                 </Link>
                 {isJobCreator && hasPendingApprovals && (
                   <Link

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle, XCircle, Clock, AlertCircle, Paperclip } from "lucide-react";
-import { parseAttachment } from "@/lib/utils";
+import { parseAttachment, formatEth, formatTokenAmount } from "@/lib/utils";
 import { motion } from "framer-motion";
 import type { Escrow, Milestone } from "@/lib/web3/types";
 
@@ -164,7 +164,7 @@ function MilestoneApprovalItem({
             );
           })()}
           <p className="text-sm font-semibold text-green-600">
-            {(Number.parseFloat(milestone.amount) / 1e7).toFixed(2)} tokens
+            {formatTokenAmount(milestone.amount, (milestone as any).token)}
           </p>
         </div>
       </div>

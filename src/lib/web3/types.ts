@@ -7,14 +7,19 @@ export interface Milestone {
     | "approved"
     | "rejected"
     | "disputed"
-    | "resolved";
+    | "resolved"
+    | "proposal_pending";
   submittedAt?: number;
   approvedAt?: number;
   rejectionReason?: string;
   disputeReason?: string;
   resolvedAt?: number;
   resolvedBy?: string;
-  resolutionAmount?: string; // Amount paid to beneficiary in resolution (0 = client wins, >0 = freelancer wins)
+  resolutionAmount?: string; // Amount paid to beneficiary in resolution (freelancer's share)
+  resolutionClientAmount?: string; // Amount refunded to client in resolution
+  resolutionReason?: string; // Admin's reason for the resolution decision (from event, not contract)
+  proposedAmount?: string; // Proposed amount for milestone changes
+  proposedDescription?: string; // Proposed description for milestone changes
 }
 
 export interface Escrow {
@@ -24,10 +29,10 @@ export interface Escrow {
   token: string;
   totalAmount: string;
   releasedAmount: string;
-  status: "pending" | "active" | "completed" | "disputed";
+  status: "pending" | "active" | "completed" | "disputed" | "cancelled";
   createdAt: number;
   duration: number;
-  /** Deadline as Unix timestamp (ms), derived from on-chain ledger sequence */
+  /** Deadline as Unix timestamp (ms) from the on-chain deadline field */
   deadlineAt?: number;
   milestones: Milestone[];
   projectTitle?: string;
@@ -48,10 +53,10 @@ export interface EscrowStats {
 }
 
 export interface WalletState {
-  address: string | null; // Stellar public key (G...)
-  chainId: number | null; // Deprecated: Stellar doesn't use chain IDs
+  address: string | null;
+  chainId: number | null;
   isConnected: boolean;
-  balance: string; // XLM balance (7 decimals)
+  balance: string; // USDC balance (18 decimals on-chain, displayed as 6)
 }
 
 export interface Application {

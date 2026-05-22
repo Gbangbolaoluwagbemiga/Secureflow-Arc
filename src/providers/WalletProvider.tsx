@@ -1,178 +1,70 @@
-import {
-  createContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
-import { wallet } from "../util/wallet";
-import storage from "../util/storage";
+import React from "react";
+import { WagmiProvider } from "wagmi";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createAppKit } from "@reown/appkit/react";
+import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
+import { defineChain } from "viem";
+import type { AppKitNetwork } from "@reown/appkit/networks";
 
-export interface WalletContextType {
-  address?: string;
-  network?: string;
-  networkPassphrase?: string;
-  isPending: boolean;
-  signTransaction?: typeof wallet.signTransaction;
-}
+// ─── Arc Testnet — defined as a viem Chain ────────────────────────────────────
+export const arcTestnet = defineChain({
+  id: 5042002,
+  name: "Arc Testnet",
+  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
+  rpcUrls: {
+    default: { http: ["https://rpc.drpc.testnet.arc.network"] },
+  },
+  blockExplorers: {
+    default: { name: "ArcScan", url: "https://testnet.arcscan.app" },
+  },
+  testnet: true,
+});
 
-const initialState = {
-  address: undefined,
-  network: undefined,
-  networkPassphrase: undefined,
-};
+// Cast to Reown's AppKitNetwork so it works with createAppKit and WagmiAdapter
+const arcTestnetReown = arcTestnet as unknown as AppKitNetwork;
 
-const POLL_INTERVAL = 1000;
+const projectId = (import.meta.env.VITE_REOWN_PROJECT_ID as string | undefined) ?? "";
 
-export const WalletContext = // eslint-disable-line react-refresh/only-export-components
-  createContext<WalletContextType>({ isPending: true });
+// ─── Wagmi adapter (Reown manages connectors: MetaMask, WC QR, Coinbase, etc.)
+export const wagmiAdapter = new WagmiAdapter({
+  projectId,
+  networks: [arcTestnetReown],
+});
 
-export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
-  const [state, setState] =
-    useState<Omit<WalletContextType, "isPending">>(initialState);
-  const [isPending, startTransition] = useTransition();
-  const popupLock = useRef(false);
-  const signTransaction = wallet.signTransaction.bind(wallet);
+export const wagmiConfig = wagmiAdapter.wagmiConfig;
 
-  const nullify = () => {
-    updateState(initialState);
-    storage.setItem("walletId", "");
-    storage.setItem("walletAddress", "");
-    storage.setItem("walletNetwork", "");
-    storage.setItem("networkPassphrase", "");
-  };
+// ─── Reown AppKit initialisation ──────────────────────────────────────────────
+createAppKit({
+  adapters: [wagmiAdapter],
+  projectId,
+  networks: [arcTestnetReown],
+  defaultNetwork: arcTestnetReown,
+  metadata: {
+    name: "SecureFlow",
+    description: "Milestone-based freelancer escrow on Arc EVM",
+    url: typeof window !== "undefined" ? window.location.origin : "https://secureflow.app",
+    icons: ["/favicon.ico"],
+  },
+  features: {
+    analytics: false,
+    email: false,
+    socials: [],
+  },
+  themeMode: "dark",
+  themeVariables: {
+    "--w3m-accent": "#7D00FF",
+    "--w3m-border-radius-master": "8px",
+  },
+});
 
-  const updateState = (newState: Omit<WalletContextType, "isPending">) => {
-    setState((prev: Omit<WalletContextType, "isPending">) => {
-      if (
-        prev.address !== newState.address ||
-        prev.network !== newState.network ||
-        prev.networkPassphrase !== newState.networkPassphrase
-      ) {
-        return newState;
-      }
-      return prev;
-    });
-  };
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { refetchOnWindowFocus: false, retry: false } },
+});
 
-  const updateCurrentWalletState = async (forceRefresh = false) => {
-    // There is no way, with StellarWalletsKit, to check if the wallet is
-    // installed/connected/authorized. We need to manage that on our side by
-    // checking our storage item.
-    const walletId = storage.getItem("walletId");
-    const walletNetwork = storage.getItem("walletNetwork");
-    const walletAddr = storage.getItem("walletAddress");
-    const passphrase = storage.getItem("networkPassphrase");
-
-    // If we already have state from storage and we're not forcing a refresh,
-    // just update state without calling wallet methods (which open popups)
-    if (
-      !forceRefresh &&
-      !state.address &&
-      walletAddr !== null &&
-      walletNetwork !== null &&
-      passphrase !== null
-    ) {
-      updateState({
-        address: walletAddr,
-        network: walletNetwork,
-        networkPassphrase: passphrase,
-      });
-      return; // Don't call wallet methods if we have cached data
-    }
-
-    if (!walletId) {
-      nullify();
-      return;
-    }
-
-    // If we already have the address and we're not forcing refresh, skip wallet calls
-    if (!forceRefresh && walletAddr && state.address === walletAddr) {
-      return; // Already have the address, no need to call wallet
-    }
-
-    if (popupLock.current) return;
-
-    // If our storage item is there, then we try to get the user's address &
-    // network from their wallet. Note: `getAddress` MAY open their wallet
-    // extension, depending on which wallet they select!
-    try {
-      popupLock.current = true;
-      wallet.setWallet(walletId);
-
-      // For non-freighter wallets, if we have address in storage, don't call getAddress
-      if (walletId !== "freighter" && walletAddr !== null && !forceRefresh) {
-        popupLock.current = false; // Reset lock before returning
-        return;
-      }
-
-      const [a, n] = await Promise.all([
-        wallet.getAddress(),
-        wallet.getNetwork(),
-      ]);
-
-      if (!a.address) storage.setItem("walletId", "");
-      if (
-        a.address !== state.address ||
-        n.network !== state.network ||
-        n.networkPassphrase !== state.networkPassphrase
-      ) {
-        storage.setItem("walletAddress", a.address);
-        updateState({ ...a, ...n });
-      }
-    } catch (e) {
-      // Don't aggressively sign the user out on transient wallet errors.
-      // Freighter (and other wallets) may throw if locked, not yet injected,
-      // or if the user closes the popup. Keep storage/state so they can retry.
-    } finally {
-      popupLock.current = false;
-    }
-  };
-
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    let isMounted = true;
-
-    // Create recursive polling function to check wallet state continuously
-    // Only check storage, don't call wallet methods (which open popups)
-    const pollWalletState = async () => {
-      if (!isMounted) return;
-
-      // Only check storage, don't force refresh (which would open wallet popup)
-      await updateCurrentWalletState(false);
-
-      if (isMounted) {
-        timer = setTimeout(() => void pollWalletState(), POLL_INTERVAL);
-      }
-    };
-
-    // Get the wallet address when the component is mounted for the first time
-    // Only call wallet methods on initial mount, not on every state change
-    startTransition(async () => {
-      await updateCurrentWalletState(true); // Force refresh only on mount
-      // Start polling after initial state is loaded
-
-      if (isMounted) {
-        timer = setTimeout(() => void pollWalletState(), POLL_INTERVAL);
-      }
-    });
-
-    // Clear the timeout and stop polling when the component unmounts
-    return () => {
-      isMounted = false;
-      if (timer) clearTimeout(timer);
-    };
-  }, []); // Empty dependency array - only run once on mount
-
-  const contextValue = useMemo(
-    () => ({
-      ...state,
-      isPending,
-      signTransaction,
-    }),
-    [state, isPending, signTransaction]
-  );
-
-  return <WalletContext value={contextValue}>{children}</WalletContext>;
-};
+export const WalletProvider = ({ children }: { children: React.ReactNode }) => (
+  <WagmiProvider config={wagmiConfig}>
+    <QueryClientProvider client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  </WagmiProvider>
+);

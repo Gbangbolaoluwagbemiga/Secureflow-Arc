@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useWriteContract } from "wagmi";
 import {
   Dialog,
   DialogContent,
@@ -39,6 +40,7 @@ export function ClientRatingDialog({
   const { toast } = useToast();
   const { wallet } = useWeb3();
   const { addNotification } = useNotifications();
+  const { writeContractAsync } = useWriteContract();
   const [rating, setRating] = useState(0);
   const [hovered, setHovered] = useState(0);
   const [review, setReview] = useState("");
@@ -57,7 +59,7 @@ export function ClientRatingDialog({
         rating,
         review: review.trim(),
         freelancer: freelancerAddress,
-      });
+      }, writeContractAsync);
 
       if (clientAddress && wallet.address) {
         addNotification(

@@ -8,12 +8,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { motion } from "framer-motion";
 import { Clock, DollarSign, ChevronDown, ChevronUp, Star, AlertTriangle, CalendarPlus, Scale, Paperclip, MessageCircle } from "lucide-react";
 import { MilestoneActions } from "@/components/milestone-actions";
-import { parseAttachment } from "@/lib/utils";
+import { MilestoneNegotiation } from "@/components/milestone-negotiation";
+import { JobManagement } from "@/components/job-management";
+import { EvidenceSubmissionButton } from "@/components/evidence-submission-button";
+import { ViewEvidenceButton } from "@/components/view-evidence-button";
+import { parseAttachment, formatEth, formatTokenAmount } from "@/lib/utils";
 import { RatingDialog } from "@/components/rating/rating-dialog";
 import { ChatDialog } from "@/components/chat/chat-dialog";
 import { useState, useEffect } from "react";
 import { contractService } from "@/lib/web3/contract-service";
 import { useWeb3 } from "@/contexts/web3-context";
+import { useToast } from "@/hooks/use-toast";
 import { isApiConfigured } from "@/lib/api";
 import type { Escrow } from "@/lib/web3/types";
 
@@ -49,6 +54,7 @@ export function EscrowCard({
   onRaiseOverdueDispute,
   onExtendDeadline,
 }: EscrowCardProps) {
+  const { toast } = useToast();
   const [showRatingDialog, setShowRatingDialog] = useState(false);
   const [hasRating, setHasRating] = useState(false);
   const [existingRating, setExistingRating] = useState<{
@@ -76,18 +82,14 @@ export function EscrowCard({
   useEffect(() => {
     if (escrow.status === "completed" && escrow.isClient) {
       contractService
-        .getRating(Number.parseInt(escrow.id, 10))
-        .then((rating) => {
-          if (rating) {
+        .getRating(Number.parseInt(escrow.id, 10), wallet.address || undefined)
+        .then((r: any) => {
+          if (r && r.score) {
             setHasRating(true);
-            setExistingRating({
-              rating: rating.rating,
-              review: rating.review,
-            });
+            setExistingRating({ rating: r.score, review: r.review || "" });
           }
         })
-        .catch((error) => {
-        });
+        .catch(() => {});
     }
   }, [escrow.id, escrow.status, escrow.isClient]);
 
@@ -100,23 +102,41 @@ export function EscrowCard({
       case "completed":
         return "bg-green-100 text-green-800";
       case "disputed":
+        return "bg-orange-100 text-orange-800";
+      case "rejected":
         return "bg-red-100 text-red-800";
       case "resolved":
         return "bg-purple-100 text-purple-800";
-      case "terminated":
-        return "bg-gray-100 text-gray-800";
+      case "Dispute Resolved":
+        return "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300";
       default:
         return "bg-gray-100 text-gray-800";
     }
   };
 
-  // Check if this escrow should be marked as terminated
-  const isTerminated = escrow.milestones.some(
+  // Check if this escrow has issues (disputed or rejected milestones)
+  const hasIssues = escrow.milestones.some(
     (milestone) =>
       milestone.status === "disputed" ||
       milestone.status === "rejected" ||
       milestone.status === "resolved"
   );
+  
+  // Check if any milestone was resolved (dispute resolution)
+  const hasResolvedDispute = escrow.milestones.some(m => m.status === "resolved");
+  
+  // Determine display status
+  const getDisplayStatus = () => {
+    // If any milestone is disputed, show disputed
+    if (escrow.milestones.some(m => m.status === "disputed")) return "disputed";
+    // If any milestone is rejected, show rejected
+    if (escrow.milestones.some(m => m.status === "rejected")) return "rejected";
+    // If any milestone was resolved (dispute resolution), show "Dispute Resolved"
+    if (hasResolvedDispute) return "Dispute Resolved";
+    return escrow.status;
+  };
+  
+  const displayStatus = getDisplayStatus();
 
   const getMilestoneStatusColor = (status: string) => {
     switch (status) {
@@ -159,9 +179,14 @@ export function EscrowCard({
         <CardHeader>
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <CardTitle className="text-lg mb-2">
-                {escrow.projectDescription}
+              <CardTitle className="text-lg mb-1">
+                {escrow.projectTitle || `Escrow #${escrow.id}`}
               </CardTitle>
+              {escrow.projectDescription && (
+                <p className="text-sm text-muted-foreground mb-2">
+                  {escrow.projectDescription}
+                </p>
+              )}
               <div className="flex items-center gap-4 text-sm text-gray-600">
                 <div className="flex items-center gap-1">
                   <Clock className="h-4 w-4" />
@@ -172,19 +197,16 @@ export function EscrowCard({
                 <div className="flex items-center gap-1">
                   <DollarSign className="h-4 w-4" />
                   <span>
-                    {(Number.parseFloat(escrow.totalAmount) / 1e7).toFixed(2)}{" "}
-                    tokens
+                    {formatTokenAmount(escrow.totalAmount, escrow.token)}
                   </span>
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <Badge
-                className={getStatusColor(
-                  isTerminated ? "terminated" : escrow.status
-                )}
+                className={getStatusColor(displayStatus)}
               >
-                {isTerminated ? "terminated" : escrow.status}
+                {displayStatus}
               </Badge>
               {/* Message Freelancer — visible to client when a freelancer is assigned */}
               {escrow.isClient && escrow.beneficiary && wallet.address && isApiConfigured() && (
@@ -231,15 +253,13 @@ export function EscrowCard({
               <div>
                 <span className="text-gray-600">Total Amount:</span>
                 <div className="font-semibold">
-                  {(Number.parseFloat(escrow.totalAmount) / 1e7).toFixed(2)}{" "}
-                  tokens
+                  {formatTokenAmount(escrow.totalAmount, escrow.token)}
                 </div>
               </div>
               <div>
                 <span className="text-gray-600">Released:</span>
                 <div className="font-semibold">
-                  {(Number.parseFloat(escrow.releasedAmount) / 1e7).toFixed(2)}{" "}
-                  tokens
+                  {formatTokenAmount(escrow.releasedAmount, escrow.token)}
                 </div>
               </div>
               <div>
@@ -267,71 +287,134 @@ export function EscrowCard({
                   {escrow.milestones.map((milestone, idx) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between p-2 bg-muted/20 rounded"
+                      className="flex flex-col gap-3 p-3 bg-muted/20 rounded-lg border border-muted"
                     >
-                      <div className="flex-1">
-                        {(() => {
-                          const { body, attachment } = parseAttachment(milestone.description ?? "");
-                          return (
-                            <>
-                              <p className="text-sm font-medium">{body}</p>
-                              {attachment && (
-                                <a
-                                  href={attachment.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 mt-1 text-xs text-primary hover:underline"
-                                >
-                                  <Paperclip className="h-3 w-3 shrink-0" />
-                                  {attachment.name}
-                                </a>
-                              )}
-                            </>
-                          );
-                        })()}
-                        <p className="text-xs text-muted-foreground">
-                          {(Number.parseFloat(milestone.amount) / 1e7).toFixed(
-                            2
-                          )}{" "}
-                          tokens
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          {(() => {
+                            const { body, attachment } = parseAttachment(milestone.description ?? "");
+                            return (
+                              <>
+                                <p className="text-sm font-medium">{body}</p>
+                                {attachment && (
+                                  <a
+                                    href={attachment.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 mt-1 text-xs text-primary hover:underline"
+                                  >
+                                    <Paperclip className="h-3 w-3 shrink-0" />
+                                    {attachment.name}
+                                  </a>
+                                )}
+                              </>
+                            );
+                          })()}
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {formatTokenAmount(milestone.amount, escrow.token)}
+                          </p>
+                        </div>
                         <Badge
                           className={getMilestoneStatusColor(milestone.status)}
                         >
                           {milestone.status}
                         </Badge>
-                        <MilestoneActions
-                          escrowId={escrow.id}
-                          milestoneIndex={idx}
-                          milestone={milestone}
-                          isPayer={escrow.isClient || false}
-                          isBeneficiary={escrow.isFreelancer || false}
-                          escrowStatus={escrow.status}
-                          allMilestones={escrow.milestones}
-                          showSubmitButton={false} // Hide submit buttons on dashboard
-                          payerAddress={escrow.payer} // Client address for notifications
-                          beneficiaryAddress={escrow.beneficiary} // Freelancer address for notifications
-                          escrowReleasedAmount={escrow.releasedAmount}
-                          escrowTotalAmount={escrow.totalAmount}
-                          onSuccess={async () => {
-                            // Refresh the escrow data
-                            window.dispatchEvent(
-                              new CustomEvent("escrowUpdated")
-                            );
-                            // Wait a moment for blockchain state to update
-                            await new Promise((resolve) =>
-                              setTimeout(resolve, 2000)
-                            );
-                            // Trigger refresh without reloading the page
-                            // The parent component should listen to the event and refresh
-                          }}
-                        />
                       </div>
+                      
+                      {/* Milestone Actions - Now vertical */}
+                      <MilestoneActions
+                        escrowId={escrow.id}
+                        milestoneIndex={idx}
+                        milestone={milestone}
+                        isPayer={escrow.isClient || false}
+                        isBeneficiary={escrow.isFreelancer || false}
+                        escrowStatus={escrow.status}
+                        allMilestones={escrow.milestones}
+                        showSubmitButton={false} // Hide submit buttons on dashboard
+                        payerAddress={escrow.payer} // Client address for notifications
+                        beneficiaryAddress={escrow.beneficiary} // Freelancer address for notifications
+                        escrowReleasedAmount={escrow.releasedAmount}
+                        escrowTotalAmount={escrow.totalAmount}
+                        onSuccess={async () => {
+                          // Refresh the escrow data
+                          window.dispatchEvent(
+                            new CustomEvent("escrowUpdated")
+                          );
+                          // Wait a moment for blockchain state to update
+                          await new Promise((resolve) =>
+                            setTimeout(resolve, 2000)
+                          );
+                          // Trigger refresh without reloading the page
+                          // The parent component should listen to the event and refresh
+                        }}
+                      />
+                      
+                      {/* Evidence buttons for disputed milestones */}
+                      {milestone.status === "disputed" && (
+                        <div className="mt-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                          <div className="flex items-center gap-2 mb-2">
+                            <AlertTriangle className="h-4 w-4 text-orange-600" />
+                            <span className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                              Milestone Under Dispute
+                            </span>
+                          </div>
+                          <p className="text-xs text-orange-600 dark:text-orange-400 mb-3">
+                            This milestone is being reviewed by an arbiter. Submit evidence to support your case.
+                          </p>
+                          <div className="flex flex-col gap-2">
+                            <ViewEvidenceButton
+                              escrowId={escrow.id}
+                              milestoneIndex={idx}
+                              clientAddress={escrow.payer}
+                              freelancerAddress={escrow.beneficiary}
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                            />
+                            <EvidenceSubmissionButton
+                              escrowId={escrow.id}
+                              milestoneIndex={idx}
+                              onEvidenceSubmitted={() => {
+                                toast({
+                                  title: "Evidence submitted",
+                                  description: "Your evidence has been recorded on-chain",
+                                });
+                              }}
+                              variant="default"
+                              size="sm"
+                              className="w-full"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Milestone Negotiation Component - Shows proposal review UI for clients */}
+                      <MilestoneNegotiation
+                        escrowId={escrow.id}
+                        milestoneIndex={idx}
+                        milestone={milestone}
+                        isFreelancer={false}
+                        isClient={escrow.isClient || false}
+                        totalBudget={escrow.totalAmount}
+                        onUpdate={() => {
+                          window.dispatchEvent(new CustomEvent("escrowUpdated"));
+                        }}
+                      />
                     </div>
                   ))}
                 </div>
+
+                {/* Job Management Component - Only shows for open jobs */}
+                <JobManagement
+                  escrowId={escrow.id}
+                  isOpenJob={!escrow.beneficiary || escrow.beneficiary === "0x0000000000000000000000000000000000000000"}
+                  isClient={escrow.isClient || false}
+                  totalAmount={escrow.totalAmount}
+                  token={escrow.token}
+                  onUpdate={() => {
+                    window.dispatchEvent(new CustomEvent("escrowUpdated"));
+                  }}
+                />
               </div>
             )}
 
@@ -444,8 +527,8 @@ export function EscrowCard({
               </div>
             )}
 
-            {/* Rating Section for Completed Escrows */}
-            {escrow.status === "completed" && escrow.isClient && (
+            {/* Rating Section for Completed Escrows - Hide for disputed/resolved projects */}
+            {escrow.status === "completed" && escrow.isClient && !hasResolvedDispute && (
               <div className="mt-4 pt-4 border-t">
                 {hasRating ? (
                   <div className="space-y-2">
@@ -499,14 +582,12 @@ export function EscrowCard({
             setHasRating(true);
             // Refresh rating data for this escrow only
             try {
-              const rating = await contractService.getRating(
-                Number.parseInt(escrow.id, 10)
+              const r: any = await contractService.getRating(
+                Number.parseInt(escrow.id, 10),
+                wallet.address || undefined
               );
-              if (rating) {
-                setExistingRating({
-                  rating: rating.rating,
-                  review: rating.review,
-                });
+              if (r && r.score) {
+                setExistingRating({ rating: r.score, review: r.review || "" });
               }
             } catch (error) {
             }

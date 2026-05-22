@@ -1,15 +1,12 @@
 {
-  "name": "scaffold-stellar-frontend",
+  "name": "secureflow",
   "type": "module",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "vite",
     "start": "vite",
-    "dev:clients": "stellar scaffold watch --build-clients",
-    "prebuild": "(command -v stellar >/dev/null 2>&1 && stellar scaffold build --build-clients) || echo 'Warning: stellar scaffold not available, using committed contracts'",
     "build": "tsc -b && vite build",
-    "install:contracts": "npm install --workspace=packages && npm run build --workspace=packages",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier . --write"
@@ -18,7 +15,6 @@
     "packages/*"
   ],
   "dependencies": {
-    "@creit.tech/stellar-wallets-kit": "^1.9.5",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-aspect-ratio": "^1.1.8",
@@ -46,10 +42,9 @@
     "@radix-ui/react-toggle": "^1.1.10",
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "@stellar/design-system": "^3.1.5",
-    "@stellar/stellar-sdk": "^14.2.0",
-    "@stellar/stellar-xdr-json": "^23.0.0",
-    "@tanstack/react-query": "^5.90.2",
+    "@reown/appkit": "^1.8.19",
+    "@reown/appkit-adapter-wagmi": "^1.8.19",
+    "@tanstack/react-query": "^5.100.10",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -70,6 +65,8 @@
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.3.1",
     "vaul": "^1.1.2",
+    "viem": "^2.49.0",
+    "wagmi": "^3.6.14",
     "zod": "^4.1.11",
     "zustand": "^5.0.8"
   },
@@ -112,15 +109,3 @@
     ]
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-

@@ -33,7 +33,7 @@ export function AdminStats({ stats }: AdminStatsProps) {
           <DollarSign className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{stats.totalVolume} tokens</div>
+          <div className="text-2xl font-bold">{stats.totalVolume} USDC</div>
           <p className="text-xs text-muted-foreground">Platform volume</p>
         </CardContent>
       </Card>
