@@ -74,7 +74,7 @@ export function Navbar() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-2">
           <Link to="/" className="flex items-center gap-2 font-bold text-xl">
             <img
-              src="/secureflow-favicon.svg"
+              src="/secureflow-favicon-v2.svg"
               alt="SecureFlow"
               className="h-7 w-7 shrink-0"
             />

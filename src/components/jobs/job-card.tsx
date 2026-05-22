@@ -46,6 +46,8 @@ export function JobCard({
         return "bg-green-100 text-green-800";
       case "disputed":
         return "bg-red-100 text-red-800";
+      case "resolved":
+        return "bg-purple-100 text-purple-800";
       default:
         return "bg-gray-100 text-gray-800";
     }

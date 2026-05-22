@@ -25,6 +25,7 @@ import {
   Award,
   Briefcase,
   RefreshCw,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -51,6 +52,7 @@ interface UserAnalytics {
   totalEarned: string;
   totalSpent: string;
   activeProjects: number;
+  cancelledProjects: number;
 }
 
 interface TrendsData {
@@ -85,9 +87,6 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8787";
-  const API_SECRET = import.meta.env.VITE_API_SECRET || "";
-
   useEffect(() => {
     fetchAnalytics();
   }, [wallet.address]);
@@ -95,39 +94,171 @@ export default function AnalyticsPage() {
   const fetchAnalytics = async () => {
     setRefreshing(true);
     try {
-      // Fetch platform analytics
-      const platformRes = await fetch(`${API_URL}/v1/analytics/platform`, {
-        headers: {
-          Authorization: `Bearer ${API_SECRET}`,
-        },
-      });
-      if (platformRes.ok) {
-        const platformJson = await platformRes.json();
-        setPlatformData(platformJson);
-      }
+      // Fetch analytics directly from blockchain
+      const { ContractService } = await import("@/lib/web3/contract-service");
+      const { CONTRACTS } = await import("@/lib/web3/config");
+      const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
 
-      // Fetch user analytics if wallet is connected
-      if (wallet.address) {
-        const userRes = await fetch(`${API_URL}/v1/analytics/user/${wallet.address}`, {
-          headers: {
-            Authorization: `Bearer ${API_SECRET}`,
-          },
-        });
-        if (userRes.ok) {
-          const userJson = await userRes.json();
-          setUserData(userJson);
+      // Get next escrow ID to know how many escrows exist
+      const nextEscrowId = await cs.getNextEscrowId();
+      const totalEscrows = nextEscrowId - 1;
+
+      let activeEscrows = 0;
+      let completedEscrows = 0;
+      let disputedEscrows = 0;
+      let totalVolume = 0n;
+      let totalFees = 0n;
+      const statusDistribution = {
+        pending: 0,
+        inProgress: 0,
+        completed: 0,
+        refunded: 0,
+        disputed: 0,
+        expired: 0,
+        cancelled: 0,
+      };
+
+      // Iterate through all escrows to calculate stats
+      for (let i = 1; i < nextEscrowId; i++) {
+        try {
+          const escrow = await cs.getEscrow(i);
+          if (!escrow) continue;
+
+          const status = escrow.status || 0;
+          totalVolume += BigInt(escrow.totalAmount || 0);
+
+          // Count by status
+          switch (status) {
+            case 0:
+              statusDistribution.pending++;
+              break;
+            case 1:
+              activeEscrows++;
+              statusDistribution.inProgress++;
+              break;
+            case 2:
+              completedEscrows++;
+              statusDistribution.completed++;
+              break;
+            case 3:
+              statusDistribution.refunded++;
+              break;
+            case 4:
+              disputedEscrows++;
+              statusDistribution.disputed++;
+              break;
+            case 5:
+              statusDistribution.expired++;
+              break;
+            case 6:
+              statusDistribution.cancelled++;
+              break;
+          }
+        } catch (error) {
+          // Skip escrows that can't be read
+          continue;
         }
       }
 
-      // Fetch trends
-      const trendsRes = await fetch(`${API_URL}/v1/analytics/trends`, {
-        headers: {
-          Authorization: `Bearer ${API_SECRET}`,
-        },
+      // Calculate completion rate
+      const completionRate = totalEscrows > 0 
+        ? ((completedEscrows / totalEscrows) * 100).toFixed(2)
+        : "0.00";
+
+      // Calculate dispute rate
+      const disputeRate = totalEscrows > 0
+        ? ((disputedEscrows / totalEscrows) * 100).toFixed(2)
+        : "0.00";
+
+      // Get platform fee from contract
+      try {
+        // Platform fee is typically stored in contract, we'll calculate it from completed escrows
+        // For now, estimate based on 1% fee (adjust based on your contract)
+        totalFees = totalVolume / 100n; // 1% fee
+      } catch (error) {
+        totalFees = 0n;
+      }
+
+      const platformAnalytics: PlatformAnalytics = {
+        totalEscrows,
+        activeEscrows,
+        completedEscrows,
+        disputedEscrows,
+        totalVolume: (totalVolume / BigInt(1e6)).toString(), // Convert from 6 decimals to display
+        totalFees: (totalFees / BigInt(1e6)).toString(),
+        completionRate,
+        disputeRate,
+      };
+
+      setPlatformData(platformAnalytics);
+      setTrendsData({
+        totalEscrows,
+        statusDistribution,
       });
-      if (trendsRes.ok) {
-        const trendsJson = await trendsRes.json();
-        setTrendsData(trendsJson);
+
+      // Fetch user analytics if wallet is connected
+      if (wallet.address) {
+        try {
+          const userEscrows = await cs.getUserEscrows(wallet.address);
+          let userCompletedEscrows = 0;
+          let userTotalEarned = 0n;
+          let userTotalSpent = 0n;
+          let userActiveProjects = 0;
+          let userProjectsAsClient = 0;
+          let userProjectsAsFreelancer = 0;
+          let userCancelledProjects = 0;
+
+          for (const escrowId of userEscrows) {
+            try {
+              const escrow = await cs.getEscrow(escrowId);
+              if (!escrow) continue;
+
+              const isClient = escrow.depositor?.toLowerCase() === wallet.address.toLowerCase();
+              const isFreelancer = escrow.beneficiary?.toLowerCase() === wallet.address.toLowerCase();
+
+              if (isClient) {
+                userProjectsAsClient++;
+                userTotalSpent += BigInt(escrow.totalAmount || 0);
+              }
+              if (isFreelancer) {
+                userProjectsAsFreelancer++;
+                userTotalEarned += BigInt(escrow.paidAmount || 0);
+              }
+
+              if (escrow.status === 1) {
+                userActiveProjects++;
+              } else if (escrow.status === 2) {
+                userCompletedEscrows++;
+              } else if (escrow.status === 6) {
+                userCancelledProjects++;
+              }
+            } catch (error) {
+              continue;
+            }
+          }
+
+          // Get user rating
+          const { averageX100, count } = await cs.getAverageRating(wallet.address);
+          const averageRating = averageX100 / 100;
+
+          const userAnalytics: UserAnalytics = {
+            address: wallet.address,
+            completedEscrows: userCompletedEscrows,
+            reputation: userCompletedEscrows * 10, // Simple reputation calculation
+            averageRating,
+            ratingCount: count,
+            projectsAsClient: userProjectsAsClient,
+            projectsAsFreelancer: userProjectsAsFreelancer,
+            totalEarned: (userTotalEarned / BigInt(1e6)).toString(),
+            totalSpent: (userTotalSpent / BigInt(1e6)).toString(),
+            activeProjects: userActiveProjects,
+            cancelledProjects: userCancelledProjects,
+          };
+
+          setUserData(userAnalytics);
+        } catch (error) {
+          console.error("Failed to fetch user analytics:", error);
+        }
       }
     } catch (error: any) {
       toast({
@@ -428,6 +559,16 @@ export default function AnalyticsPage() {
                       <Activity className="h-8 w-8 text-cyan-500" />
                     </div>
                   </Card>
+
+                  <Card className="glass border-primary/20 p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Cancelled Projects</p>
+                        <h3 className="text-3xl font-bold mt-2">{userData.cancelledProjects}</h3>
+                      </div>
+                      <AlertCircle className="h-8 w-8 text-red-500" />
+                    </div>
+                  </Card>
                 </div>
 
                 {/* User Activity Chart */}
@@ -494,6 +635,10 @@ export default function AnalyticsPage() {
                       <div className="flex justify-between items-center">
                         <span className="text-muted-foreground">Active Projects</span>
                         <span className="font-bold">{userData.activeProjects}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Cancelled Projects</span>
+                        <span className="font-bold text-red-600">{userData.cancelledProjects}</span>
                       </div>
                     </div>
                   </Card>

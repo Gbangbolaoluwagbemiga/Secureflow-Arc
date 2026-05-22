@@ -193,6 +193,19 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
       // Only show success and send notifications if transaction was confirmed
       toast({ title: "Dispute Resolved", description: "Resolution confirmed on-chain." });
       
+      // Dispatch event for dispute resolved
+      window.dispatchEvent(new CustomEvent("disputeResolved", {
+        detail: {
+          escrowId: selectedDispute.escrowId,
+          milestoneIndex: selectedDispute.milestoneIndex,
+          clientAddress: selectedDispute.clientAddress,
+          freelancerAddress: selectedDispute.freelancerAddress,
+          freelancerAmount: freelancerAmount.toString(),
+          clientAmount: clientAmount.toString(),
+          reason: resolutionReason,
+        }
+      }));
+      
       // Send notification to client
       addCrossWalletNotification(
         {

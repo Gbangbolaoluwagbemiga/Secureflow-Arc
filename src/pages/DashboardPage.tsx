@@ -10,7 +10,6 @@ import {
   createEscrowNotification,
   createMilestoneNotification,
 } from "@/contexts/notification-context";
-import { MilestoneNegotiation } from "@/components/milestone-negotiation";
 import type { Escrow } from "@/lib/web3/types";
 import {
   Wallet,
@@ -65,9 +64,13 @@ export default function DashboardPage() {
       case 2:
         return "completed";
       case 3:
-        return "disputed";
+        return "refunded";
       case 4:
-        return "active"; // Changed from "cancelled" to "active" for disputed escrows
+        return "disputed";
+      case 5:
+        return "expired";
+      case 6:
+        return "cancelled";
       default:
         return "pending";
     }
@@ -131,10 +134,16 @@ export default function DashboardPage() {
 
     window.addEventListener("escrowUpdated", handleEscrowUpdated);
     window.addEventListener("milestoneApproved", handleEscrowUpdated);
+    window.addEventListener("milestoneSubmitted", handleEscrowUpdated);
+    window.addEventListener("milestoneRejected", handleEscrowUpdated);
+    window.addEventListener("disputeResolved", handleEscrowUpdated);
 
     return () => {
       window.removeEventListener("escrowUpdated", handleEscrowUpdated);
       window.removeEventListener("milestoneApproved", handleEscrowUpdated);
+      window.removeEventListener("milestoneSubmitted", handleEscrowUpdated);
+      window.removeEventListener("milestoneRejected", handleEscrowUpdated);
+      window.removeEventListener("disputeResolved", handleEscrowUpdated);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet.address]);
@@ -279,14 +288,20 @@ export default function DashboardPage() {
                     | "resolved"
                     | "proposal_pending"
                   > = {
-                    0: "pending",
-                    1: "submitted",
-                    2: "approved",
-                    3: "rejected",      // Fixed: was "disputed"
-                    4: "disputed",      // Fixed: was "resolved"
+                    0: "pending",           // NotStarted
+                    1: "submitted",         // Submitted
+                    2: "approved",          // Approved (also used for resolved disputes)
+                    3: "rejected",          // Rejected
+                    4: "disputed",          // Disputed
                     5: "proposal_pending",  // ProposalPending
                   };
-                  const status = statusMap[statusNumber] || "pending";
+                  
+                  let status = statusMap[statusNumber] || "pending";
+                  
+                  // If milestone is approved AND has resolution amounts, it was a resolved dispute
+                  if (status === "approved" && m.resolutionFreelancerAmount && BigInt(m.resolutionFreelancerAmount) > 0n) {
+                    status = "resolved";
+                  }
 
 
                   // milestone timestamps are Unix seconds (from block.timestamp)
@@ -304,7 +319,8 @@ export default function DashboardPage() {
                     rejectionReason: m.rejectionReason || undefined,
                     resolvedAt,
                     resolvedBy: m.resolvedBy || undefined,
-                    resolutionAmount: undefined,
+                    resolutionAmount: m.resolutionFreelancerAmount?.toString() || undefined,
+                    resolutionClientAmount: m.resolutionClientAmount?.toString() || undefined,
                     proposedAmount: m.proposedAmount?.toString() || undefined,
                     proposedDescription: m.proposedDescription || undefined,
                   };

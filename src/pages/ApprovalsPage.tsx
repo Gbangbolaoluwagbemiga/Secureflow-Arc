@@ -254,6 +254,17 @@ export default function ApprovalsPage() {
         [selectedFreelancer.freelancerAddress]
       );
 
+      // Dispatch event for freelancer acceptance notification (real-time)
+      window.dispatchEvent(new CustomEvent("freelancerAccepted", {
+        detail: {
+          escrowId: selectedJobForApproval.id,
+          projectTitle: selectedJobForApproval.projectTitle || `Job #${selectedJobForApproval.id}`,
+          clientAddress: wallet.address,
+          freelancerAddress: selectedFreelancer.freelancerAddress,
+          jobTitle: selectedJobForApproval.projectTitle || `Job #${selectedJobForApproval.id}`,
+        }
+      }));
+
       // 2. Notify the CLIENT (confirming their approval action)
       addNotification(
         {

@@ -107,6 +107,8 @@ export function EscrowCard({
         return "bg-red-100 text-red-800";
       case "resolved":
         return "bg-purple-100 text-purple-800";
+      case "Dispute Resolved":
+        return "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -120,10 +122,17 @@ export function EscrowCard({
       milestone.status === "resolved"
   );
   
+  // Check if any milestone was resolved (dispute resolution)
+  const hasResolvedDispute = escrow.milestones.some(m => m.status === "resolved");
+  
   // Determine display status
   const getDisplayStatus = () => {
+    // If any milestone is disputed, show disputed
     if (escrow.milestones.some(m => m.status === "disputed")) return "disputed";
+    // If any milestone is rejected, show rejected
     if (escrow.milestones.some(m => m.status === "rejected")) return "rejected";
+    // If any milestone was resolved (dispute resolution), show "Dispute Resolved"
+    if (hasResolvedDispute) return "Dispute Resolved";
     return escrow.status;
   };
   
@@ -379,13 +388,14 @@ export function EscrowCard({
                         </div>
                       )}
                       
-                      {/* Milestone Negotiation Component */}
+                      {/* Milestone Negotiation Component - Shows proposal review UI for clients */}
                       <MilestoneNegotiation
                         escrowId={escrow.id}
                         milestoneIndex={idx}
                         milestone={milestone}
-                        isFreelancer={escrow.isFreelancer || false}
+                        isFreelancer={false}
                         isClient={escrow.isClient || false}
+                        totalBudget={escrow.totalAmount}
                         onUpdate={() => {
                           window.dispatchEvent(new CustomEvent("escrowUpdated"));
                         }}
@@ -517,8 +527,8 @@ export function EscrowCard({
               </div>
             )}
 
-            {/* Rating Section for Completed Escrows */}
-            {escrow.status === "completed" && escrow.isClient && (
+            {/* Rating Section for Completed Escrows - Hide for disputed/resolved projects */}
+            {escrow.status === "completed" && escrow.isClient && !hasResolvedDispute && (
               <div className="mt-4 pt-4 border-t">
                 {hasRating ? (
                   <div className="space-y-2">

@@ -1,26 +1,29 @@
 {
-  "name": "SecureFlow - Trustless Escrow on Stellar",
+  "name": "SecureFlow - Secure Escrow Platform",
   "short_name": "SecureFlow",
-  "description": "Trustless payments with transparent milestones powered by Stellar",
+  "description": "Decentralized freelancer marketplace with trustless escrow on Arc EVM",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#6366f1",
+  "background_color": "#ffffff",
+  "theme_color": "#3B82F6",
   "icons": [
     {
-      "src": "/secureflow-logo.svg",
+      "src": "/secureflow-favicon-v2.svg",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any"
     },
     {
-      "src": "/placeholder-logo.png",
-      "sizes": "192x192",
-      "type": "image/png"
+      "src": "/secureflow-logo-v2.svg",
+      "sizes": "256x256",
+      "type": "image/svg+xml",
+      "purpose": "any"
     },
     {
-      "src": "/placeholder-logo.png",
-      "sizes": "512x512",
-      "type": "image/png"
+      "src": "/secureflow-social-logo.svg",
+      "sizes": "1200x1200",
+      "type": "image/svg+xml",
+      "purpose": "any"
     }
   ]
 }

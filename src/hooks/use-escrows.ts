@@ -114,22 +114,66 @@ export function useCreateEscrow() {
         const { createPublicClient, http } = await import("viem");
         const { arcTestnet } = await import("@/providers/WalletProvider");
         const publicClient = createPublicClient({ chain: arcTestnet, transport: http() });
-        const allowance = await publicClient.readContract({
-          address: token,
-          abi: erc20Abi,
-          functionName: "allowance",
-          args: [params.depositor as `0x${string}`, escrowAddr],
-        }) as bigint;
-
-        if (allowance < deposit) {
-          toast({ title: "Approving token", description: "Please confirm the approval in your wallet." });
-          await writeContractAsync({
+        
+        try {
+          const allowance = await publicClient.readContract({
             address: token,
             abi: erc20Abi,
-            functionName: "approve",
-            args: [escrowAddr, deposit],
-          });
-          toast({ title: "Token approved", description: "Now creating escrow…" });
+            functionName: "allowance",
+            args: [params.depositor as `0x${string}`, escrowAddr],
+          }) as bigint;
+
+          if (allowance < deposit) {
+            // Show approval required message
+            toast({ 
+              title: "Token Approval Required", 
+              description: "Please approve the token transfer in your wallet. A popup will appear shortly." 
+            });
+            
+            // Small delay to ensure toast is visible before wallet popup
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Trigger approval transaction - this will show wallet popup
+            let approvalHash: string;
+            try {
+              approvalHash = await writeContractAsync({
+                address: token,
+                abi: erc20Abi,
+                functionName: "approve",
+                args: [escrowAddr, deposit],
+              });
+            } catch (walletError: any) {
+              const errorMsg = walletError?.message || "Wallet error";
+              if (errorMsg.includes("User rejected") || errorMsg.includes("user rejected")) {
+                throw new Error("You rejected the token approval. Please try again and approve the transaction.");
+              }
+              throw new Error(`Token approval failed: ${errorMsg}`);
+            }
+            
+            // Wait for approval to be mined
+            try {
+              const approvalReceipt = await publicClient.waitForTransactionReceipt({ 
+                hash: approvalHash as `0x${string}`,
+                timeout: 120_000,
+                pollingInterval: 1_000,
+              });
+              
+              if (approvalReceipt.status !== "success") {
+                throw new Error("Token approval transaction failed - please try again");
+              }
+              
+              toast({ 
+                title: "Token Approved Successfully", 
+                description: "Your tokens have been approved. Creating escrow..." 
+              });
+            } catch (receiptError: any) {
+              const errorMsg = receiptError?.message || "Failed to confirm approval";
+              throw new Error(`Approval confirmation failed: ${errorMsg}`);
+            }
+          }
+        } catch (approvalError: any) {
+          const errorMsg = approvalError?.message || "Token approval failed";
+          throw new Error(errorMsg);
         }
       }
 
@@ -159,7 +203,12 @@ export function useCreateEscrow() {
       
       toast({ title: "Transaction submitted", description: "Waiting for confirmation..." });
       
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      // Wait for transaction with a longer timeout (2 minutes) for testnet
+      const receipt = await publicClient.waitForTransactionReceipt({ 
+        hash,
+        timeout: 120_000, // 2 minutes timeout
+        pollingInterval: 1_000, // Poll every 1 second
+      });
       
       if (receipt.status === "reverted") {
         throw new Error("Transaction failed - please check your balance and try again");

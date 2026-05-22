@@ -1,0 +1,59 @@
+<svg width="1200" height="1200" viewBox="0 0 1200 1200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="social-primary" x1="0" y1="0" x2="1200" y2="1200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="social-accent" x1="0" y1="0" x2="1200" y2="1200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <filter id="social-shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="20" stdDeviation="40" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="1200" fill="white"/>
+
+  <!-- Gradient background circle -->
+  <circle cx="600" cy="600" r="550" fill="url(#social-primary)" opacity="0.05"/>
+
+  <!-- Main Shield -->
+  <g filter="url(#social-shadow)">
+    <!-- Shield body -->
+    <path d="M600 200L900 350V600C900 800 750 950 600 1050C450 950 300 800 300 600V350L600 200Z" 
+          fill="url(#social-primary)" stroke="url(#social-primary)" stroke-width="8"/>
+    
+    <!-- Inner shield highlight -->
+    <path d="M600 300L820 420V600C820 750 720 870 600 950C480 870 380 750 380 600V420L600 300Z" 
+          fill="white" opacity="0.12"/>
+  </g>
+
+  <!-- Flowing lines (representing secure transactions) -->
+  <g stroke="url(#social-accent)" stroke-width="20" stroke-linecap="round" fill="none" opacity="0.8">
+    <!-- Left flow -->
+    <path d="M480 580C450 620 430 680 450 740"/>
+    <!-- Center flow -->
+    <path d="M600 520C600 600 600 700 600 780"/>
+    <!-- Right flow -->
+    <path d="M720 580C750 620 770 680 750 740"/>
+  </g>
+
+  <!-- Checkmark (verification/completion) -->
+  <g stroke="url(#social-accent)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M480 750L580 850L800 620"/>
+  </g>
+
+  <!-- Lock icon (security) - subtle -->
+  <g opacity="0.5">
+    <rect x="520" y="420" width="160" height="140" rx="20" fill="none" stroke="white" stroke-width="12"/>
+    <path d="M560 420V300C560 200 600 140 600 140C600 140 640 200 640 300V420" fill="none" stroke="white" stroke-width="12" stroke-linecap="round"/>
+    <circle cx="600" cy="520" r="12" fill="white"/>
+  </g>
+
+  <!-- Text below -->
+  <text x="600" y="1100" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="80" font-weight="700" fill="#1F2937" text-anchor="middle" letter-spacing="-2">
+    SecureFlow
+  </text>
+</svg>

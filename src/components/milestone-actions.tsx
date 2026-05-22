@@ -297,6 +297,17 @@ export function MilestoneActions({
         }
 
         if (actionType === "dispute") {
+          // Dispatch event for dispute raised
+          window.dispatchEvent(new CustomEvent("disputeRaised", {
+            detail: {
+              escrowId: Number(escrowId),
+              milestoneIndex,
+              clientAddress: payerAddress,
+              freelancerAddress: beneficiaryAddress,
+              reason: disputeReason,
+            }
+          }));
+
           // Notify the other party about the dispute
           const otherParty = isPayer ? beneficiaryAddress : payerAddress;
           if (otherParty) {
@@ -497,56 +508,90 @@ export function MilestoneActions({
 
         {/* Resolved Status - Show resolved badge with winner info */}
         {milestone.status === "resolved" && (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-3">
             <div className="flex items-center justify-center gap-2 text-blue-600 py-2">
               <CheckCircle2 className="h-4 w-4" />
-              <span className="text-sm font-medium">Resolved</span>
+              <span className="text-sm font-medium">Dispute Resolved</span>
             </div>
-            {/* Determine winner based on resolution amount or escrow state */}
+            
+            {/* Resolution Details */}
             {(() => {
-              // If we have resolution amount, use it directly
-              if (milestone.resolutionAmount !== undefined) {
-                const resolutionAmount = Number(milestone.resolutionAmount);
-                return (
-                  <div className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-900/20 p-2 rounded border">
-                    {resolutionAmount > 0 ? (
-                      <span className="text-green-600 dark:text-green-400">
-                        <strong>Freelancer won:</strong>{" "}
-                        {formatEth(resolutionAmount)} awarded
+              const freelancerAmount = milestone.resolutionAmount ? Number(milestone.resolutionAmount) : 0;
+              const clientAmount = milestone.resolutionClientAmount ? Number(milestone.resolutionClientAmount) : 0;
+              const milestoneAmount = Number(milestone.amount);
+              
+              console.log(`[MilestoneActions] Resolved milestone display:`, {
+                escrowId,
+                milestoneIndex,
+                freelancerAmount,
+                clientAmount,
+                milestoneAmount,
+                resolutionAmount: milestone.resolutionAmount,
+                resolutionClientAmount: milestone.resolutionClientAmount,
+                amount: milestone.amount,
+                escrowReleasedAmount,
+                escrowTotalAmount,
+              });
+              
+              // Get the token address from the escrow (we need to pass this as a prop)
+              // For now, use address(0) which represents USDC on Arc Testnet
+              const tokenAddress = "0x0000000000000000000000000000000000000000";
+              
+              return (
+                <div className="space-y-2 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                    Admin Resolution Decision:
+                  </div>
+                  
+                  {/* Money Split */}
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between items-center p-2 bg-white dark:bg-blue-950 rounded border border-blue-100 dark:border-blue-800">
+                      <span className="text-muted-foreground">Freelancer receives:</span>
+                      <span className="font-semibold text-green-600 dark:text-green-400">
+                        {formatTokenAmount(freelancerAmount, tokenAddress)}
                       </span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center p-2 bg-white dark:bg-blue-950 rounded border border-blue-100 dark:border-blue-800">
+                      <span className="text-muted-foreground">Client receives:</span>
+                      <span className="font-semibold text-orange-600 dark:text-orange-400">
+                        {formatTokenAmount(clientAmount, tokenAddress)}
+                      </span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center p-2 bg-white dark:bg-blue-950 rounded border border-blue-100 dark:border-blue-800">
+                      <span className="text-muted-foreground">Total milestone:</span>
+                      <span className="font-semibold text-blue-600 dark:text-blue-400">
+                        {formatTokenAmount(milestoneAmount, tokenAddress)}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Resolution Summary */}
+                  <div className="pt-2 border-t border-blue-200 dark:border-blue-800">
+                    {freelancerAmount > 0 && clientAmount > 0 ? (
+                      <p className="text-xs text-blue-700 dark:text-blue-300">
+                        ✅ <strong>Split Decision:</strong> The admin awarded {formatTokenAmount(freelancerAmount, tokenAddress)} to the freelancer and {formatTokenAmount(clientAmount, tokenAddress)} back to the client.
+                      </p>
+                    ) : freelancerAmount > 0 ? (
+                      <p className="text-xs text-green-700 dark:text-green-300">
+                        ✅ <strong>Freelancer Won:</strong> The admin awarded the full {formatTokenAmount(freelancerAmount, tokenAddress)} to the freelancer.
+                      </p>
                     ) : (
-                      <span className="text-orange-600 dark:text-orange-400">
-                        <strong>Client won:</strong> Full refund issued
-                      </span>
+                      <p className="text-xs text-orange-700 dark:text-orange-300">
+                        ✅ <strong>Client Won:</strong> The admin refunded the full {formatTokenAmount(clientAmount, tokenAddress)} to the client.
+                      </p>
                     )}
                   </div>
-                );
-              }
-              // Otherwise, infer from escrow state
-              if (escrowReleasedAmount && escrowTotalAmount) {
-                const released = Number(escrowReleasedAmount);
-                const milestoneAmount = Number(milestone.amount);
-                // If released amount is close to milestone amount, freelancer likely won
-                // If escrow was refunded (released < milestone), client won
-                if (released >= milestoneAmount * 0.9) {
-                  return (
-                    <div className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-900/20 p-2 rounded border">
-                      <span className="text-green-600 dark:text-green-400">
-                        <strong>Freelancer won:</strong> Payment released
-                      </span>
+                  
+                  {/* Resolution Timestamp */}
+                  {milestone.resolvedAt && (
+                    <div className="text-xs text-muted-foreground pt-2 border-t border-blue-200 dark:border-blue-800">
+                      Resolved on {new Date(milestone.resolvedAt).toLocaleDateString()} at {new Date(milestone.resolvedAt).toLocaleTimeString()}
                     </div>
-                  );
-                } else {
-                  return (
-                    <div className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-900/20 p-2 rounded border">
-                      <span className="text-orange-600 dark:text-orange-400">
-                        <strong>Client won:</strong> Refund issued
-                      </span>
-                    </div>
-                  );
-                }
-              }
-              return null;
+                  )}
+                </div>
+              );
             })()}
           </div>
         )}

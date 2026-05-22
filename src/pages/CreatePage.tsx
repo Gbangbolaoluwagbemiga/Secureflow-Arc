@@ -212,26 +212,26 @@ export default function CreateEscrowPage() {
 
   const handleSubmit = async () => {
     if (!wallet.isConnected) {
-      toast({ title: "Wallet not connected", description: "Please connect your wallet", variant: "destructive" });
+      toast({ title: "Wallet Not Connected", description: "Please connect your wallet to create a job", variant: "destructive" });
       return;
     }
 
     const validationErrors = validateForm();
     if (validationErrors.length > 0) {
-      toast({ title: "Validation failed", description: validationErrors.join(", "), variant: "destructive" });
+      toast({ title: "Please Fix These Issues", description: validationErrors.join(", "), variant: "destructive" });
       return;
     }
 
     // Additional validation for amounts
     const totalBudgetNum = Number.parseFloat(formData.totalBudget || "0");
     if (totalBudgetNum <= 0) {
-      toast({ title: "Invalid amount", description: "Total budget must be greater than 0", variant: "destructive" });
+      toast({ title: "Invalid Amount", description: "Total budget must be greater than 0", variant: "destructive" });
       return;
     }
 
     const totalMilestones = formData.milestones.reduce((sum, m) => sum + Number.parseFloat(m.amount || "0"), 0);
     if (Math.abs(totalMilestones - totalBudgetNum) > 0.01) {
-      toast({ title: "Amount mismatch", description: "Milestone amounts must equal total budget", variant: "destructive" });
+      toast({ title: "Amount Mismatch", description: "Milestone amounts must equal total budget", variant: "destructive" });
       return;
     }
 
@@ -246,10 +246,8 @@ export default function CreateEscrowPage() {
 
       // Convert amounts to base units using the correct token decimals
       // Arc Testnet USDC is an ERC-20 token at 0x3600...0000, NOT native token
-      // Use the USDC token address from env, or default to native if not set
-      const tokenAddr = formData.useNativeToken 
-        ? (USDC_ADDRESS || "0x0000000000000000000000000000000000000000")
-        : (formData.token || USDC_ADDRESS || "0x0000000000000000000000000000000000000000");
+      // Always use USDC token address (it's an ERC-20, not native)
+      const tokenAddr = USDC_ADDRESS || "0x3600000000000000000000000000000000000000";
       
       const totalAmountWei = parseTokenAmount(formData.totalBudget, tokenAddr);
       const milestoneAmountsWei = formData.milestones.map((m) =>
@@ -262,14 +260,12 @@ export default function CreateEscrowPage() {
       }
 
       // Check USDC balance (wallet.balance shows USDC balance on Arc Testnet)
-      if (formData.useNativeToken || !formData.token) {
-        const walletBalance = Number.parseFloat(wallet.balance || "0");
-        const requiredBalance = Number.parseFloat(formData.totalBudget);
-        if (walletBalance < requiredBalance) {
-          throw new Error(
-            `Insufficient USDC balance. You have ${walletBalance.toFixed(2)} USDC but need ${formData.totalBudget} USDC (plus a small platform fee).`
-          );
-        }
+      const walletBalance = Number.parseFloat(wallet.balance || "0");
+      const requiredBalance = Number.parseFloat(formData.totalBudget);
+      if (walletBalance < requiredBalance) {
+        throw new Error(
+          `Insufficient USDC balance. You have ${walletBalance.toFixed(2)} USDC but need ${formData.totalBudget} USDC (plus a small platform fee).`
+        );
       }
 
       const milestones = milestoneAmountsWei.map(
@@ -279,10 +275,13 @@ export default function CreateEscrowPage() {
       if (!wallet.address) throw new Error("Wallet not connected");
 
       // For Arc Testnet USDC (ERC-20), pass the USDC token address
-      // NOT address(0) - that's for native ETH/currency
-      const tokenToPass = formData.useNativeToken 
-        ? (USDC_ADDRESS || "0x0000000000000000000000000000000000000000")
-        : (formData.token || USDC_ADDRESS || "0x0000000000000000000000000000000000000000");
+      // USDC is an ERC-20 token, not native ETH
+      const tokenToPass = USDC_ADDRESS || "0x3600000000000000000000000000000000000000";
+
+      toast({ 
+        title: "Creating Escrow", 
+        description: "Processing your job creation. This may take a minute. Please don't close this window." 
+      });
 
       const result = await createEscrow.mutateAsync({
         depositor: wallet.address,
@@ -298,10 +297,10 @@ export default function CreateEscrowPage() {
       });
 
       toast({ 
-        title: "Escrow created!", 
+        title: "Job Created Successfully", 
         description: result.escrowId !== "unknown"
-          ? `Escrow #${result.escrowId} created successfully.`
-          : "Your escrow was created successfully."
+          ? `Your job #${result.escrowId} has been created and is now live.`
+          : "Your job has been created successfully and is now live."
       });
 
       setTimeout(() => {

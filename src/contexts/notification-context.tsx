@@ -489,11 +489,113 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       }
     };
     
+    const handleFreelancerAccepted = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { escrowId, projectTitle, clientAddress, freelancerAddress } = customEvent.detail || {};
+      
+      if (freelancerAddress && freelancerAddress.toLowerCase() === wallet.address?.toLowerCase()) {
+        // Show notification immediately to the freelancer (they are the current user)
+        const notification = createFreelancerAcceptanceNotification(escrowId, {
+          projectTitle,
+          clientAddress,
+        });
+        
+        // Add to current user's notifications immediately
+        setNotifications((prev) => [
+          {
+            ...notification,
+            id: `notification_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            timestamp: new Date(),
+            read: false,
+          },
+          ...prev,
+        ]);
+        
+        // Also show a toast for immediate feedback
+        toast({
+          title: notification.title,
+          description: notification.message,
+        });
+        
+        // Send to backend for persistence
+        if (isApiConfigured()) {
+          postNotification({
+            wallet_address: freelancerAddress,
+            type: notification.type,
+            title: notification.title,
+            message: notification.message,
+            action_url: notification.actionUrl,
+            data: {
+              ...(notification.data ?? {}),
+              sourceAddress: clientAddress,
+            },
+          }).catch(() => {
+            // Fallback to localStorage if API fails
+            try {
+              const existing = JSON.parse(
+                localStorage.getItem(`notifications_${freelancerAddress}`) || "[]",
+              );
+              localStorage.setItem(
+                `notifications_${freelancerAddress}`,
+                JSON.stringify([
+                  {
+                    ...notification,
+                    id: `notification_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    timestamp: new Date(),
+                    read: false,
+                  },
+                  ...existing,
+                ]),
+              );
+            } catch {
+              // Silently fail
+            }
+          });
+        }
+      }
+    };
+
+    const handleDisputeRaised = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { escrowId, milestoneIndex, clientAddress, freelancerAddress } = customEvent.detail || {};
+      
+      // Notify both client and freelancer
+      addCrossWalletNotification(
+        createDisputeNotification("raised", escrowId, milestoneIndex, {
+          clientAddress,
+          freelancerAddress,
+        }),
+        clientAddress,
+        freelancerAddress
+      );
+    };
+
+    const handleDisputeResolved = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { escrowId, milestoneIndex, clientAddress, freelancerAddress, freelancerAmount, clientAmount } = customEvent.detail || {};
+      
+      // Notify both client and freelancer with resolution details
+      addCrossWalletNotification(
+        createDisputeNotification("resolved", escrowId, milestoneIndex, {
+          clientAddress,
+          freelancerAddress,
+          freelancerAmount,
+          clientAmount,
+          resolutionDetails: `Freelancer: ${freelancerAmount}, Client: ${clientAmount}`,
+        }),
+        clientAddress,
+        freelancerAddress
+      );
+    };
+    
     window.addEventListener("workStarted", handleWorkStarted as EventListener);
     window.addEventListener("jobApplicationSubmitted", handleJobApplicationSubmitted as EventListener);
     window.addEventListener("milestoneProposalSubmitted", handleMilestoneProposalSubmitted as EventListener);
     window.addEventListener("milestoneProposalRejected", handleMilestoneProposalRejected as EventListener);
     window.addEventListener("milestoneProposalApproved", handleMilestoneProposalApproved as EventListener);
+    window.addEventListener("freelancerAccepted", handleFreelancerAccepted as EventListener);
+    window.addEventListener("disputeRaised", handleDisputeRaised as EventListener);
+    window.addEventListener("disputeResolved", handleDisputeResolved as EventListener);
     
     return () => {
       window.clearInterval(t);
@@ -502,6 +604,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("milestoneProposalSubmitted", handleMilestoneProposalSubmitted as EventListener);
       window.removeEventListener("milestoneProposalRejected", handleMilestoneProposalRejected as EventListener);
       window.removeEventListener("milestoneProposalApproved", handleMilestoneProposalApproved as EventListener);
+      window.removeEventListener("freelancerAccepted", handleFreelancerAccepted as EventListener);
+      window.removeEventListener("disputeRaised", handleDisputeRaised as EventListener);
+      window.removeEventListener("disputeResolved", handleDisputeResolved as EventListener);
     };
   }, [wallet.address, syncRemoteNotifications, addNotification]);
 
@@ -841,6 +946,62 @@ export const createRatingNotification = (
           escrowId,
           ...additionalData,
         },
+      };
+  }
+};
+
+export const createFreelancerAcceptanceNotification = (
+  escrowId: string,
+  additionalData?: Record<string, any>,
+): Omit<Notification, "id" | "timestamp" | "read"> => {
+  return {
+    type: "application",
+    title: "🎉 You've Been Accepted!",
+    message: `Congratulations! You've been accepted for ${additionalData?.projectTitle || `Project #${escrowId}`}. Work is ready to start!`,
+    actionUrl: `/freelancer?escrow=${escrowId}`,
+    data: {
+      escrowId,
+      ...additionalData,
+    },
+  };
+};
+
+export const createDisputeNotification = (
+  action: "raised" | "resolved",
+  escrowId: string,
+  milestoneIndex: number,
+  additionalData?: Record<string, any>,
+): Omit<Notification, "id" | "timestamp" | "read"> => {
+  const baseData = {
+    escrowId,
+    milestoneIndex,
+    ...additionalData,
+  };
+
+  switch (action) {
+    case "raised":
+      return {
+        type: "dispute",
+        title: "⚠️ Dispute Raised",
+        message: `A dispute has been raised for Milestone ${milestoneIndex + 1}. Admin review is in progress.`,
+        actionUrl: `/dashboard?escrow=${escrowId}`,
+        data: baseData,
+      };
+    case "resolved":
+      return {
+        type: "dispute",
+        title: "✅ Dispute Resolved",
+        message: `The dispute for Milestone ${milestoneIndex + 1} has been resolved by admin. Check the details for the decision.`,
+        actionUrl: `/dashboard?escrow=${escrowId}`,
+        data: baseData,
+      };
+    default:
+      return {
+        type: "dispute",
+        title: "Dispute Update",
+        message: `Dispute status updated for Milestone ${milestoneIndex + 1}`,
+        actionUrl: `/dashboard?escrow=${escrowId}`,
+        data: baseData,
       };
   }
 };

@@ -69,6 +69,8 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
         address resolvedBy;
         uint256 proposedAmount;
         string proposedDescription;
+        uint256 resolutionFreelancerAmount; // Amount awarded to freelancer in dispute resolution
+        uint256 resolutionClientAmount;     // Amount refunded to client in dispute resolution
     }
 
     struct Escrow {
@@ -269,7 +271,9 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
                 resolvedAt: 0,
                 resolvedBy: address(0),
                 proposedAmount: 0,
-                proposedDescription: ""
+                proposedDescription: "",
+                resolutionFreelancerAmount: 0,
+                resolutionClientAmount: 0
             }));
         }
 
@@ -434,6 +438,8 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
         m.status = MilestoneStatus.Approved;
         m.resolvedAt = block.timestamp;
         m.resolvedBy = msg.sender;
+        m.resolutionFreelancerAmount = freelancerAmount;
+        m.resolutionClientAmount = clientAmount;
 
         esc.paidAmount += freelancerAmount;
         esc.totalAmount -= clientAmount;

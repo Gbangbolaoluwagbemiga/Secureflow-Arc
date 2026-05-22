@@ -70,6 +70,7 @@ SecureFlow is a blockchain-powered freelancer marketplace that enables clients a
 - [Node.js](https://nodejs.org/) 20+
 - [Foundry](https://getfoundry.sh/) (for contract deployment)
 - [MetaMask](https://metamask.io/) or any EVM wallet
+- Arc Testnet USDC tokens (for testing)
 
 ### 1. Clone & Install
 
@@ -85,20 +86,34 @@ cd backend && npm install && cd ..
 ```bash
 # Frontend
 cp .env.example .env
-# Fill in VITE_SECUREFLOW_CONTRACT_ADDRESS, VITE_API_URL, etc.
+# Required variables:
+# - VITE_SECUREFLOW_CONTRACT_ADDRESS: Deployed contract address
+# - VITE_USDC_TOKEN_CONTRACT: USDC token address (0x3600000000000000000000000000000000000000)
+# - VITE_API_URL: Backend API URL (http://localhost:3000 for dev)
+# - VITE_SUPABASE_URL: Supabase project URL
+# - VITE_SUPABASE_ANON_KEY: Supabase anonymous key
 
 # Backend
 cp backend/.env.example backend/.env
-# Fill in SUPABASE_*, GROQ_API_KEY, RELAYER_PRIVATE_KEY, etc.
+# Required variables:
+# - SUPABASE_URL: Supabase project URL
+# - SUPABASE_SERVICE_KEY: Supabase service role key
+# - GROQ_API_KEY: Groq API key for AI features
+# - RELAYER_PRIVATE_KEY: Private key for gasless transactions
+# - RELAYER_ADDRESS: Address of the relayer
 ```
 
 ### 3. Deploy the Contract
 
 ```bash
 # Set PRIVATE_KEY and ARC_RPC_URL in .env (or export them)
+export PRIVATE_KEY=your_private_key
+export ARC_RPC_URL=https://rpc.drpc.testnet.arc.network
+
 chmod +x deploy.sh
 ./deploy.sh
-# Copy the deployed address to VITE_SECUREFLOW_CONTRACT_ADDRESS
+
+# Copy the deployed address to VITE_SECUREFLOW_CONTRACT_ADDRESS in .env
 ```
 
 ### 4. Run the App
@@ -113,6 +128,12 @@ cd backend && npm run dev
 
 Open `http://localhost:5173` and connect MetaMask to Arc Testnet (chain ID 5042002).
 
+### 5. Get Test USDC
+
+1. Visit the [Arc Testnet Faucet](https://faucet.testnet.arc.network)
+2. Request test ETH and USDC tokens
+3. Tokens will arrive in your wallet within a few minutes
+
 ### Arc Testnet Network Details
 
 | Field | Value |
@@ -126,7 +147,198 @@ Open `http://localhost:5173` and connect MetaMask to Arc Testnet (chain ID 50420
 
 ---
 
-## Contract Architecture
+## Token Approval Flow
+
+When creating an escrow with USDC tokens, SecureFlow automatically handles the token approval process:
+
+### How It Works
+
+1. **User initiates escrow creation** with USDC amount
+2. **App checks current allowance** on the USDC contract
+3. **If allowance is insufficient**:
+   - Toast notification: "Token Approval Required"
+   - Wallet popup appears for user to approve
+   - User signs the approval transaction
+   - App waits for approval to be mined
+4. **After approval is confirmed**:
+   - Toast notification: "Token Approved Successfully"
+   - Escrow creation proceeds automatically
+5. **Escrow is created** and funds are locked in the contract
+
+### User Experience
+
+- **First time**: User sees approval popup, then escrow creation
+- **Subsequent times**: If allowance is sufficient, no approval needed
+- **Error handling**: Clear messages if user rejects or approval fails
+
+### Technical Details
+
+- USDC on Arc Testnet: `0x3600000000000000000000000000000000000000` (6 decimals)
+- Approval amount: `totalAmount + platformFee` (in wei)
+- Timeout: 2 minutes for approval confirmation
+- Polling interval: 1 second for faster confirmation
+
+---
+
+## Production Deployment
+
+### Pre-Deployment Checklist
+
+- [ ] Contract deployed and verified on Arc Mainnet
+- [ ] All environment variables configured
+- [ ] Backend API deployed and running
+- [ ] Supabase database migrated
+- [ ] USDC token whitelisted on contract
+- [ ] Admin address set on contract
+- [ ] Platform fee configured
+- [ ] Relayer configured for gasless transactions
+
+### Deployment Steps
+
+1. **Deploy Smart Contract**
+   ```bash
+   export PRIVATE_KEY=your_mainnet_key
+   export ARC_RPC_URL=https://rpc.arc.network
+   ./deploy.sh
+   ```
+
+2. **Verify Contract on Block Explorer**
+   ```bash
+   # Use Arc Scan to verify the contract
+   # https://arcscan.app
+   ```
+
+3. **Deploy Backend**
+   ```bash
+   # Deploy to your hosting (Vercel, Railway, etc.)
+   cd backend
+   npm run build
+   # Follow your hosting provider's deployment guide
+   ```
+
+4. **Deploy Frontend**
+   ```bash
+   # Build for production
+   npm run build
+   
+   # Deploy to Vercel, Netlify, or your hosting
+   # Update VITE_API_URL to production backend URL
+   ```
+
+5. **Configure DNS & SSL**
+   - Point domain to frontend hosting
+   - Enable SSL/TLS certificates
+   - Update CORS settings in backend
+
+### Monitoring
+
+- Monitor contract events on Arc Scan
+- Track API errors in backend logs
+- Monitor Supabase database performance
+- Set up alerts for failed transactions
+
+---
+
+## API Documentation
+
+### Backend Routes
+
+#### Gasless Transactions
+- `POST /api/gasless/apply` — Submit job application without gas
+- `POST /api/gasless/relay` — Relay meta-transaction
+
+#### AI Features
+- `POST /api/ai/generate-milestones` — Generate milestone suggestions
+- `POST /api/ai/draft-cover-letter` — Draft cover letter
+
+#### Messaging
+- `GET /api/messages/:escrowId` — Get conversation
+- `POST /api/messages` — Send message
+
+#### Notifications
+- `GET /api/notifications/:userId` — Get user notifications
+- `POST /api/notifications/subscribe` — Subscribe to push notifications
+
+#### Analytics
+- `GET /api/analytics/platform` — Platform statistics
+- `GET /api/analytics/user/:userId` — User statistics
+
+---
+
+## Troubleshooting
+
+### Token Approval Not Showing
+
+**Problem**: Wallet popup doesn't appear when creating escrow
+
+**Solutions**:
+1. Check that USDC token address is correct in `.env`
+2. Ensure wallet is connected to Arc Testnet
+3. Try refreshing the page and reconnecting wallet
+4. Check browser console for errors
+
+### Escrow Creation Timeout
+
+**Problem**: "Transaction failed - timeout" error
+
+**Solutions**:
+1. Check Arc Testnet RPC status
+2. Ensure sufficient gas (ETH) in wallet
+3. Wait a few minutes and retry
+4. Check transaction on Arc Scan
+
+### Insufficient Balance
+
+**Problem**: "Insufficient USDC balance" error
+
+**Solutions**:
+1. Request test USDC from faucet
+2. Check wallet balance on Arc Scan
+3. Ensure you have enough for escrow + platform fee
+4. Verify correct network (Arc Testnet, chain ID 5042002)
+
+### Backend API Errors
+
+**Problem**: "Failed to connect to API" error
+
+**Solutions**:
+1. Verify backend is running (`npm run dev` in backend folder)
+2. Check `VITE_API_URL` in frontend `.env`
+3. Verify CORS settings in backend
+4. Check backend logs for errors
+
+---
+
+## Security Considerations
+
+### Smart Contract
+- Audited by [security firm] (if applicable)
+- Uses OpenZeppelin contracts
+- Multi-sig dispute resolution
+- Emergency pause functionality
+
+### Frontend
+- No private keys stored in browser
+- All transactions signed by user wallet
+- HTTPS only in production
+- Content Security Policy headers
+
+### Backend
+- Environment variables for secrets
+- Rate limiting on API endpoints
+- Input validation on all routes
+- Supabase Row Level Security (RLS)
+
+---
+
+## Support & Community
+
+- **Issues**: [GitHub Issues](https://github.com/your-repo/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-repo/discussions)
+- **Discord**: [Join our community](https://discord.gg/your-invite)
+- **Email**: support@secureflow.app
+
+---
 
 ### `SecureFlow.sol`
 

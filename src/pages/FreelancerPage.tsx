@@ -250,10 +250,16 @@ export default function FreelancerPage() {
 
     window.addEventListener("escrowUpdated", handleEscrowUpdated);
     window.addEventListener("milestoneApproved", handleEscrowUpdated);
+    window.addEventListener("milestoneSubmitted", handleEscrowUpdated);
+    window.addEventListener("milestoneRejected", handleEscrowUpdated);
+    window.addEventListener("disputeResolved", handleEscrowUpdated);
 
     return () => {
       window.removeEventListener("escrowUpdated", handleEscrowUpdated);
       window.removeEventListener("milestoneApproved", handleEscrowUpdated);
+      window.removeEventListener("milestoneSubmitted", handleEscrowUpdated);
+      window.removeEventListener("milestoneRejected", handleEscrowUpdated);
+      window.removeEventListener("disputeResolved", handleEscrowUpdated);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet.address]);
@@ -330,6 +336,8 @@ export default function FreelancerPage() {
 
             // Fetch milestones for this escrow
             const milestonesData = await contractService.getMilestones(i);
+            console.log(`[FreelancerPage] Raw milestones data from contract for Escrow ${i}:`, milestonesData);
+            
             const allMilestones = milestonesData.map(
               (m: any, index: number) => {
                 // Convert milestone status to number first (might be string enum or number)
@@ -400,16 +408,35 @@ export default function FreelancerPage() {
                   | "approved"
                   | "rejected"
                   | "disputed"
+                  | "resolved"
                   | "proposal_pending"
                 > = {
                   0: "pending",           // NotStarted
                   1: "submitted",         // Submitted
-                  2: "approved",          // Approved
+                  2: "approved",          // Approved (also used for resolved disputes)
                   3: "rejected",          // Rejected
                   4: "disputed",          // Disputed
                   5: "proposal_pending",  // ProposalPending
                 };
-                const status = statusMap[statusNumber] || "pending";
+                
+                let status = statusMap[statusNumber] || "pending";
+                
+                // Debug logging for milestone data
+                console.log(`[FreelancerPage] Escrow ${i}, Milestone ${index}:`, {
+                  rawStatus: m.status,
+                  statusNumber,
+                  mappedStatus: status,
+                  amount: m.amount?.toString(),
+                  resolutionFreelancerAmount: m.resolutionFreelancerAmount?.toString(),
+                  resolutionClientAmount: m.resolutionClientAmount?.toString(),
+                  description: m.description,
+                });
+                
+                // If milestone is approved AND has resolution amounts, it was a resolved dispute
+                if (status === "approved" && m.resolutionFreelancerAmount && BigInt(m.resolutionFreelancerAmount) > 0n) {
+                  console.log(`[FreelancerPage] Detected resolved dispute for Escrow ${i}, Milestone ${index}`);
+                  status = "resolved";
+                }
 
 
                 // milestone timestamps are Unix seconds from block.timestamp
@@ -428,7 +455,7 @@ export default function FreelancerPage() {
                   );
                 }
 
-                return {
+                const milestone = {
                   description: m.description || "",
                   amount: m.amount?.toString() || "0",
                   status,
@@ -436,9 +463,15 @@ export default function FreelancerPage() {
                   approvedAt,
                   disputeReason: m.disputeReason || undefined,
                   rejectionReason: m.rejectionReason || undefined,
+                  resolutionAmount: m.resolutionFreelancerAmount?.toString() || undefined,
+                  resolutionClientAmount: m.resolutionClientAmount?.toString() || undefined,
                   proposedAmount: m.proposedAmount?.toString() || undefined,
                   proposedDescription: m.proposedDescription || undefined,
                 };
+                
+                console.log(`[FreelancerPage] Final milestone object for Escrow ${i}, Milestone ${index}:`, milestone);
+                
+                return milestone;
               }
             );
 
@@ -1140,7 +1173,7 @@ export default function FreelancerPage() {
 
   const getStatusFromNumber = (
     status: number
-  ): "pending" | "active" | "completed" | "disputed" => {
+  ): "pending" | "active" | "completed" | "disputed" | "cancelled" | "refunded" | "expired" => {
     switch (status) {
       case 0:
         return "pending";
@@ -1149,9 +1182,13 @@ export default function FreelancerPage() {
       case 2:
         return "completed";
       case 3:
-        return "disputed";
+        return "refunded";
       case 4:
-        return "active"; // Map cancelled to active
+        return "disputed";
+      case 5:
+        return "expired";
+      case 6:
+        return "cancelled";
       default:
         return "pending";
     }
@@ -1190,6 +1227,10 @@ export default function FreelancerPage() {
         return "bg-blue-100 text-blue-800";
       case "approved":
         return "bg-green-100 text-green-800";
+      case "resolved":
+        return "bg-purple-100 text-purple-800";
+      case "disputed":
+        return "bg-red-100 text-red-800";
       case "terminated":
         return "bg-gray-100 text-gray-800";
       default:
@@ -1854,6 +1895,7 @@ export default function FreelancerPage() {
                                           milestone={milestone}
                                           isFreelancer={true}
                                           isClient={false}
+                                          totalBudget={escrow.totalAmount}
                                           onUpdate={() => fetchFreelancerEscrows()}
                                         />
                                       </div>

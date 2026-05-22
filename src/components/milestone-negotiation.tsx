@@ -30,6 +30,7 @@ interface MilestoneNegotiationProps {
   };
   isFreelancer: boolean;
   isClient: boolean;
+  totalBudget?: string; // Total escrow budget in wei
   onUpdate?: () => void;
 }
 
@@ -39,6 +40,7 @@ export function MilestoneNegotiation({
   milestone,
   isFreelancer,
   isClient,
+  totalBudget,
   onUpdate,
 }: MilestoneNegotiationProps) {
   const { writeContractAsync } = useWriteContract();
@@ -55,10 +57,25 @@ export function MilestoneNegotiation({
     if (!proposedAmount || parseFloat(proposedAmount) <= 0) {
       toast({
         title: "Invalid Amount",
-        description: "Please enter a valid amount",
+        description: "Please enter a valid amount greater than 0",
         variant: "destructive",
       });
       return;
+    }
+
+    // Validate that proposed amount doesn't exceed total budget
+    if (totalBudget) {
+      const totalBudgetUSDC = parseFloat(totalBudget) / 1e6; // Convert from 6 decimals
+      const proposedAmountUSDC = parseFloat(proposedAmount);
+      
+      if (proposedAmountUSDC > totalBudgetUSDC) {
+        toast({
+          title: "Amount Too High",
+          description: `Proposed amount (${proposedAmountUSDC.toFixed(6)} USDC) cannot exceed the total project budget (${totalBudgetUSDC.toFixed(6)} USDC)`,
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -86,6 +103,15 @@ export function MilestoneNegotiation({
         title: "Proposal Submitted",
         description: "The client will review your proposed changes",
       });
+
+      // Dispatch escrowUpdated event for auto-refresh
+      window.dispatchEvent(new CustomEvent("escrowUpdated", {
+        detail: {
+          escrowId: Number(escrowId),
+          milestoneIndex,
+          sourceAddress: wallet.address,
+        }
+      }));
 
       // Dispatch event to notify client
       window.dispatchEvent(new CustomEvent("milestoneProposalSubmitted", {
@@ -172,6 +198,15 @@ export function MilestoneNegotiation({
         description: `Milestone updated. Freelancer will receive ${proposedAmount.toFixed(6)} USDC`,
       });
 
+      // Dispatch escrowUpdated event for auto-refresh
+      window.dispatchEvent(new CustomEvent("escrowUpdated", {
+        detail: {
+          escrowId: Number(escrowId),
+          milestoneIndex,
+          sourceAddress: wallet.address,
+        }
+      }));
+
       // Get escrow details to notify freelancer
       try {
         const escrow = await cs.getEscrow(Number(escrowId));
@@ -237,6 +272,15 @@ export function MilestoneNegotiation({
         title: "Proposal Rejected",
         description: "The freelancer can submit a new proposal",
       });
+
+      // Dispatch escrowUpdated event for auto-refresh
+      window.dispatchEvent(new CustomEvent("escrowUpdated", {
+        detail: {
+          escrowId: Number(escrowId),
+          milestoneIndex,
+          sourceAddress: wallet.address,
+        }
+      }));
 
       // Get escrow details to notify freelancer
       try {

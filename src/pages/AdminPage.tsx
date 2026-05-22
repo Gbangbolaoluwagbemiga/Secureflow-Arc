@@ -8,7 +8,7 @@ import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { contractService } from "@/lib/web3/contract-service";
 import { useWriteContract } from "wagmi";
-import { Shield, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { Shield, CheckCircle2, AlertCircle, Loader2, Coins, Lock } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ArbiterManagement } from "@/components/admin/arbiter-management";
 
@@ -71,7 +71,7 @@ export default function AdminPage() {
   const handleWhitelistToken = async () => {
     if (!tokenAddress || !/^0x[a-fA-F0-9]{40}$/.test(tokenAddress)) {
       toast({
-        title: "Invalid address",
+        title: "Invalid Address",
         description: "Please enter a valid EVM address (0x...)",
         variant: "destructive",
       });
@@ -86,15 +86,15 @@ export default function AdminPage() {
       );
 
       toast({
-        title: "Token whitelisted!",
-        description: `Transaction hash: ${hash.slice(0, 10)}...`,
+        title: "Token Whitelisted Successfully",
+        description: `Token has been added to the whitelist. Transaction: ${hash.slice(0, 10)}...`,
       });
 
       setTokenAddress("");
     } catch (error: any) {
       toast({
-        title: "Failed to whitelist token",
-        description: error?.message || "Something went wrong",
+        title: "Failed to Whitelist Token",
+        description: error?.message || "Something went wrong. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -105,7 +105,7 @@ export default function AdminPage() {
   const handleQuickWhitelistUSDC = async () => {
     if (!USDC_ADDRESS) {
       toast({
-        title: "USDC not configured",
+        title: "USDC Not Configured",
         description: "Set VITE_USDC_TOKEN_CONTRACT in your .env file",
         variant: "destructive",
       });
@@ -120,8 +120,8 @@ export default function AdminPage() {
       );
 
       toast({
-        title: "USDC whitelisted!",
-        description: `Users can now create escrows with USDC. Tx: ${hash.slice(0, 10)}...`,
+        title: "USDC Whitelisted Successfully",
+        description: `Users can now create escrows with USDC. Transaction: ${hash.slice(0, 10)}...`,
       });
     } catch (error: any) {
       const message = error?.message || "Something went wrong";
@@ -129,12 +129,12 @@ export default function AdminPage() {
       // Check if already whitelisted
       if (message.includes("already whitelisted") || message.includes("AlreadyWhitelisted")) {
         toast({
-          title: "USDC already whitelisted",
+          title: "USDC Already Whitelisted",
           description: "This token is already available for escrows",
         });
       } else {
         toast({
-          title: "Failed to whitelist USDC",
+          title: "Failed to Whitelist USDC",
           description: message,
           variant: "destructive",
         });
@@ -239,7 +239,7 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen py-12 gradient-mesh">
-      <div className="container mx-auto px-4 max-w-4xl space-y-6">
+      <div className="container mx-auto px-4 max-w-6xl space-y-6">
         <div>
           <h1 className="text-4xl font-bold mb-2">Admin Panel</h1>
           <p className="text-muted-foreground">
@@ -255,23 +255,70 @@ export default function AdminPage() {
           </AlertDescription>
         </Alert>
 
-        {/* Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Common administrative tasks</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-4 border rounded-lg">
-              <div>
-                <h3 className="font-semibold">Whitelist USDC Token</h3>
-                <p className="text-sm text-muted-foreground">
-                  Enable USDC ({USDC_ADDRESS.slice(0, 10)}...) for escrow payments
-                </p>
-              </div>
+        {/* Grid Layout for Admin Controls */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Quick Actions Card */}
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Coins className="h-5 w-5" />
+                Quick Actions
+              </CardTitle>
+              <CardDescription>Common administrative tasks</CardDescription>
+            </CardHeader>
+            <CardContent>
               <Button
                 onClick={handleQuickWhitelistUSDC}
                 disabled={isWhitelisting || !USDC_ADDRESS}
+                className="w-full bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+                size="lg"
+              >
+                {isWhitelisting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Whitelisting USDC...
+                  </>
+                ) : (
+                  <>
+                    <Lock className="mr-2 h-4 w-4" />
+                    Whitelist USDC Token
+                  </>
+                )}
+              </Button>
+              <p className="text-xs text-muted-foreground mt-3 text-center">
+                Enable USDC ({USDC_ADDRESS.slice(0, 10)}...) for escrow payments
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Token Management Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Coins className="h-5 w-5" />
+                Add Custom Token
+              </CardTitle>
+              <CardDescription>Whitelist ERC-20 tokens</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="tokenAddress">Token Contract Address</Label>
+                <Input
+                  id="tokenAddress"
+                  placeholder="0x..."
+                  value={tokenAddress}
+                  onChange={(e) => setTokenAddress(e.target.value)}
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Enter the ERC-20 token contract address
+                </p>
+              </div>
+
+              <Button
+                onClick={handleWhitelistToken}
+                disabled={isWhitelisting || !tokenAddress}
+                className="w-full"
               >
                 {isWhitelisting ? (
                   <>
@@ -279,62 +326,48 @@ export default function AdminPage() {
                     Whitelisting...
                   </>
                 ) : (
-                  "Whitelist USDC"
+                  "Whitelist Token"
                 )}
               </Button>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* Token Management */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Token Management</CardTitle>
-            <CardDescription>
-              Whitelist ERC-20 tokens for use in escrow payments
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="tokenAddress">Token Contract Address</Label>
-              <Input
-                id="tokenAddress"
-                placeholder="0x..."
-                value={tokenAddress}
-                onChange={(e) => setTokenAddress(e.target.value)}
-                className="font-mono"
-              />
-              <p className="text-xs text-muted-foreground">
-                Enter the ERC-20 token contract address to whitelist
-              </p>
-            </div>
-
-            <Button
-              onClick={handleWhitelistToken}
-              disabled={isWhitelisting || !tokenAddress}
-              className="w-full"
-            >
-              {isWhitelisting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Whitelisting Token...
-                </>
-              ) : (
-                "Whitelist Token"
-              )}
-            </Button>
-          </CardContent>
-        </Card>
+          {/* Whitelisted Tokens Display Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                Whitelisted Tokens
+              </CardTitle>
+              <CardDescription>Active tokens in the system</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                  <p className="text-sm font-semibold text-green-900 dark:text-green-100">
+                    1 Token Whitelisted
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs font-mono bg-muted p-2 rounded break-all">
+                    <span className="text-muted-foreground">USDC: </span>
+                    {USDC_ADDRESS}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Arbiter Management */}
         <ArbiterManagement onArbiterAdded={() => {
           toast({
-            title: "Arbiter authorized",
+            title: "Arbiter Authorized",
             description: "The arbiter has been successfully authorized",
           });
         }} onArbiterRemoved={() => {
           toast({
-            title: "Arbiter removed",
+            title: "Arbiter Removed",
             description: "The arbiter has been successfully removed",
           });
         }} />
@@ -364,25 +397,31 @@ export default function AdminPage() {
           </CardContent>
         </Card>
 
-        {/* Information */}
+        {/* Information Card */}
         <Card>
           <CardHeader>
-            <CardTitle>Information</CardTitle>
+            <CardTitle>Contract Information</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Contract Address:</span>
-              <span className="font-mono">
-                {import.meta.env.VITE_SECUREFLOW_CONTRACT_ADDRESS}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Your Address:</span>
-              <span className="font-mono">{wallet.address}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Network:</span>
-              <span>Arc Testnet</span>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-muted/50 p-3 rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">Contract Address</p>
+                <p className="text-xs font-mono break-all">
+                  {import.meta.env.VITE_SECUREFLOW_CONTRACT_ADDRESS}
+                </p>
+              </div>
+              <div className="bg-muted/50 p-3 rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">Your Address</p>
+                <p className="text-xs font-mono break-all">{wallet.address}</p>
+              </div>
+              <div className="bg-muted/50 p-3 rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">Network</p>
+                <p className="text-xs font-semibold">Arc Testnet (Chain ID: 5042002)</p>
+              </div>
+              <div className="bg-muted/50 p-3 rounded-lg">
+                <p className="text-xs text-muted-foreground mb-1">USDC Token</p>
+                <p className="text-xs font-mono break-all">{USDC_ADDRESS}</p>
+              </div>
             </div>
           </CardContent>
         </Card>
