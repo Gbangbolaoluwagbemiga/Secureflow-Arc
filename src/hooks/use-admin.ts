@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useWriteContract } from "wagmi";
 import { CONTRACTS } from "@/lib/web3/config";
-import SecureFlowABI from "../../contracts/solidity/out/SecureFlow.sol/SecureFlow.json";
+import SecureFlowABI from "@/lib/web3/SecureFlowABI.json";
 import { toast } from "@/hooks/use-toast";
 import { useWeb3 } from "@/contexts/web3-context";
 
