@@ -572,7 +572,34 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
     const handleDisputeResolved = (event: Event) => {
       const customEvent = event as CustomEvent;
-      const { escrowId, milestoneIndex, clientAddress, freelancerAddress, freelancerAmount, clientAmount } = customEvent.detail || {};
+      const { escrowId, milestoneIndex, clientAddress, freelancerAddress, freelancerAmount, clientAmount, reason } = customEvent.detail || {};
+      
+      console.log('[NotificationContext] Dispute resolved event received:', {
+        escrowId,
+        milestoneIndex,
+        reason,
+        hasReason: !!reason,
+      });
+      
+      // Store resolution reason in localStorage for display
+      if (reason && escrowId && milestoneIndex !== undefined) {
+        const key = `resolution_${escrowId}_${milestoneIndex}`;
+        console.log('[NotificationContext] Storing resolution reason in localStorage:', {
+          key,
+          reason,
+        });
+        localStorage.setItem(key, reason);
+        
+        // Verify it was stored
+        const stored = localStorage.getItem(key);
+        console.log('[NotificationContext] Verification - stored value:', stored);
+      } else {
+        console.log('[NotificationContext] NOT storing resolution reason - missing data:', {
+          hasReason: !!reason,
+          hasEscrowId: !!escrowId,
+          hasMilestoneIndex: milestoneIndex !== undefined,
+        });
+      }
       
       // Notify both client and freelancer with resolution details
       addCrossWalletNotification(
@@ -582,6 +609,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
           freelancerAmount,
           clientAmount,
           resolutionDetails: `Freelancer: ${freelancerAmount}, Client: ${clientAmount}`,
+          reason,
         }),
         clientAddress,
         freelancerAddress

@@ -321,6 +321,7 @@ export default function DashboardPage() {
                     resolvedBy: m.resolvedBy || undefined,
                     resolutionAmount: m.resolutionFreelancerAmount?.toString() || undefined,
                     resolutionClientAmount: m.resolutionClientAmount?.toString() || undefined,
+                    resolutionReason: m.resolutionReason || undefined,
                     proposedAmount: m.proposedAmount?.toString() || undefined,
                     proposedDescription: m.proposedDescription || undefined,
                   };

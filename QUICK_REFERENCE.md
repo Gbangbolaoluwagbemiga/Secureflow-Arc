@@ -1,331 +1,166 @@
-# SecureFlow Quick Reference
+# 🚀 Quick Reference - SecureFlow Deployment
 
-**Last Updated:** May 22, 2026  
-**Status:** ✅ Production Ready (Testnet)
+## 📍 Contract Information
 
----
+```
+Contract Address: 0xcF1dbED572C954b147EB91daf9Ff3875960461f2
+Network: Arc Testnet
+Chain ID: 5042002
+RPC URL: https://rpc.drpc.testnet.arc.network
+Explorer: https://testnet.arcscan.app
+```
 
-## 🚀 Quick Start (5 Minutes)
+## 🔗 Important Links
 
-### 1. Setup
+| Resource | URL |
+|----------|-----|
+| **Contract** | https://testnet.arcscan.app/address/0xcF1dbED572C954b147EB91daf9Ff3875960461f2 |
+| **Deploy Tx** | https://testnet.arcscan.app/tx/0xbb1d37e16d12f5292d68631f0bd69fdd27ecc9b3b347a1867b70d2eff497eb3a |
+| **Whitelist Tx** | https://testnet.arcscan.app/tx/0xc5bc90cabbf4800e55b7a01fb3ff1212798eadbdda2e0f84e94907386ddb2d2d |
+
+## ⚙️ Configuration
+
 ```bash
-git clone <repo>
-cd SecureFlow-scaffold
-npm install
-cd backend && npm install && cd ..
-```
-
-### 2. Configure
-```bash
-cp .env.example .env
-# Edit .env with your values
-```
-
-### 3. Run
-```bash
-# Terminal 1
-npm run dev
-
-# Terminal 2
-cd backend && npm run dev
-```
-
-### 4. Open
-```
-http://localhost:5173
-```
-
----
-
-## 📋 Key Information
-
-### Arc Testnet
-| Field | Value |
-|-------|-------|
-| Chain ID | 5042002 |
-| RPC | https://rpc.drpc.testnet.arc.network |
-| Explorer | https://testnet.arcscan.app |
-| Faucet | https://faucet.testnet.arc.network |
-
-### Contract
-| Field | Value |
-|-------|-------|
-| Address | 0x24f2ca10f18B7263f2ea9162eF00F6Dce0B76ff7 |
-| USDC | 0x3600000000000000000000000000000000000000 |
-| Status | ✅ Verified |
-
-### Environment Variables
-```bash
-# Frontend
-VITE_SECUREFLOW_CONTRACT_ADDRESS=0x24f2ca10f18B7263f2ea9162eF00F6Dce0B76ff7
+# Frontend .env
+VITE_SECUREFLOW_CONTRACT_ADDRESS=0xcF1dbED572C954b147EB91daf9Ff3875960461f2
 VITE_USDC_TOKEN_CONTRACT=0x3600000000000000000000000000000000000000
-VITE_API_URL=http://localhost:3000
-VITE_SUPABASE_URL=your_url
-VITE_SUPABASE_ANON_KEY=your_key
 
-# Backend
-SUPABASE_URL=your_url
-SUPABASE_SERVICE_KEY=your_key
-GROQ_API_KEY=your_key
-RELAYER_PRIVATE_KEY=your_key
-RELAYER_ADDRESS=your_address
+# Contract Settings
+Platform Fee: 2.5% (250 basis points)
+Fee Collector: Deployer address
+USDC Address: 0x0000000000000000000000000000000000000000 (whitelisted)
+USDC Decimals: 6
 ```
 
----
+## 🎯 What's New
 
-## 🔑 Token Approval Flow
+### ✅ Fixed Issues
+1. **Platform Fees Display** - Now shows actual collected fees (not 0.0000)
+2. **Resolution Reason** - Admin must provide reason (mandatory, stored on-chain)
+3. **Status Detection** - Shows "Dispute Resolved" (purple badge) correctly
+4. **Filtering** - "Disputed" filter works correctly
+5. **Rating Control** - Hidden for disputed projects
 
-### How It Works
-1. User creates escrow with USDC
-2. App checks allowance
-3. If insufficient → Show approval popup
-4. User approves in wallet
-5. App waits for confirmation
-6. Escrow created
+### 🆕 New Features
+- Resolution reason display (both original dispute + admin's reason)
+- Fund split visualization (freelancer amount + client refund)
+- Winner indicator (Freelancer Won / Client Won / Split Decision)
+- Real-time platform fees tracking
+- Milestone-level dispute detection
 
-### User Experience
-- **First time:** Approval popup + escrow creation
-- **Subsequent:** Direct escrow creation (no popup)
+## 🧪 Quick Test
 
-### Troubleshooting
+```bash
+# 1. Create escrow (10 USDC)
+# 2. Submit milestone
+# 3. Dispute milestone
+# 4. Resolve with reason (required)
+# 5. Check both dashboards for resolution details
+```
+
+## 🔧 Useful Commands
+
+### Check Contract State
+```bash
+# Platform fee
+cast call 0xcF1dbED572C954b147EB91daf9Ff3875960461f2 \
+  "platformFeeBP()(uint256)" \
+  --rpc-url https://rpc.drpc.testnet.arc.network
+
+# Total fees collected
+cast call 0xcF1dbED572C954b147EB91daf9Ff3875960461f2 \
+  "totalFeesByToken(address)(uint256)" \
+  0x0000000000000000000000000000000000000000 \
+  --rpc-url https://rpc.drpc.testnet.arc.network
+
+# Check if USDC whitelisted
+cast call 0xcF1dbED572C954b147EB91daf9Ff3875960461f2 \
+  "whitelistedTokens(address)(bool)" \
+  0x0000000000000000000000000000000000000000 \
+  --rpc-url https://rpc.drpc.testnet.arc.network
+```
+
+### Authorize Arbiter
+```bash
+cd contracts/solidity
+source .env
+
+cast send 0xcF1dbED572C954b147EB91daf9Ff3875960461f2 \
+  "authorizeArbiter(address)" \
+  YOUR_ARBITER_ADDRESS \
+  --rpc-url https://rpc.drpc.testnet.arc.network \
+  --private-key "$PRIVATE_KEY" \
+  --legacy
+```
+
+## 📊 Expected Behavior
+
+### Dispute Resolution Flow
+```
+1. Client/Freelancer raises dispute
+   ↓
+2. Admin reviews evidence
+   ↓
+3. Admin enters resolution reason (REQUIRED)
+   ↓
+4. Admin sets fund split (0-100%)
+   ↓
+5. Transaction confirmed
+   ↓
+6. Both parties see:
+   - Original dispute reason (orange)
+   - Admin's resolution reason (blue)
+   - Fund split details
+   - Winner indicator
+   - Status: "Dispute Resolved" (purple)
+```
+
+### Platform Fees
+```
+Escrow Created (100 USDC)
+   ↓
+Platform Fee: 2.5 USDC (2.5%)
+Escrow Amount: 100 USDC
+Total Deposit: 102.5 USDC
+   ↓
+Analytics Dashboard shows:
+Platform Fees: 2.5 USDC ✅
+```
+
+## 🐛 Troubleshooting
+
 | Issue | Solution |
 |-------|----------|
-| No popup | Check MetaMask is connected to Arc Testnet |
-| Approval fails | Ensure sufficient ETH for gas |
-| Insufficient balance | Request USDC from faucet |
-| Hangs | Wait up to 2 minutes, check Arc Scan |
+| Fees show 0.0000 | Clear cache, verify contract address |
+| Resolution reason not showing | Check you're using new contract |
+| Status shows "completed" | Old disputes won't have new fields |
+| Button not disabled | Check browser console for errors |
+| Transaction fails | Verify reason field is not empty |
+
+## 📞 Support Checklist
+
+Before asking for help:
+- [ ] Cleared browser cache
+- [ ] Verified contract address in `.env`
+- [ ] Checked browser console for errors
+- [ ] Confirmed wallet connected to Arc Testnet
+- [ ] Verified transaction on Arc Explorer
+- [ ] Checked that USDC is whitelisted
+
+## 🎯 Success Indicators
+
+Everything is working if:
+- ✅ Platform fees > 0 in Analytics
+- ✅ Admin can't resolve without reason
+- ✅ Resolution reason displays on both dashboards
+- ✅ Status shows "Dispute Resolved" (purple)
+- ✅ Fund split displays correctly
+- ✅ Filtering by "Disputed" works
+- ✅ Rating hidden for disputed projects
 
 ---
 
-## 📁 Project Structure
+**Contract deployed and ready! 🎉**
 
-```
-SecureFlow-scaffold/
-├── contracts/          # Smart contracts (Solidity)
-├── backend/            # Express API
-├── src/                # React frontend
-│   ├── pages/          # Route pages
-│   ├── components/     # UI components
-│   ├── hooks/          # Custom hooks
-│   └── lib/web3/       # Web3 integration
-├── public/             # Static assets (logos, favicon)
-├── .env.example        # Environment template
-└── *.md                # Documentation
-```
-
----
-
-## 🧪 Testing Token Approval
-
-### Prerequisites
-1. Arc Testnet network added to MetaMask
-2. Test USDC tokens (from faucet)
-3. App running locally
-
-### Test Steps
-1. Go to "Create New Escrow"
-2. Fill in details (10 USDC budget)
-3. Click "Create Escrow"
-4. **Expected:** Approval popup appears
-5. Click "Approve" in MetaMask
-6. **Expected:** Escrow created successfully
-
----
-
-## 📚 Documentation
-
-| Document | Purpose |
-|----------|---------|
-| README.md | Overview & getting started |
-| TOKEN_APPROVAL_GUIDE.md | Token approval details |
-| QUICK_START.md | 5-minute setup |
-| DEPLOYMENT_GUIDE.md | Deployment instructions |
-| TROUBLESHOOTING.md | Common issues |
-| PRODUCTION_READY_CHECKLIST.md | Mainnet checklist |
-| IMPLEMENTATION_SUMMARY.md | Technical summary |
-
----
-
-## 🔧 Common Commands
-
-### Frontend
-```bash
-npm run dev          # Start dev server
-npm run build        # Build for production
-npm run preview      # Preview production build
-npm run lint         # Run linter
-```
-
-### Backend
-```bash
-cd backend
-npm run dev          # Start dev server
-npm run build        # Build for production
-npm run migrate      # Run migrations
-```
-
-### Contract
-```bash
-./deploy.sh          # Deploy contract
-# Verify on Arc Scan manually
-```
-
----
-
-## 🐛 Debugging
-
-### Check Build
-```bash
-npm run build
-# Look for errors in output
-```
-
-### Check Console
-```
-Browser DevTools → Console tab
-Look for error messages
-```
-
-### Check Transactions
-```
-https://testnet.arcscan.app
-Search for wallet address or tx hash
-```
-
-### Check Logs
-```bash
-# Frontend logs in browser console
-# Backend logs in terminal
-# Contract events on Arc Scan
-```
-
----
-
-## 🚨 Common Issues
-
-### "Token Approval Required" but no popup
-- Check MetaMask is connected
-- Check Arc Testnet is selected
-- Refresh page and retry
-
-### "Insufficient USDC balance"
-- Request USDC from faucet
-- Check balance on Arc Scan
-- Account for platform fee
-
-### "Transaction timeout"
-- Arc Testnet can be slow
-- Wait up to 2 minutes
-- Check Arc Scan for transaction
-
-### "Contract not found"
-- Verify contract address in .env
-- Check on Arc Scan
-- Ensure correct network
-
----
-
-## 📊 Features
-
-### Core
-- ✅ Escrow creation with milestones
-- ✅ Milestone submission & approval
-- ✅ Dispute resolution
-- ✅ Emergency refund
-- ✅ Token approval (automatic)
-
-### Platform
-- ✅ Job marketplace
-- ✅ Freelancer applications
-- ✅ Real-time messaging
-- ✅ Notifications
-- ✅ Ratings & reviews
-- ✅ Analytics dashboard
-- ✅ Admin panel
-
-### AI
-- ✅ Milestone generation
-- ✅ Cover letter drafting
-
----
-
-## 🔐 Security
-
-### Frontend
-- No hardcoded secrets
-- Environment variables for config
-- Input validation on all forms
-- XSS & CSRF protection
-
-### Backend
-- Rate limiting
-- Input validation
-- SQL injection prevention
-- Authentication & authorization
-
-### Smart Contract
-- OpenZeppelin contracts
-- Access control
-- Emergency pause
-- Safe math
-
----
-
-## 📞 Support
-
-### Resources
-1. Check documentation (README.md, guides)
-2. Check browser console for errors
-3. Check Arc Scan for transactions
-4. Contact support: support@secureflow.app
-
-### Useful Links
-- Arc Testnet: https://testnet.arc.network
-- Arc Scan: https://testnet.arcscan.app
-- Faucet: https://faucet.testnet.arc.network
-- GitHub: [your-repo]
-
----
-
-## ✅ Checklist Before Deployment
-
-- [ ] Build succeeds: `npm run build`
-- [ ] No console errors
-- [ ] Token approval working
-- [ ] Escrow creation working
-- [ ] All features tested
-- [ ] Environment variables configured
-- [ ] Documentation reviewed
-- [ ] Security audit completed
-
----
-
-## 🎯 Next Steps
-
-### For Testing
-1. Follow "Quick Start" above
-2. Request test USDC from faucet
-3. Test token approval flow
-4. Test all features
-
-### For Mainnet
-1. Review PRODUCTION_READY_CHECKLIST.md
-2. Deploy contract to Arc Mainnet
-3. Update environment variables
-4. Deploy backend & frontend
-5. Monitor for issues
-
----
-
-## 📝 Notes
-
-- USDC on Arc Testnet: 6 decimals (not 18)
-- Platform fee: Configurable on contract
-- Approval timeout: 2 minutes
-- Escrow creation timeout: 2 minutes
-
----
-
-**Version:** 1.0  
-**Last Updated:** May 22, 2026  
-**Status:** ✅ Production Ready (Testnet)
+For detailed testing instructions, see `TESTING_GUIDE.md`
+For deployment details, see `DEPLOYMENT_COMPLETE.md`

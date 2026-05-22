@@ -520,17 +520,32 @@ export function MilestoneActions({
               const clientAmount = milestone.resolutionClientAmount ? Number(milestone.resolutionClientAmount) : 0;
               const milestoneAmount = Number(milestone.amount);
               
-              console.log(`[MilestoneActions] Resolved milestone display:`, {
+              // Try multiple ways to get the resolution reason
+              const resolutionReasonKey = `resolution_${escrowId}_${milestoneIndex}`;
+              let resolutionReason = localStorage.getItem(resolutionReasonKey);
+              
+              // Also try with string escrowId (in case it was stored differently)
+              if (!resolutionReason) {
+                resolutionReason = localStorage.getItem(`resolution_${String(escrowId)}_${milestoneIndex}`);
+              }
+              
+              // Fallback to milestone property
+              if (!resolutionReason && milestone.resolutionReason) {
+                resolutionReason = milestone.resolutionReason;
+              }
+              
+              // Get the original dispute reason
+              const disputeReason = milestone.disputeReason;
+              
+              console.log(`[MilestoneActions] Resolution display debug:`, {
                 escrowId,
                 milestoneIndex,
-                freelancerAmount,
-                clientAmount,
-                milestoneAmount,
-                resolutionAmount: milestone.resolutionAmount,
-                resolutionClientAmount: milestone.resolutionClientAmount,
-                amount: milestone.amount,
-                escrowReleasedAmount,
-                escrowTotalAmount,
+                resolutionReasonKey,
+                resolutionReasonFromLocalStorage: localStorage.getItem(resolutionReasonKey),
+                resolutionReasonFromMilestone: milestone.resolutionReason,
+                resolutionReasonFinal: resolutionReason,
+                disputeReason,
+                allLocalStorageKeys: Object.keys(localStorage).filter(k => k.startsWith('resolution_')),
               });
               
               // Get the token address from the escrow (we need to pass this as a prop)
@@ -542,6 +557,22 @@ export function MilestoneActions({
                   <div className="text-sm font-semibold text-blue-900 dark:text-blue-100">
                     Admin Resolution Decision:
                   </div>
+                  
+                  {/* Original Dispute Reason */}
+                  {disputeReason && (
+                    <div className="p-2 bg-orange-50 dark:bg-orange-950 rounded border border-orange-200 dark:border-orange-800">
+                      <p className="text-xs text-muted-foreground mb-1">Original Dispute Reason:</p>
+                      <p className="text-sm text-orange-900 dark:text-orange-100">{disputeReason}</p>
+                    </div>
+                  )}
+                  
+                  {/* Admin's Resolution Reason */}
+                  {resolutionReason && (
+                    <div className="p-2 bg-white dark:bg-blue-950 rounded border border-blue-100 dark:border-blue-800">
+                      <p className="text-xs text-muted-foreground mb-1">Admin's Resolution Reason:</p>
+                      <p className="text-sm text-blue-900 dark:text-blue-100">{resolutionReason}</p>
+                    </div>
+                  )}
                   
                   {/* Money Split */}
                   <div className="space-y-2 text-xs">

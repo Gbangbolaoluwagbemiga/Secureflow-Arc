@@ -17,6 +17,7 @@ export interface Milestone {
   resolvedBy?: string;
   resolutionAmount?: string; // Amount paid to beneficiary in resolution (freelancer's share)
   resolutionClientAmount?: string; // Amount refunded to client in resolution
+  resolutionReason?: string; // Admin's reason for the resolution decision (from event, not contract)
   proposedAmount?: string; // Proposed amount for milestone changes
   proposedDescription?: string; // Proposed description for milestone changes
 }

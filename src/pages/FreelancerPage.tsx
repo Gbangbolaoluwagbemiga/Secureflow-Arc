@@ -465,6 +465,7 @@ export default function FreelancerPage() {
                   rejectionReason: m.rejectionReason || undefined,
                   resolutionAmount: m.resolutionFreelancerAmount?.toString() || undefined,
                   resolutionClientAmount: m.resolutionClientAmount?.toString() || undefined,
+                  resolutionReason: m.resolutionReason || undefined,
                   proposedAmount: m.proposedAmount?.toString() || undefined,
                   proposedDescription: m.proposedDescription || undefined,
                 };

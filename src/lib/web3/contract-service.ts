@@ -96,6 +96,13 @@ export class ContractService {
     try { return Number(await this.contract.read.platformFeeBP()); } catch { return 0; }
   }
 
+  async getTotalFeesByToken(tokenAddress: string): Promise<string> {
+    try { 
+      const fees = await this.contract.read.totalFeesByToken([tokenAddress as Address]);
+      return fees.toString();
+    } catch { return "0"; }
+  }
+
   async getTotalEscrows(): Promise<number> {
     try { return Math.max(0, Number(await this.contract.read.nextEscrowId()) - 1); } catch { return 0; }
   }
@@ -685,7 +692,7 @@ export class ContractService {
   }
 
   async arbiterAwardFreelancer(
-    params: { escrow_id: number; arbiter: string; freelancer_amount: bigint },
+    params: { escrow_id: number; arbiter: string; freelancer_amount: bigint; reason: string },
     write: WagmiWrite
   ): Promise<`0x${string}`> {
     const milestones = await this.getMilestones(params.escrow_id);
@@ -698,7 +705,7 @@ export class ContractService {
       address: this.addr,
       abi: SecureFlowABI.abi,
       functionName: "resolveDispute",
-      args: [BigInt(params.escrow_id), BigInt(idx), freelancerAmount, clientAmount],
+      args: [BigInt(params.escrow_id), BigInt(idx), freelancerAmount, clientAmount, params.reason],
     });
   }
 }

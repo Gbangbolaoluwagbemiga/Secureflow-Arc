@@ -136,7 +136,7 @@ export function EscrowCard({
     return escrow.status;
   };
   
-  const displayStatus = hasIssues ? getDisplayStatus() : escrow.status;
+  const displayStatus = getDisplayStatus();
 
   const getMilestoneStatusColor = (status: string) => {
     switch (status) {

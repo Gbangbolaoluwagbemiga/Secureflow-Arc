@@ -126,33 +126,54 @@ export default function AnalyticsPage() {
 
           const status = escrow.status || 0;
           totalVolume += BigInt(escrow.totalAmount || 0);
+          
+          // Check if any milestone is disputed or resolved
+          let hasDisputedMilestone = false;
+          try {
+            const milestones = await cs.getMilestones(i);
+            for (const m of milestones) {
+              const milestoneStatus = Number(m.status || 0);
+              // Status 4 = Disputed, or check if milestone has resolution amounts (was disputed and resolved)
+              if (milestoneStatus === 4 || (m.resolutionFreelancerAmount && BigInt(m.resolutionFreelancerAmount) > 0n)) {
+                hasDisputedMilestone = true;
+                break;
+              }
+            }
+          } catch (error) {
+            // Skip milestone check if it fails
+          }
 
-          // Count by status
-          switch (status) {
-            case 0:
-              statusDistribution.pending++;
-              break;
-            case 1:
-              activeEscrows++;
-              statusDistribution.inProgress++;
-              break;
-            case 2:
-              completedEscrows++;
-              statusDistribution.completed++;
-              break;
-            case 3:
-              statusDistribution.refunded++;
-              break;
-            case 4:
-              disputedEscrows++;
-              statusDistribution.disputed++;
-              break;
-            case 5:
-              statusDistribution.expired++;
-              break;
-            case 6:
-              statusDistribution.cancelled++;
-              break;
+          // Count by status - if has disputed milestone, count as disputed regardless of escrow status
+          if (hasDisputedMilestone) {
+            disputedEscrows++;
+            statusDistribution.disputed++;
+          } else {
+            switch (status) {
+              case 0:
+                statusDistribution.pending++;
+                break;
+              case 1:
+                activeEscrows++;
+                statusDistribution.inProgress++;
+                break;
+              case 2:
+                completedEscrows++;
+                statusDistribution.completed++;
+                break;
+              case 3:
+                statusDistribution.refunded++;
+                break;
+              case 4:
+                disputedEscrows++;
+                statusDistribution.disputed++;
+                break;
+              case 5:
+                statusDistribution.expired++;
+                break;
+              case 6:
+                statusDistribution.cancelled++;
+                break;
+            }
           }
         } catch (error) {
           // Skip escrows that can't be read
@@ -170,12 +191,14 @@ export default function AnalyticsPage() {
         ? ((disputedEscrows / totalEscrows) * 100).toFixed(2)
         : "0.00";
 
-      // Get platform fee from contract
+      // Get actual platform fees collected from contract
       try {
-        // Platform fee is typically stored in contract, we'll calculate it from completed escrows
-        // For now, estimate based on 1% fee (adjust based on your contract)
-        totalFees = totalVolume / 100n; // 1% fee
+        // Read totalFeesByToken for USDC (address(0) on Arc Testnet)
+        const usdcAddress = "0x0000000000000000000000000000000000000000";
+        const feesCollected = await cs.getTotalFeesByToken(usdcAddress);
+        totalFees = BigInt(feesCollected);
       } catch (error) {
+        console.error("Failed to fetch platform fees:", error);
         totalFees = 0n;
       }
 

@@ -169,7 +169,7 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
 
       // Send transaction and get hash
       const txHash = await svc.arbiterAwardFreelancer(
-        { escrow_id: Number(selectedDispute.escrowId), arbiter: wallet.address || "", freelancer_amount: freelancerAmount },
+        { escrow_id: Number(selectedDispute.escrowId), arbiter: wallet.address || "", freelancer_amount: freelancerAmount, reason: resolutionReason },
         writeContractAsync
       );
 
@@ -470,8 +470,16 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Resolution Reason (optional)</Label>
-                  <Input value={resolutionReason} onChange={(e) => setResolutionReason(e.target.value)} placeholder="Explain your decision…" />
+                  <Label>Resolution Reason (required)</Label>
+                  <Input 
+                    value={resolutionReason} 
+                    onChange={(e) => setResolutionReason(e.target.value)} 
+                    placeholder="Explain your decision…" 
+                    required
+                  />
+                  {!resolutionReason.trim() && (
+                    <p className="text-xs text-red-600">Resolution reason is required</p>
+                  )}
                 </div>
               </TabsContent>
 
@@ -499,7 +507,11 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => void resolveDispute()} disabled={isResolving} className="bg-green-600 hover:bg-green-700">
+            <Button 
+              onClick={() => void resolveDispute()} 
+              disabled={isResolving || !resolutionReason.trim()} 
+              className="bg-green-600 hover:bg-green-700"
+            >
               {isResolving ? "Resolving…" : "Resolve Dispute"}
             </Button>
           </DialogFooter>

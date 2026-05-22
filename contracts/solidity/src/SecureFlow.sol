@@ -71,6 +71,7 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
         string proposedDescription;
         uint256 resolutionFreelancerAmount; // Amount awarded to freelancer in dispute resolution
         uint256 resolutionClientAmount;     // Amount refunded to client in dispute resolution
+        string resolutionReason;            // Admin's reason for resolution decision
     }
 
     struct Escrow {
@@ -273,7 +274,8 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
                 proposedAmount: 0,
                 proposedDescription: "",
                 resolutionFreelancerAmount: 0,
-                resolutionClientAmount: 0
+                resolutionClientAmount: 0,
+                resolutionReason: ""
             }));
         }
 
@@ -414,15 +416,18 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
 
     /**
      * @notice Multi-sig arbiter dispute resolution.
+     * @param reason Admin's reason for the resolution decision (required)
      */
     function resolveDispute(
         uint256 escrowId,
         uint256 milestoneIndex,
         uint256 freelancerAmount,
-        uint256 clientAmount
+        uint256 clientAmount,
+        string calldata reason
     ) external onlyArbiter nonReentrant {
         Escrow storage esc = _requireEscrow(escrowId);
         if (esc.status != EscrowStatus.Disputed) revert InvalidEscrowStatus();
+        if (bytes(reason).length == 0) revert InvalidConfig(); // Reason is required
 
         Milestone storage m = _getMilestone(escrowId, milestoneIndex);
         if (freelancerAmount + clientAmount != m.amount) revert InvalidAmount();
@@ -440,6 +445,7 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
         m.resolvedBy = msg.sender;
         m.resolutionFreelancerAmount = freelancerAmount;
         m.resolutionClientAmount = clientAmount;
+        m.resolutionReason = reason;
 
         esc.paidAmount += freelancerAmount;
         esc.totalAmount -= clientAmount;
