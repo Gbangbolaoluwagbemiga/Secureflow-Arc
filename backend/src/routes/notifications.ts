@@ -13,18 +13,21 @@ notificationsRouter.get("/", async (req, res) => {
     return;
   }
 
-  const wallet = String(req.query.wallet ?? "").trim();
-  if (!wallet || !/^0x[0-9a-fA-F]{40}$/.test(wallet)) {
+  const walletRaw = String(req.query.wallet ?? "").trim();
+  if (!walletRaw || !/^0x[0-9a-fA-F]{40}$/.test(walletRaw)) {
     res.status(400).json({ error: "wallet must be a valid Arc EVM address (0x…)" });
     return;
   }
+  // Normalize to lowercase — wagmi returns checksum case but writers may use lowercase.
+  const wallet = walletRaw.toLowerCase();
 
+  // ilike makes this case-insensitive so historical rows in mixed case still surface.
   const { data, error } = await supabase
     .from("notifications")
     .select(
       "id, wallet_address, type, title, message, read_at, action_url, data, created_at",
     )
-    .eq("wallet_address", wallet)
+    .ilike("wallet_address", wallet)
     .order("created_at", { ascending: false })
     .limit(100);
 
@@ -60,17 +63,18 @@ notificationsRouter.patch("/:id/read", async (req, res) => {
     return;
   }
 
-  const wallet = String(req.query.wallet ?? "").trim();
-  if (!wallet || !/^0x[0-9a-fA-F]{40}$/.test(wallet)) {
+  const walletRaw = String(req.query.wallet ?? "").trim();
+  if (!walletRaw || !/^0x[0-9a-fA-F]{40}$/.test(walletRaw)) {
     res.status(400).json({ error: "wallet must be a valid Arc EVM address (0x…)" });
     return;
   }
+  const wallet = walletRaw.toLowerCase();
 
   const { error } = await supabase
     .from("notifications")
     .update({ read_at: new Date().toISOString() })
     .eq("id", id)
-    .eq("wallet_address", wallet);
+    .ilike("wallet_address", wallet);
 
   if (error) {
     res.status(500).json({ error: error.message });
@@ -96,11 +100,13 @@ notificationsRouter.post("/", async (req, res) => {
     data: payload,
   } = req.body ?? {};
 
-  const wallet = String(wallet_address ?? "").trim();
-  if (!wallet || !/^0x[0-9a-fA-F]{40}$/.test(wallet)) {
+  const walletRaw = String(wallet_address ?? "").trim();
+  if (!walletRaw || !/^0x[0-9a-fA-F]{40}$/.test(walletRaw)) {
     res.status(400).json({ error: "wallet_address must be a valid Arc EVM address (0x…)" });
     return;
   }
+  // Always store wallets in lowercase so reads + writes match regardless of casing.
+  const wallet = walletRaw.toLowerCase();
 
   if (!type || !title || !message) {
     res.status(400).json({ error: "type, title, and message are required" });
