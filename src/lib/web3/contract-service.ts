@@ -1,7 +1,7 @@
 import { createPublicClient, http, getContract, type Address } from "viem";
 import { arcTestnet } from "@/providers/WalletProvider";
 import { CONTRACTS } from "./config";
-import SecureFlowABI from "../../../contracts/solidity/out/SecureFlow.sol/SecureFlow.json";
+import SecureFlowABI from "./SecureFlowABI.json";
 
 /** wagmi writeContractAsync — typed as any to stay compatible across wagmi versions */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
