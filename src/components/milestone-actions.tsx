@@ -251,14 +251,22 @@ export function MilestoneActions({
         if (actionType === "submit" || actionType === "resubmit") {
           window.dispatchEvent(
             new CustomEvent("milestoneSubmitted", {
-              detail: { escrowId: Number(escrowId), milestoneIndex },
+              detail: { 
+                escrowId: Number(escrowId), 
+                milestoneIndex,
+                sourceAddress: wallet.address // Add source address
+              },
             }),
           );
         }
         if (actionType === "approve") {
           window.dispatchEvent(
             new CustomEvent("milestoneApproved", {
-              detail: { escrowId: Number(escrowId), milestoneIndex },
+              detail: { 
+                escrowId: Number(escrowId), 
+                milestoneIndex,
+                sourceAddress: wallet.address // Add source address
+              },
             }),
           );
         }
@@ -536,17 +544,6 @@ export function MilestoneActions({
               
               // Get the original dispute reason
               const disputeReason = milestone.disputeReason;
-              
-              console.log(`[MilestoneActions] Resolution display debug:`, {
-                escrowId,
-                milestoneIndex,
-                resolutionReasonKey,
-                resolutionReasonFromLocalStorage: localStorage.getItem(resolutionReasonKey),
-                resolutionReasonFromMilestone: milestone.resolutionReason,
-                resolutionReasonFinal: resolutionReason,
-                disputeReason,
-                allLocalStorageKeys: Object.keys(localStorage).filter(k => k.startsWith('resolution_')),
-              });
               
               // Get the token address from the escrow (we need to pass this as a prop)
               // For now, use address(0) which represents USDC on Arc Testnet

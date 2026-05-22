@@ -156,7 +156,12 @@ export function OverdueDisputeResolution({ onResolved }: Props) {
         }
 
         txHash = await svc.arbiterAwardFreelancer(
-          { escrow_id: Number(selected.escrowId), arbiter: wallet.address || "", freelancer_amount: freelancerWei },
+          {
+            escrow_id: Number(selected.escrowId),
+            arbiter: wallet.address || "",
+            freelancer_amount: freelancerWei,
+            reason: `Arbiter split: freelancer ${pct}% / client ${100 - pct}% of unreleased funds`,
+          },
           writeContractAsync
         );
       }

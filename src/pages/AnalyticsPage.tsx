@@ -35,8 +35,10 @@ interface PlatformAnalytics {
   activeEscrows: number;
   completedEscrows: number;
   disputedEscrows: number;
-  totalVolume: string;
-  totalFees: string;
+  totalVolumeUsdc: string;
+  totalVolumeEth: string;
+  totalFeesUsdc: string;
+  totalFeesEth: string;
   completionRate: string;
   disputeRate: string;
 }
@@ -103,11 +105,16 @@ export default function AnalyticsPage() {
       const nextEscrowId = await cs.getNextEscrowId();
       const totalEscrows = nextEscrowId - 1;
 
+      const NATIVE_ETH = "0x0000000000000000000000000000000000000000";
+      const USDC_ADDRESS = (
+        (import.meta.env.VITE_USDC_TOKEN_CONTRACT as string | undefined)?.trim() || NATIVE_ETH
+      ).toLowerCase();
+
       let activeEscrows = 0;
       let completedEscrows = 0;
       let disputedEscrows = 0;
-      let totalVolume = 0n;
-      let totalFees = 0n;
+      let totalVolumeUsdcRaw = 0n;
+      let totalVolumeEthRaw = 0n;
       const statusDistribution = {
         pending: 0,
         inProgress: 0,
@@ -125,8 +132,14 @@ export default function AnalyticsPage() {
           if (!escrow) continue;
 
           const status = escrow.status || 0;
-          totalVolume += BigInt(escrow.totalAmount || 0);
-          
+          const escrowToken = (escrow.token || NATIVE_ETH).toLowerCase();
+          const amount = BigInt(escrow.totalAmount || 0);
+          if (escrowToken === USDC_ADDRESS) {
+            totalVolumeUsdcRaw += amount;
+          } else {
+            totalVolumeEthRaw += amount;
+          }
+
           // Check if any milestone is disputed or resolved
           let hasDisputedMilestone = false;
           try {
@@ -191,24 +204,30 @@ export default function AnalyticsPage() {
         ? ((disputedEscrows / totalEscrows) * 100).toFixed(2)
         : "0.00";
 
-      // Get actual platform fees collected from contract
+      // Read platform fees per token. USDC is 6 decimals, native ETH is 18.
+      let totalFeesUsdcRaw = 0n;
+      let totalFeesEthRaw = 0n;
       try {
-        // Read totalFeesByToken for USDC (address(0) on Arc Testnet)
-        const usdcAddress = "0x0000000000000000000000000000000000000000";
-        const feesCollected = await cs.getTotalFeesByToken(usdcAddress);
-        totalFees = BigInt(feesCollected);
-      } catch (error) {
-        console.error("Failed to fetch platform fees:", error);
-        totalFees = 0n;
+        if (USDC_ADDRESS !== NATIVE_ETH) {
+          totalFeesUsdcRaw = BigInt(await cs.getTotalFeesByToken(USDC_ADDRESS));
+        }
+        totalFeesEthRaw = BigInt(await cs.getTotalFeesByToken(NATIVE_ETH));
+      } catch {
+        /* fee read failed — keep zeros */
       }
+
+      const formatUsdc = (raw: bigint) => (Number(raw) / 1e6).toFixed(2);
+      const formatEth = (raw: bigint) => (Number(raw) / 1e18).toFixed(6);
 
       const platformAnalytics: PlatformAnalytics = {
         totalEscrows,
         activeEscrows,
         completedEscrows,
         disputedEscrows,
-        totalVolume: (totalVolume / BigInt(1e6)).toString(), // Convert from 6 decimals to display
-        totalFees: (totalFees / BigInt(1e6)).toString(),
+        totalVolumeUsdc: formatUsdc(totalVolumeUsdcRaw),
+        totalVolumeEth: formatEth(totalVolumeEthRaw),
+        totalFeesUsdc: formatUsdc(totalFeesUsdcRaw),
+        totalFeesEth: formatEth(totalFeesEthRaw),
         completionRate,
         disputeRate,
       };
@@ -382,10 +401,13 @@ export default function AnalyticsPage() {
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Total Volume</p>
                     <h3 className="text-3xl font-bold mt-2">
-                      {platformData?.totalVolume
-                        ? `${parseFloat(platformData.totalVolume).toFixed(2)} USDC`
-                        : "0 USDC"}
+                      {platformData?.totalVolumeUsdc ?? "0.00"} USDC
                     </h3>
+                    {platformData && parseFloat(platformData.totalVolumeEth) > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        + {platformData.totalVolumeEth} ETH
+                      </p>
+                    )}
                   </div>
                   <DollarSign className="h-8 w-8 text-green-500" />
                 </div>
@@ -519,10 +541,13 @@ export default function AnalyticsPage() {
                   <div>
                     <p className="text-sm text-muted-foreground">Platform Fees</p>
                     <p className="text-2xl font-bold">
-                      {platformData?.totalFees
-                        ? `${parseFloat(platformData.totalFees).toFixed(4)} USDC`
-                        : "0 USDC"}
+                      {platformData?.totalFeesUsdc ?? "0.00"} USDC
                     </p>
+                    {platformData && parseFloat(platformData.totalFeesEth) > 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        + {platformData.totalFeesEth} ETH
+                      </p>
+                    )}
                   </div>
                 </div>
               </Card>

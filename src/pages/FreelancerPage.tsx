@@ -336,8 +336,7 @@ export default function FreelancerPage() {
 
             // Fetch milestones for this escrow
             const milestonesData = await contractService.getMilestones(i);
-            console.log(`[FreelancerPage] Raw milestones data from contract for Escrow ${i}:`, milestonesData);
-            
+
             const allMilestones = milestonesData.map(
               (m: any, index: number) => {
                 // Convert milestone status to number first (might be string enum or number)
@@ -420,21 +419,9 @@ export default function FreelancerPage() {
                 };
                 
                 let status = statusMap[statusNumber] || "pending";
-                
-                // Debug logging for milestone data
-                console.log(`[FreelancerPage] Escrow ${i}, Milestone ${index}:`, {
-                  rawStatus: m.status,
-                  statusNumber,
-                  mappedStatus: status,
-                  amount: m.amount?.toString(),
-                  resolutionFreelancerAmount: m.resolutionFreelancerAmount?.toString(),
-                  resolutionClientAmount: m.resolutionClientAmount?.toString(),
-                  description: m.description,
-                });
-                
+
                 // If milestone is approved AND has resolution amounts, it was a resolved dispute
                 if (status === "approved" && m.resolutionFreelancerAmount && BigInt(m.resolutionFreelancerAmount) > 0n) {
-                  console.log(`[FreelancerPage] Detected resolved dispute for Escrow ${i}, Milestone ${index}`);
                   status = "resolved";
                 }
 
@@ -455,7 +442,7 @@ export default function FreelancerPage() {
                   );
                 }
 
-                const milestone = {
+                return {
                   description: m.description || "",
                   amount: m.amount?.toString() || "0",
                   status,
@@ -469,10 +456,6 @@ export default function FreelancerPage() {
                   proposedAmount: m.proposedAmount?.toString() || undefined,
                   proposedDescription: m.proposedDescription || undefined,
                 };
-                
-                console.log(`[FreelancerPage] Final milestone object for Escrow ${i}, Milestone ${index}:`, milestone);
-                
-                return milestone;
               }
             );
 
@@ -945,7 +928,13 @@ export default function FreelancerPage() {
       await fetchFreelancerEscrows();
 
       // Dispatch event to notify other components
-      window.dispatchEvent(new CustomEvent("milestoneSubmitted"));
+      window.dispatchEvent(new CustomEvent("milestoneSubmitted", {
+        detail: { 
+          escrowId: Number(escrowId), 
+          milestoneIndex,
+          sourceAddress: wallet.address // Add source to prevent self-refresh
+        }
+      }));
     } catch (error) {
       toast({
         title: "Failed to submit milestone",
@@ -1796,7 +1785,7 @@ export default function FreelancerPage() {
                                           above and resubmit with improvements.
                                         </p>
 
-                                        <div className="flex gap-2">
+                                        <div className="flex flex-wrap gap-2">
                                           <Button
                                             size="sm"
                                             className="bg-red-600 hover:bg-red-700 text-white"
@@ -1812,6 +1801,20 @@ export default function FreelancerPage() {
                                             }}
                                           >
                                             Resubmit Work
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="gap-1.5 border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                            onClick={() => {
+                                              setSelectedEscrowId(escrow.id);
+                                              setSelectedMilestoneIndex(index);
+                                              setDisputeReason("");
+                                              setShowDisputeDialog(true);
+                                            }}
+                                          >
+                                            <Scale className="h-3.5 w-3.5" />
+                                            Raise Dispute
                                           </Button>
                                         </div>
                                       </div>

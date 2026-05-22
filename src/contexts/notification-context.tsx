@@ -181,20 +181,18 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         .slice(0, 8)
         .map((r) => `${r.id}:${r.read ? "1" : "0"}`)
         .join("|");
-      const hasNewRemoteState =
-        lastRemoteFingerprintRef.current &&
-        lastRemoteFingerprintRef.current !== fingerprint;
+      const hadPriorFingerprint = !!lastRemoteFingerprintRef.current;
       lastRemoteFingerprintRef.current = fingerprint;
       setNotifications((prev) => mergeRemoteNotifications(remote, prev));
 
-      if (
-        hasNewRemoteState &&
-        newRows.some((row) => isCrossPartyRemoteNotification(row))
-      ) {
-        // Only refresh for opposite-party updates (plus slow safety poll elsewhere).
+      // Refresh dashboard/freelancer pages on ANY new cross-party row.
+      // Skip on the very first sync after mount — that's just the initial fetch,
+      // not an opposite-party change worth a noisy refresh.
+      const crossPartyNewRows = newRows.filter((row) => isCrossPartyRemoteNotification(row));
+      if (hadPriorFingerprint && crossPartyNewRows.length > 0) {
         const sourceAddress =
-          (newRows[0]?.data?.sourceAddress as string | undefined) ??
-          (newRows[0]?.data?.actorAddress as string | undefined);
+          (crossPartyNewRows[0]?.data?.sourceAddress as string | undefined) ??
+          (crossPartyNewRows[0]?.data?.actorAddress as string | undefined);
         window.dispatchEvent(
           new CustomEvent("escrowUpdated", { detail: { sourceAddress } }),
         );
@@ -293,8 +291,17 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     lastRemoteFingerprintRef.current = "";
     lastRemoteIdsRef.current = new Set();
     void syncRemoteNotifications();
-    // Poll every 30 seconds to avoid rate limiting
-    const t = window.setInterval(() => void syncRemoteNotifications(), 30_000);
+    // Poll every 10s — tight enough to feel "live" without hammering the API.
+    // The internal rate-limiter still enforces a 5s floor between actual syncs.
+    const t = window.setInterval(() => void syncRemoteNotifications(), 10_000);
+
+    // Refresh aggressively when the tab regains focus / visibility.
+    const handleFocus = () => void syncRemoteNotifications();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void syncRemoteNotifications();
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
     
     // Listen for work started events
     const handleWorkStarted = (event: CustomEvent) => {
@@ -441,13 +448,23 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         freelancerAddress,
       } = event.detail;
 
-      // Notify the freelancer that their proposal was rejected
+      // Lock the freelancer's one-shot proposal slot for this escrow — they don't
+      // get another go after a rejection (decided in product spec).
+      if (freelancerAddress) {
+        try {
+          localStorage.setItem(
+            `proposal_used_${escrowId}_${freelancerAddress.toLowerCase()}`,
+            "1",
+          );
+        } catch { /* ignore */ }
+      }
+
       if (freelancerAddress) {
         addNotification(
           {
             type: "milestone",
             title: "Proposal Rejected",
-            message: `Your proposal for milestone ${milestoneIndex + 1} was rejected. You can submit a new proposal.`,
+            message: `Your proposal for milestone ${milestoneIndex + 1} was rejected. The original terms remain in effect.`,
             actionUrl: `/freelancer?escrow=${escrowId}`,
             data: {
               escrowId,
@@ -574,31 +591,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       const customEvent = event as CustomEvent;
       const { escrowId, milestoneIndex, clientAddress, freelancerAddress, freelancerAmount, clientAmount, reason } = customEvent.detail || {};
       
-      console.log('[NotificationContext] Dispute resolved event received:', {
-        escrowId,
-        milestoneIndex,
-        reason,
-        hasReason: !!reason,
-      });
-      
-      // Store resolution reason in localStorage for display
       if (reason && escrowId && milestoneIndex !== undefined) {
-        const key = `resolution_${escrowId}_${milestoneIndex}`;
-        console.log('[NotificationContext] Storing resolution reason in localStorage:', {
-          key,
-          reason,
-        });
-        localStorage.setItem(key, reason);
-        
-        // Verify it was stored
-        const stored = localStorage.getItem(key);
-        console.log('[NotificationContext] Verification - stored value:', stored);
-      } else {
-        console.log('[NotificationContext] NOT storing resolution reason - missing data:', {
-          hasReason: !!reason,
-          hasEscrowId: !!escrowId,
-          hasMilestoneIndex: milestoneIndex !== undefined,
-        });
+        localStorage.setItem(`resolution_${escrowId}_${milestoneIndex}`, reason);
       }
       
       // Notify both client and freelancer with resolution details
@@ -616,8 +610,149 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       );
     };
     
+    // Listen for milestone submission events
+    const handleMilestoneSubmitted = (event: CustomEvent) => {
+      const {
+        escrowId,
+        milestoneIndex,
+        sourceAddress,
+      } = event.detail || {};
+      
+      // Get escrow details to find client address and send notification
+      (async () => {
+        try {
+          const { ContractService } = await import("@/lib/web3/contract-service");
+          const cs = new ContractService();
+          const escrow = await cs.getEscrow(Number(escrowId));
+          
+          if (escrow && escrow.depositor && sourceAddress) {
+            // Only notify if the source is not the current user
+            const currentAddress = wallet.address?.toLowerCase();
+            const sourceAddr = sourceAddress.toLowerCase();
+            
+            if (currentAddress !== sourceAddr) {
+              // Notify the client about milestone submission
+              addNotification(
+                {
+                  type: "milestone",
+                  title: "New Milestone Submitted",
+                  message: `Milestone ${milestoneIndex + 1} has been submitted for review`,
+                  actionUrl: `/dashboard?escrow=${escrowId}`,
+                  data: {
+                    escrowId,
+                    milestoneIndex,
+                    action: "milestone_submitted",
+                    sourceAddress,
+                  },
+                },
+                [escrow.depositor]
+              );
+            }
+          }
+        } catch (error) {
+          // Silently fail - notification is not critical
+          console.error('Failed to send milestone submission notification:', error);
+        }
+      })();
+    };
+    
+    // Listen for milestone approval events
+    const handleMilestoneApproved = (event: CustomEvent) => {
+      const {
+        escrowId,
+        milestoneIndex,
+        sourceAddress,
+      } = event.detail || {};
+      
+      // Get escrow details to find freelancer address and send notification
+      (async () => {
+        try {
+          const { ContractService } = await import("@/lib/web3/contract-service");
+          const cs = new ContractService();
+          const escrow = await cs.getEscrow(Number(escrowId));
+          
+          if (escrow && escrow.beneficiary && sourceAddress) {
+            // Only notify if the source is not the current user
+            const currentAddress = wallet.address?.toLowerCase();
+            const sourceAddr = sourceAddress.toLowerCase();
+            
+            if (currentAddress !== sourceAddr) {
+              // Notify the freelancer about milestone approval
+              addNotification(
+                {
+                  type: "milestone",
+                  title: "Milestone Approved! 🎉",
+                  message: `Milestone ${milestoneIndex + 1} has been approved. Payment released!`,
+                  actionUrl: `/freelancer?escrow=${escrowId}`,
+                  data: {
+                    escrowId,
+                    milestoneIndex,
+                    action: "milestone_approved",
+                    sourceAddress,
+                  },
+                },
+                [escrow.beneficiary]
+              );
+            }
+          }
+        } catch (error) {
+          console.error('Failed to send milestone approval notification:', error);
+        }
+      })();
+    };
+    
+    // Listen for milestone rejection events
+    const handleMilestoneRejected = (event: CustomEvent) => {
+      const {
+        escrowId,
+        milestoneIndex,
+        sourceAddress,
+        reason,
+      } = event.detail || {};
+      
+      // Get escrow details to find freelancer address and send notification
+      (async () => {
+        try {
+          const { ContractService } = await import("@/lib/web3/contract-service");
+          const cs = new ContractService();
+          const escrow = await cs.getEscrow(Number(escrowId));
+          
+          if (escrow && escrow.beneficiary && sourceAddress) {
+            // Only notify if the source is not the current user
+            const currentAddress = wallet.address?.toLowerCase();
+            const sourceAddr = sourceAddress.toLowerCase();
+            
+            if (currentAddress !== sourceAddr) {
+              // Notify the freelancer about milestone rejection
+              addNotification(
+                {
+                  type: "milestone",
+                  title: "Milestone Rejected",
+                  message: `Milestone ${milestoneIndex + 1} was rejected. ${reason ? `Reason: ${reason}` : 'Please review and resubmit.'}`,
+                  actionUrl: `/freelancer?escrow=${escrowId}`,
+                  data: {
+                    escrowId,
+                    milestoneIndex,
+                    action: "milestone_rejected",
+                    reason,
+                    sourceAddress,
+                  },
+                },
+                [escrow.beneficiary]
+              );
+            }
+          }
+        } catch (error) {
+          console.error('Failed to send milestone rejection notification:', error);
+        }
+      })();
+    };
+    
     window.addEventListener("workStarted", handleWorkStarted as EventListener);
     window.addEventListener("jobApplicationSubmitted", handleJobApplicationSubmitted as EventListener);
+    window.addEventListener("milestoneSubmitted", handleMilestoneSubmitted as EventListener);
+    window.addEventListener("milestoneApproved", handleMilestoneApproved as EventListener);
+    window.addEventListener("milestoneRejected", handleMilestoneRejected as EventListener);
     window.addEventListener("milestoneProposalSubmitted", handleMilestoneProposalSubmitted as EventListener);
     window.addEventListener("milestoneProposalRejected", handleMilestoneProposalRejected as EventListener);
     window.addEventListener("milestoneProposalApproved", handleMilestoneProposalApproved as EventListener);
@@ -627,8 +762,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     
     return () => {
       window.clearInterval(t);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("workStarted", handleWorkStarted as EventListener);
       window.removeEventListener("jobApplicationSubmitted", handleJobApplicationSubmitted as EventListener);
+      window.removeEventListener("milestoneSubmitted", handleMilestoneSubmitted as EventListener);
+      window.removeEventListener("milestoneApproved", handleMilestoneApproved as EventListener);
+      window.removeEventListener("milestoneRejected", handleMilestoneRejected as EventListener);
       window.removeEventListener("milestoneProposalSubmitted", handleMilestoneProposalSubmitted as EventListener);
       window.removeEventListener("milestoneProposalRejected", handleMilestoneProposalRejected as EventListener);
       window.removeEventListener("milestoneProposalApproved", handleMilestoneProposalApproved as EventListener);

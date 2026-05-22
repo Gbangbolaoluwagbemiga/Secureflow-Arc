@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useWriteContract } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,6 +53,18 @@ export function MilestoneNegotiation({
 
   const hasProposal = milestone.status === "proposal_pending";
 
+  // Freelancers get exactly ONE proposal per escrow lifetime. Once they submit
+  // (or it gets rejected), the propose-changes button is gone for good on this escrow.
+  const proposalLockKey = `proposal_used_${escrowId}_${(wallet.address || "").toLowerCase()}`;
+  const [proposalAlreadyUsed, setProposalAlreadyUsed] = useState<boolean>(() => {
+    try { return localStorage.getItem(proposalLockKey) === "1"; } catch { return false; }
+  });
+
+  // Re-check the lock whenever escrow/wallet changes (e.g. switching wallets).
+  useEffect(() => {
+    try { setProposalAlreadyUsed(localStorage.getItem(proposalLockKey) === "1"); } catch { /* ignore */ }
+  }, [proposalLockKey]);
+
   const handleProposeChange = async () => {
     if (!proposedAmount || parseFloat(proposedAmount) <= 0) {
       toast({
@@ -99,9 +111,13 @@ export function MilestoneNegotiation({
         writeContractAsync
       );
 
+      // Lock proposals for this escrow + freelancer — one shot per escrow lifetime.
+      try { localStorage.setItem(proposalLockKey, "1"); } catch { /* ignore */ }
+      setProposalAlreadyUsed(true);
+
       toast({
         title: "Proposal Submitted",
-        description: "The client will review your proposed changes",
+        description: "You've used your one proposal for this project. The client will review it.",
       });
 
       // Dispatch escrowUpdated event for auto-refresh
@@ -322,8 +338,9 @@ export function MilestoneNegotiation({
     }
   };
 
-  // Show proposal UI for freelancers on NotStarted milestones
-  if (isFreelancer && milestone.status === "pending" && !hasProposal) {
+  // Show proposal UI for freelancers on NotStarted milestones — but only if they
+  // haven't already used their one proposal for this escrow.
+  if (isFreelancer && milestone.status === "pending" && !hasProposal && !proposalAlreadyUsed) {
     return (
       <Dialog open={isProposing} onOpenChange={setIsProposing}>
         <DialogTrigger asChild>

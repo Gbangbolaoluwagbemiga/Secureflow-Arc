@@ -44,7 +44,7 @@ export default function ApprovalsPage() {
   const { toast } = useToast();
   const { isJobCreator, loading: isJobCreatorLoading } = useJobCreatorStatus();
   const { refreshApprovals } = usePendingApprovals();
-  const { addNotification } = useNotifications();
+  const { addNotification, addCrossWalletNotification } = useNotifications();
   const [jobs, setJobs] = useState<JobWithApplications[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState<JobWithApplications | null>(
@@ -128,9 +128,7 @@ export default function ApprovalsPage() {
 
               // Get applications from on-chain transaction data
               try {
-                console.log(`Fetching applications for escrow ${i}...`);
                 const apps = await contractService.getApplicationDetails(i);
-                console.log(`Found ${apps.length} applications for escrow ${i}:`, apps);
                 applicationCount = apps.length;
 
                 for (const app of apps) {
@@ -235,23 +233,22 @@ export default function ApprovalsPage() {
         description: "The freelancer has been approved for this job",
       });
 
-      // 1. Notify the APPROVED freelancer
-      addNotification(
-        createApplicationNotification(
-          "approved",
-          Number(selectedJobForApproval.id),
-          selectedFreelancer.freelancerAddress,
-          {
-            jobTitle:
-              selectedJobForApproval.projectTitle ||
-              `Job #${selectedJobForApproval.id}`,
-            freelancerName:
-              selectedFreelancer.freelancerAddress.slice(0, 6) +
-              "..." +
-              selectedFreelancer.freelancerAddress.slice(-4),
-          }
-        ),
-        [selectedFreelancer.freelancerAddress]
+      // 1. Notify the APPROVED freelancer using cross-wallet notification
+      addCrossWalletNotification(
+        {
+          type: "application",
+          title: "🎉 You've Been Accepted!",
+          message: `Congratulations! You've been accepted for "${selectedJobForApproval.projectTitle || `Job #${selectedJobForApproval.id}`}". Work is ready to start!`,
+          actionUrl: `/freelancer?escrow=${selectedJobForApproval.id}`,
+          data: {
+            escrowId: selectedJobForApproval.id,
+            projectTitle: selectedJobForApproval.projectTitle || `Job #${selectedJobForApproval.id}`,
+            clientAddress: wallet.address,
+            action: "freelancer_accepted",
+          },
+        },
+        undefined, // clientAddress (not needed here)
+        selectedFreelancer.freelancerAddress // freelancerAddress
       );
 
       // Dispatch event for freelancer acceptance notification (real-time)
@@ -287,7 +284,7 @@ export default function ApprovalsPage() {
       );
 
       for (const applicant of otherApplicants) {
-        addNotification(
+        addCrossWalletNotification(
           {
             type: "application",
             title: "Job Position Filled",
@@ -300,7 +297,7 @@ export default function ApprovalsPage() {
               selectedFreelancer: selectedFreelancer.freelancerAddress,
             },
           },
-          [applicant.freelancerAddress]
+          applicant.freelancerAddress
         );
       }
 

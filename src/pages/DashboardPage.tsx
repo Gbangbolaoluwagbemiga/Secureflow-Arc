@@ -798,6 +798,16 @@ export default function DashboardPage() {
         description: "The freelancer has been notified and can resubmit",
       });
 
+      // Dispatch event for milestone rejection
+      window.dispatchEvent(new CustomEvent("milestoneRejected", {
+        detail: {
+          escrowId: Number(escrowId),
+          milestoneIndex,
+          reason,
+          sourceAddress: wallet.address,
+        }
+      }));
+
       // Wait a moment for blockchain state to update
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
