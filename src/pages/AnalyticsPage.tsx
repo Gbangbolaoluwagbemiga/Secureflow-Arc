@@ -110,6 +110,10 @@ export default function AnalyticsPage() {
         (import.meta.env.VITE_USDC_TOKEN_CONTRACT as string | undefined)?.trim() || NATIVE_ETH
       ).toLowerCase();
 
+      // Needed to recover original work value from escrow.platformFee, since
+      // the contract decrements escrow.totalAmount on dispute client refunds.
+      const platformFeeBP = await cs.getPlatformFeeBP();
+
       let activeEscrows = 0;
       let completedEscrows = 0;
       let disputedEscrows = 0;
@@ -133,7 +137,15 @@ export default function AnalyticsPage() {
 
           const status = escrow.status || 0;
           const escrowToken = (escrow.token || NATIVE_ETH).toLowerCase();
-          const amount = BigInt(escrow.totalAmount || 0);
+          // Recover original (pre-dispute-refund) work value:
+          //   platformFee = originalTotal * platformFeeBP / 10000
+          //   so originalTotal = platformFee * 10000 / platformFeeBP
+          const platformFee = BigInt(escrow.platformFee || 0);
+          const currentTotal = BigInt(escrow.totalAmount || 0);
+          const amount =
+            platformFeeBP > 0 && platformFee > 0n
+              ? (platformFee * 10000n) / BigInt(platformFeeBP)
+              : currentTotal;
           if (escrowToken === USDC_ADDRESS) {
             totalVolumeUsdcRaw += amount;
           } else {

@@ -241,11 +241,9 @@ export default function FreelancerPage() {
         return;
       }
 
-      // Refresh immediately, then do two quick follow-up refreshes to catch
-      // ledger/indexing propagation without the user manually refreshing.
+      // Single refresh per new cross-party notification — the notification
+      // only fires after the counterparty's tx is confirmed.
       fetchFreelancerEscrows(true);
-      window.setTimeout(() => void fetchFreelancerEscrows(true), 1200);
-      window.setTimeout(() => void fetchFreelancerEscrows(true), 3000);
     };
 
     window.addEventListener("escrowUpdated", handleEscrowUpdated);
@@ -263,33 +261,6 @@ export default function FreelancerPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet.address]);
-
-  // Listen for milestone submission events
-  useEffect(() => {
-    const handleMilestoneSubmitted = () => {
-      fetchFreelancerEscrows();
-    };
-
-    const handleMilestoneApproved = () => {
-      fetchFreelancerEscrows();
-    };
-
-    const handleMilestoneRejected = (_event: any) => {
-      fetchFreelancerEscrows();
-    };
-
-    window.addEventListener("milestoneSubmitted", handleMilestoneSubmitted);
-    window.addEventListener("milestoneApproved", handleMilestoneApproved);
-    window.addEventListener("milestoneRejected", handleMilestoneRejected);
-    return () => {
-      window.removeEventListener(
-        "milestoneSubmitted",
-        handleMilestoneSubmitted
-      );
-      window.removeEventListener("milestoneApproved", handleMilestoneApproved);
-      window.removeEventListener("milestoneRejected", handleMilestoneRejected);
-    };
-  }, []);
 
   const fetchFreelancerEscrows = async (isManualRefresh = false) => {
     if (isManualRefresh) {
