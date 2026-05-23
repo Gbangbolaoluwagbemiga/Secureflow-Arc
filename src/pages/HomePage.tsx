@@ -36,6 +36,11 @@ export default function HomePage() {
       // Get next escrow ID from blockchain (not hardcoded)
       const nextEscrowId = await contractService.getNextEscrowId();
 
+      // platformFeeBP is needed to back out the ORIGINAL work value from
+      // escrow.platformFee, since the contract decrements escrow.totalAmount
+      // when a client gets refunded in a dispute (SecureFlow.sol:451).
+      const platformFeeBP = await contractService.getPlatformFeeBP();
+
       let activeEscrows = 0;
       let completedEscrows = 0;
       let totalVolume = 0;
@@ -51,12 +56,18 @@ export default function HomePage() {
             continue;
           }
 
-          // Get status and total amount
+          // Get status. Total Volume Secured is the ORIGINAL contracted work
+          // value (excluding platform fee, before any dispute-refund clawback).
           const status = escrowData.status || 0;
-          const totalAmount = Number(escrowData.totalAmount || "0");
+          const platformFee = Number(escrowData.platformFee || "0");
+          const currentTotal = Number(escrowData.totalAmount || "0");
+          const originalTotal =
+            platformFeeBP > 0 && platformFee > 0
+              ? (platformFee * 10000) / platformFeeBP
+              : currentTotal;
 
-          // Add to total volume (convert from base units to USDC - 6 decimals)
-          totalVolume += totalAmount / 1e6;
+          // Convert from base units to USDC (6 decimals).
+          totalVolume += originalTotal / 1e6;
 
           // EscrowStatus enum: Pending=0, InProgress=1, Released=2, Refunded=3, Disputed=4, Expired=5
           if (status === 1) {

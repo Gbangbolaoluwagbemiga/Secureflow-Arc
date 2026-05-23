@@ -125,11 +125,10 @@ export default function DashboardPage() {
         return;
       }
 
-      // Refresh immediately, then do two quick follow-up refreshes to catch
-      // ledger/indexing propagation without the user manually refreshing.
+      // Single refresh per new cross-party notification — the notification
+      // only fires after the counterparty's tx is confirmed, so chain state
+      // is already current.
       fetchUserEscrows(true);
-      window.setTimeout(() => void fetchUserEscrows(true), 1200);
-      window.setTimeout(() => void fetchUserEscrows(true), 3000);
     };
 
     window.addEventListener("escrowUpdated", handleEscrowUpdated);
