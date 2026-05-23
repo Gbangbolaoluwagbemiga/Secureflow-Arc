@@ -20,6 +20,13 @@ import {
   uploadMilestoneFile,
   type UploadedFile,
 } from "@/lib/api";
+import { CONTRACTS } from "@/lib/web3/config";
+import { formatTokenAmount } from "@/lib/utils";
+
+interface MilestonePreview {
+  description: string;
+  amount: string;
+}
 
 interface ApplicationDialogProps {
   job: Escrow | null;
@@ -48,6 +55,8 @@ export function ApplicationDialog({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [milestones, setMilestones] = useState<MilestonePreview[] | null>(null);
+  const [milestonesLoading, setMilestonesLoading] = useState(false);
 
   // Keep user input until the dialog actually closes (e.g. after a successful tx).
   useEffect(() => {
@@ -56,8 +65,37 @@ export function ApplicationDialog({
       setProposedTimeline("");
       setSelectedFile(null);
       setUploadedFile(null);
+      setMilestones(null);
     }
   }, [open]);
+
+  // Fetch on-chain milestones for the job so applicants see the breakdown
+  // (count, per-milestone amount, and brief) before submitting.
+  useEffect(() => {
+    if (!open || !job) return;
+    let cancelled = false;
+    (async () => {
+      setMilestonesLoading(true);
+      try {
+        const { ContractService } = await import("@/lib/web3/contract-service");
+        const svc = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+        const raw = await svc.getMilestones(Number(job.id));
+        if (cancelled) return;
+        const parsed: MilestonePreview[] = (raw as any[]).map((m: any) => ({
+          description: m.description ?? "",
+          amount: m.amount?.toString() ?? "0",
+        }));
+        setMilestones(parsed);
+      } catch {
+        if (!cancelled) setMilestones([]);
+      } finally {
+        if (!cancelled) setMilestonesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, job]);
 
   const hasUserText = coverLetter.trim().length > 10;
 
@@ -152,6 +190,50 @@ export function ApplicationDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {/* Milestone breakdown for this job — count + per-milestone funds */}
+          <div>
+            <Label className="mb-1.5 block">
+              Milestones{" "}
+              {milestones && (
+                <span className="font-normal text-muted-foreground">
+                  ({milestones.length})
+                </span>
+              )}
+            </Label>
+            {milestonesLoading ? (
+              <div className="text-sm text-muted-foreground px-3 py-2 rounded-md border border-dashed">
+                Loading milestones…
+              </div>
+            ) : milestones && milestones.length > 0 ? (
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {milestones.map((m, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start justify-between gap-3 px-3 py-2 rounded-md border bg-muted/30"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-medium text-muted-foreground">
+                        Milestone {i + 1}
+                      </div>
+                      {m.description && (
+                        <div className="text-sm truncate">
+                          {m.description}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-sm font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">
+                      {formatTokenAmount(m.amount, job?.token)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground px-3 py-2 rounded-md border border-dashed">
+                No milestones defined for this job.
+              </div>
+            )}
+          </div>
+
           <div>
             <div className="flex items-center justify-between gap-2 mb-2">
               <Label htmlFor="coverLetter">Cover Letter *</Label>

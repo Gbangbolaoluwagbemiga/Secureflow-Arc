@@ -1,5 +1,10 @@
 export interface Milestone {
   description: string;
+  /** Original requirement description, cached client-side from the first time the
+   *  milestone was seen as NotStarted. The contract overwrites `description` on
+   *  submit, so this preserves the original brief for display alongside the
+   *  freelancer's submission response. */
+  originalDescription?: string;
   amount: string;
   status:
     | "pending"

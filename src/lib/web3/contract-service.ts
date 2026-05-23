@@ -1,4 +1,11 @@
-import { createPublicClient, http, getContract, type Address } from "viem";
+import {
+  createPublicClient,
+  http,
+  getContract,
+  decodeFunctionData,
+  parseAbiItem,
+  type Address,
+} from "viem";
 import { arcTestnet } from "@/providers/WalletProvider";
 import { CONTRACTS } from "./config";
 import SecureFlowABI from "./SecureFlowABI.json";
@@ -58,6 +65,96 @@ export class ContractService {
       return await this.contract.read.getMilestones([BigInt(id)]);
     } catch (error) {
       return [];
+    }
+  }
+
+  /**
+   * Recover the original milestone descriptions a client typed at job creation.
+   *
+   * The contract overwrites `Milestone.description` in `submitMilestone`, and
+   * there is no `MilestoneCreated` event that captured the original brief.
+   * To recover it we:
+   *   1. Find the `EscrowCreated` log for this escrowId — gives the txHash.
+   *   2. Fetch that transaction's input calldata.
+   *   3. Decode `createEscrow(...)` to read the `milestoneDescriptions` arg.
+   *
+   * Returns `null` if the originals can't be recovered (e.g. log not found,
+   * decode fails, or the deployment predates the current ABI shape).
+   */
+  async getOriginalMilestoneDescriptions(
+    escrowId: number,
+  ): Promise<string[] | null> {
+    const event = parseAbiItem(
+      "event EscrowCreated(uint256 indexed escrowId, address indexed depositor, address indexed beneficiary, address[] arbiters, uint256 requiredConfirmations, uint256 totalAmount, uint256 platformFee, address token, uint256 deadline, bool isOpenJob)",
+    );
+    const log = (msg: string, extra?: unknown) =>
+      // eslint-disable-next-line no-console
+      console.warn(`[secureflow:milestone-recovery] esc=${escrowId} ${msg}`, extra ?? "");
+    try {
+      // The public drpc RPC caps eth_getLogs ranges aggressively (sometimes
+      // as little as 1k blocks). Walk backwards in small chunks and fall back
+      // to even smaller windows if the call is rejected.
+      const latest = await this.client.getBlockNumber();
+      const CHUNK = 1000n;
+      const MAX_BLOCKS = 500_000n;
+      const minBlock = latest > MAX_BLOCKS ? latest - MAX_BLOCKS : 0n;
+      let txHash: `0x${string}` | null = null;
+      let toBlock = latest;
+      let scannedChunks = 0;
+      while (toBlock >= minBlock) {
+        const fromBlock = toBlock > CHUNK ? toBlock - CHUNK : 0n;
+        try {
+          const logs = await this.client.getLogs({
+            address: this.contract.address,
+            event,
+            args: { escrowId: BigInt(escrowId) },
+            fromBlock,
+            toBlock,
+          });
+          scannedChunks++;
+          if (logs.length > 0 && logs[0].transactionHash) {
+            txHash = logs[0].transactionHash;
+            log(`found log at block ${logs[0].blockNumber}`);
+            break;
+          }
+        } catch (e) {
+          log(`getLogs failed for range ${fromBlock}-${toBlock}`, e);
+          // Don't give up — try a smaller window on next iteration.
+        }
+        if (fromBlock === 0n) break;
+        toBlock = fromBlock - 1n;
+      }
+      if (!txHash) {
+        log(`no EscrowCreated log found after scanning ${scannedChunks} chunks (latest=${latest}, minBlock=${minBlock})`);
+        return null;
+      }
+      const tx = await this.client.getTransaction({ hash: txHash });
+      if (!tx?.input) {
+        log("transaction has no input data");
+        return null;
+      }
+      const decoded = decodeFunctionData({
+        abi: SecureFlowABI.abi,
+        data: tx.input,
+      });
+      if (decoded.functionName !== "createEscrow") {
+        log(`unexpected functionName: ${decoded.functionName}`);
+        return null;
+      }
+      // createEscrow signature: (beneficiary, token, totalAmount, durationDays,
+      //   arbiters, requiredConfirmations, milestoneAmounts,
+      //   milestoneDescriptions, projectTitle, projectDescription)
+      const args = decoded.args as unknown[] | undefined;
+      const descriptions = args?.[7];
+      if (!Array.isArray(descriptions)) {
+        log("milestoneDescriptions arg is not an array", descriptions);
+        return null;
+      }
+      log(`recovered ${descriptions.length} descriptions`);
+      return descriptions.map((d) => String(d));
+    } catch (e) {
+      log("unexpected error during recovery", e);
+      return null;
     }
   }
 
