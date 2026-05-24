@@ -179,7 +179,7 @@ export function ApplicationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-thick w-[min(92vw,56rem)] max-w-4xl p-7">
+      <DialogContent className="glass-thick w-[min(92vw,56rem)] max-w-4xl p-4 sm:p-7 max-h-[90vh] overflow-y-auto">
         <DialogHeader className="space-y-2">
           <DialogTitle className="leading-snug">
             Apply to {job?.projectTitle?.trim() || `Job #${job?.id || "Unknown"}`}
@@ -205,23 +205,23 @@ export function ApplicationDialog({
                 Loading milestones…
               </div>
             ) : milestones && milestones.length > 0 ? (
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                 {milestones.map((m, i) => (
                   <div
                     key={i}
-                    className="flex items-start justify-between gap-3 px-3 py-2 rounded-md border bg-muted/30"
+                    className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-3 px-3 py-2 rounded-md border bg-muted/30"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-medium text-muted-foreground">
                         Milestone {i + 1}
                       </div>
                       {m.description && (
-                        <div className="text-sm truncate">
+                        <div className="text-sm whitespace-pre-wrap break-words">
                           {m.description}
                         </div>
                       )}
                     </div>
-                    <div className="text-sm font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">
+                    <div className="text-sm font-semibold text-green-600 dark:text-green-400 whitespace-nowrap sm:self-start">
                       {formatTokenAmount(m.amount, job?.token)}
                     </div>
                   </div>
