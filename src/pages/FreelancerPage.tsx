@@ -5,6 +5,16 @@ import {
   isApiConfigured,
   type UploadedFile,
 } from "@/lib/api";
+import {
+  cacheOriginalDescription,
+  cacheOriginalDescriptions,
+  clearRecoveryInFlight,
+  getOriginalDescription,
+  hasAttemptedRecovery,
+  isRecoveryInFlight,
+  markRecoveryAttempted,
+  markRecoveryInFlight,
+} from "@/lib/milestone-cache";
 import { useWeb3 } from "@/contexts/web3-context";
 import { CONTRACTS } from "@/lib/web3/config";
 
@@ -93,6 +103,8 @@ interface Escrow {
 
 interface Milestone {
   description: string;
+  /** Cached original brief — see Milestone in src/lib/web3/types.ts. */
+  originalDescription?: string;
   amount: string;
   status: string;
   submittedAt?: number;
@@ -222,6 +234,8 @@ export default function FreelancerPage() {
   const [selectedResubmitMilestone, setSelectedResubmitMilestone] = useState<
     number | null
   >(null);
+  const [resubmitFile, setResubmitFile] = useState<File | null>(null);
+  const [resubmitUploading, setResubmitUploading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -241,11 +255,9 @@ export default function FreelancerPage() {
         return;
       }
 
-      // Refresh immediately, then do two quick follow-up refreshes to catch
-      // ledger/indexing propagation without the user manually refreshing.
+      // Single refresh per new cross-party notification — the notification
+      // only fires after the counterparty's tx is confirmed.
       fetchFreelancerEscrows(true);
-      window.setTimeout(() => void fetchFreelancerEscrows(true), 1200);
-      window.setTimeout(() => void fetchFreelancerEscrows(true), 3000);
     };
 
     window.addEventListener("escrowUpdated", handleEscrowUpdated);
@@ -263,33 +275,6 @@ export default function FreelancerPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet.address]);
-
-  // Listen for milestone submission events
-  useEffect(() => {
-    const handleMilestoneSubmitted = () => {
-      fetchFreelancerEscrows();
-    };
-
-    const handleMilestoneApproved = () => {
-      fetchFreelancerEscrows();
-    };
-
-    const handleMilestoneRejected = (_event: any) => {
-      fetchFreelancerEscrows();
-    };
-
-    window.addEventListener("milestoneSubmitted", handleMilestoneSubmitted);
-    window.addEventListener("milestoneApproved", handleMilestoneApproved);
-    window.addEventListener("milestoneRejected", handleMilestoneRejected);
-    return () => {
-      window.removeEventListener(
-        "milestoneSubmitted",
-        handleMilestoneSubmitted
-      );
-      window.removeEventListener("milestoneApproved", handleMilestoneApproved);
-      window.removeEventListener("milestoneRejected", handleMilestoneRejected);
-    };
-  }, []);
 
   const fetchFreelancerEscrows = async (isManualRefresh = false) => {
     if (isManualRefresh) {
@@ -442,8 +427,17 @@ export default function FreelancerPage() {
                   );
                 }
 
+                const currentDescription = m.description || "";
+                // Snapshot the original brief while the milestone is still
+                // NotStarted — once submitted, the contract overwrites it.
+                if (status === "pending" && currentDescription) {
+                  cacheOriginalDescription(i, index, currentDescription);
+                }
+                const originalDescription = getOriginalDescription(i, index);
+
                 return {
-                  description: m.description || "",
+                  description: currentDescription,
+                  originalDescription,
                   amount: m.amount?.toString() || "0",
                   status,
                   submittedAt,
@@ -491,6 +485,52 @@ export default function FreelancerPage() {
       }
 
       setEscrows(freelancerEscrows);
+
+      // Recover original milestone descriptions for any escrow where the
+      // freelancer has already submitted (so the cache snapshot path missed
+      // them). One getLogs+getTransaction per escrow, gated by a
+      // localStorage sentinel so we don't refetch each render.
+      void (async () => {
+        let anyRecovered = false;
+        for (const escrow of freelancerEscrows) {
+          const needsRecovery = escrow.milestones.some(
+            (m) => !m.originalDescription,
+          );
+          if (!needsRecovery) continue;
+          // Skip if we've already cached + sentineled it, or another concurrent
+          // effect is mid-recovery for the same escrow.
+          if (hasAttemptedRecovery(escrow.id)) continue;
+          if (isRecoveryInFlight(escrow.id)) continue;
+          markRecoveryInFlight(escrow.id);
+          try {
+            const originals =
+              await contractService.getOriginalMilestoneDescriptions(
+                Number(escrow.id),
+              );
+            if (originals && originals.length > 0) {
+              cacheOriginalDescriptions(escrow.id, originals);
+              markRecoveryAttempted(escrow.id);
+              anyRecovered = true;
+            }
+          } finally {
+            clearRecoveryInFlight(escrow.id);
+          }
+        }
+        if (anyRecovered) {
+          // Re-hydrate `originalDescription` from the freshly populated cache
+          // without re-fetching everything from chain.
+          setEscrows((prev) =>
+            prev.map((esc) => ({
+              ...esc,
+              milestones: esc.milestones.map((m, idx) => ({
+                ...m,
+                originalDescription:
+                  m.originalDescription ?? getOriginalDescription(esc.id, idx),
+              })),
+            })),
+          );
+        }
+      })();
 
       // Fetch badge and rating for the freelancer
       if (wallet.address) {
@@ -963,6 +1003,36 @@ export default function FreelancerPage() {
     try {
       setSubmittingMilestone(`${escrowId}-${milestoneIndex}`);
 
+      // Optionally upload an attachment first, then append the link to the
+      // description so the client sees it in the on-chain description blob.
+      let finalDescription = description.trim();
+      if (resubmitFile && isApiConfigured()) {
+        try {
+          setResubmitUploading(true);
+          toast({
+            title: "Uploading attachment…",
+            description: resubmitFile.name,
+          });
+          const uploaded: UploadedFile = await uploadMilestoneFile(
+            resubmitFile,
+            escrowId,
+            milestoneIndex,
+          );
+          finalDescription = `${finalDescription}\n\n[Attachment: ${uploaded.filename}](${uploaded.url})`;
+        } catch (uploadErr: any) {
+          toast({
+            title: "File upload failed",
+            description: uploadErr?.message || "Could not upload attachment",
+            variant: "destructive",
+          });
+          setSubmittingMilestone(null);
+          setResubmitUploading(false);
+          return;
+        } finally {
+          setResubmitUploading(false);
+        }
+      }
+
       toast({
         title: "Resubmitting milestone...",
         description: "Submitting transaction to resubmit your milestone",
@@ -975,7 +1045,7 @@ export default function FreelancerPage() {
       await contractService.resubmitMilestone({
         escrow_id: Number(escrowId),
         milestone_index: milestoneIndex,
-        description: description,
+        description: finalDescription,
         beneficiary: wallet.address || "",
       }, writeContractAsync);
 
@@ -1003,6 +1073,7 @@ export default function FreelancerPage() {
 
       // Clear form and close dialog
       setResubmitDescription("");
+      setResubmitFile(null);
       setShowResubmitDialog(false);
       setSelectedResubmitEscrow(null);
       setSelectedResubmitMilestone(null);
@@ -1732,24 +1803,48 @@ export default function FreelancerPage() {
                                       </div>
                                     </div>
 
-                                    {/* Client Requirements */}
-                                    {milestone.description &&
-                                      !milestone.description.includes(
-                                        "To be defined"
-                                      ) &&
-                                      milestone.description !==
-                                        `Milestone ${index + 1}` && (
+                                    {/* Client Requirements — prefer the
+                                        cached original brief once the
+                                        contract has overwritten m.description
+                                        with the freelancer's submission. */}
+                                    {(() => {
+                                      const requirements =
+                                        milestone.originalDescription ||
+                                        milestone.description;
+                                      if (
+                                        !requirements ||
+                                        requirements.includes("To be defined") ||
+                                        requirements === `Milestone ${index + 1}`
+                                      ) {
+                                        return null;
+                                      }
+                                      return (
                                         <div className="text-xs text-gray-600 dark:text-gray-400 mb-2">
                                           <span className="font-medium">
                                             Requirements:
                                           </span>
-                                          <p className="mt-1 line-clamp-2">
-                                            {milestone.description.length > 80
-                                              ? milestone.description.substring(
-                                                  0,
-                                                  80
-                                                ) + "..."
-                                              : milestone.description}
+                                          <p className="mt-1 whitespace-pre-wrap">
+                                            {requirements}
+                                          </p>
+                                        </div>
+                                      );
+                                    })()}
+
+                                    {/* Freelancer's submission response — only
+                                        when m.description differs from the
+                                        cached original brief (i.e. after
+                                        submitMilestone / resubmit). */}
+                                    {milestone.originalDescription &&
+                                      milestone.description &&
+                                      milestone.description !==
+                                        milestone.originalDescription &&
+                                      milestone.status !== "pending" && (
+                                        <div className="text-xs text-blue-700 dark:text-blue-300 mb-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+                                          <span className="font-medium">
+                                            Submission Response:
+                                          </span>
+                                          <p className="mt-1 whitespace-pre-wrap break-words">
+                                            {milestone.description}
                                           </p>
                                         </div>
                                       )}
@@ -2518,6 +2613,45 @@ export default function FreelancerPage() {
                       resubmission.
                     </p>
                   </div>
+
+                  {isApiConfigured() && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5">
+                        Attachment{" "}
+                        <span className="font-normal text-gray-500 dark:text-gray-400">
+                          (optional)
+                        </span>
+                      </label>
+                      {resubmitFile ? (
+                        <div className="flex items-center justify-between gap-2 p-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg text-sm">
+                          <span className="truncate text-blue-700 dark:text-blue-300 flex-1">
+                            {resubmitFile.name}
+                          </span>
+                          <button
+                            type="button"
+                            className="text-gray-400 hover:text-red-500 px-2"
+                            onClick={() => setResubmitFile(null)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 cursor-pointer hover:border-primary/40 text-sm text-gray-500 dark:text-gray-400">
+                          <input
+                            type="file"
+                            className="sr-only"
+                            accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.zip,.doc,.docx"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) setResubmitFile(f);
+                            }}
+                          />
+                          Click to attach a file
+                        </label>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex gap-2 pt-1">
                     <Button
                       onClick={() => {
@@ -2534,11 +2668,14 @@ export default function FreelancerPage() {
                       }}
                       disabled={
                         !resubmitDescription.trim() ||
-                        submittingMilestone !== null
+                        submittingMilestone !== null ||
+                        resubmitUploading
                       }
                       className="flex-1"
                     >
-                      {submittingMilestone
+                      {resubmitUploading
+                        ? "Uploading…"
+                        : submittingMilestone
                         ? "Resubmitting..."
                         : "Resubmit Milestone"}
                     </Button>
@@ -2547,6 +2684,7 @@ export default function FreelancerPage() {
                       onClick={() => {
                         setShowResubmitDialog(false);
                         setResubmitDescription("");
+                        setResubmitFile(null);
                         setSelectedResubmitEscrow(null);
                         setSelectedResubmitMilestone(null);
                       }}

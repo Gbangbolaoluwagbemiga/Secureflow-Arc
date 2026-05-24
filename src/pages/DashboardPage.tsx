@@ -4,6 +4,16 @@ import { Card } from "@/components/ui/card";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
+import {
+  cacheOriginalDescription,
+  cacheOriginalDescriptions,
+  clearRecoveryInFlight,
+  getOriginalDescription,
+  hasAttemptedRecovery,
+  isRecoveryInFlight,
+  markRecoveryAttempted,
+  markRecoveryInFlight,
+} from "@/lib/milestone-cache";
 
 import {
   useNotifications,
@@ -125,11 +135,10 @@ export default function DashboardPage() {
         return;
       }
 
-      // Refresh immediately, then do two quick follow-up refreshes to catch
-      // ledger/indexing propagation without the user manually refreshing.
+      // Single refresh per new cross-party notification — the notification
+      // only fires after the counterparty's tx is confirmed, so chain state
+      // is already current.
       fetchUserEscrows(true);
-      window.setTimeout(() => void fetchUserEscrows(true), 1200);
-      window.setTimeout(() => void fetchUserEscrows(true), 3000);
     };
 
     window.addEventListener("escrowUpdated", handleEscrowUpdated);
@@ -309,8 +318,15 @@ export default function DashboardPage() {
                   const approvedAt = m.approvedAt > 0 ? Number(m.approvedAt) * 1000 : undefined;
                   const resolvedAt = m.resolvedAt > 0 ? Number(m.resolvedAt) * 1000 : undefined;
 
+                  const currentDescription = m.description || "";
+                  if (status === "pending" && currentDescription) {
+                    cacheOriginalDescription(i, milestoneIndex, currentDescription);
+                  }
+                  const originalDescription = getOriginalDescription(i, milestoneIndex);
+
                   return {
-                    description: m.description || "",
+                    description: currentDescription,
+                    originalDescription,
                     amount: m.amount?.toString() || "0",
                     status,
                     submittedAt,
@@ -383,6 +399,47 @@ export default function DashboardPage() {
       // Always update escrows if fetch was successful
       // The error handling in catch block will preserve escrows if fetch fails
       setEscrows(userEscrows);
+
+      // Recover original milestone descriptions for escrows whose milestones
+      // have already been submitted (so the snapshot path missed them). See
+      // FreelancerPage for the same pattern.
+      void (async () => {
+        let anyRecovered = false;
+        for (const escrow of userEscrows) {
+          const needsRecovery = escrow.milestones.some(
+            (m) => !m.originalDescription,
+          );
+          if (!needsRecovery) continue;
+          if (hasAttemptedRecovery(escrow.id)) continue;
+          if (isRecoveryInFlight(escrow.id)) continue;
+          markRecoveryInFlight(escrow.id);
+          try {
+            const originals =
+              await contractService.getOriginalMilestoneDescriptions(
+                Number(escrow.id),
+              );
+            if (originals && originals.length > 0) {
+              cacheOriginalDescriptions(escrow.id, originals);
+              markRecoveryAttempted(escrow.id);
+              anyRecovered = true;
+            }
+          } finally {
+            clearRecoveryInFlight(escrow.id);
+          }
+        }
+        if (anyRecovered) {
+          setEscrows((prev) =>
+            prev.map((esc) => ({
+              ...esc,
+              milestones: esc.milestones.map((m, idx) => ({
+                ...m,
+                originalDescription:
+                  m.originalDescription ?? getOriginalDescription(esc.id, idx),
+              })),
+            })),
+          );
+        }
+      })();
     } catch (error) {
       // Don't clear existing escrows on error - preserve what we have
       // Only show toast if we don't have any escrows yet

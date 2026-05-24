@@ -293,9 +293,35 @@ export function EscrowCard({
                         <div className="flex-1 min-w-0">
                           {(() => {
                             const { body, attachment } = parseAttachment(milestone.description ?? "");
+                            // Once the contract overwrites the original
+                            // description on submit, the cached
+                            // `originalDescription` is the brief and
+                            // `description` is the submission response.
+                            const hasSubmissionResponse =
+                              milestone.originalDescription &&
+                              milestone.description &&
+                              milestone.description !== milestone.originalDescription &&
+                              milestone.status !== "pending";
+                            const requirements =
+                              milestone.originalDescription || body;
                             return (
                               <>
-                                <p className="text-sm font-medium">{body}</p>
+                                <p className="text-xs text-muted-foreground font-medium">
+                                  Requirements:
+                                </p>
+                                <p className="text-sm font-medium whitespace-pre-wrap break-words">
+                                  {requirements}
+                                </p>
+                                {hasSubmissionResponse && (
+                                  <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+                                    <p className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                                      Submission Response:
+                                    </p>
+                                    <p className="text-sm text-blue-800 dark:text-blue-200 whitespace-pre-wrap break-words mt-1">
+                                      {body}
+                                    </p>
+                                  </div>
+                                )}
                                 {attachment && (
                                   <a
                                     href={attachment.url}

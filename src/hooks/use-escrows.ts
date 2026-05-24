@@ -6,6 +6,10 @@ import SecureFlowABI from "@/lib/web3/SecureFlowABI.json";
 import useWalletStore from "@/store/wallet.store";
 import { toast } from "@/hooks/use-toast";
 import { erc20Abi } from "@/lib/web3/abis";
+import {
+  cacheOriginalDescriptions,
+  markRecoveryAttempted,
+} from "@/lib/milestone-cache";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 
@@ -230,6 +234,15 @@ export function useCreateEscrow() {
         } catch (e) {
           // Continue to next log
         }
+      }
+
+      // Snapshot the original milestone descriptions now — the contract will
+      // overwrite Milestone.description on submitMilestone(), so this is the
+      // last chance to capture them from the client's input cleanly. Also
+      // mark the recovery sentinel so we don't waste an RPC trip later.
+      if (escrowId && escrowId !== "unknown") {
+        cacheOriginalDescriptions(escrowId, milestoneDescriptions);
+        markRecoveryAttempted(escrowId);
       }
 
       return { hash, escrowId: escrowId || "unknown" };

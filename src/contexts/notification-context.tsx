@@ -181,15 +181,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         .slice(0, 8)
         .map((r) => `${r.id}:${r.read ? "1" : "0"}`)
         .join("|");
-      const hadPriorFingerprint = !!lastRemoteFingerprintRef.current;
       lastRemoteFingerprintRef.current = fingerprint;
       setNotifications((prev) => mergeRemoteNotifications(remote, prev));
 
-      // Refresh dashboard/freelancer pages on ANY new cross-party row.
-      // Skip on the very first sync after mount — that's just the initial fetch,
-      // not an opposite-party change worth a noisy refresh.
+      // Refresh dashboard/freelancer pages on any cross-party row we haven't
+      // already seen this session. Crucially, we DO fire on the first sync
+      // after mount too — that's the case where the user opens the app after
+      // the counterparty already acted, and the dashboard is otherwise stuck
+      // on stale-on-mount data.
       const crossPartyNewRows = newRows.filter((row) => isCrossPartyRemoteNotification(row));
-      if (hadPriorFingerprint && crossPartyNewRows.length > 0) {
+      if (crossPartyNewRows.length > 0) {
         const sourceAddress =
           (crossPartyNewRows[0]?.data?.sourceAddress as string | undefined) ??
           (crossPartyNewRows[0]?.data?.actorAddress as string | undefined);
@@ -776,7 +777,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("disputeRaised", handleDisputeRaised as EventListener);
       window.removeEventListener("disputeResolved", handleDisputeResolved as EventListener);
     };
-  }, [wallet.address, syncRemoteNotifications, addNotification]);
+    // addNotification intentionally omitted from deps — it's recreated every
+    // render which would re-tear listeners and reset lastRemoteIdsRef on every
+    // state update, causing an infinite refresh loop. Its closure only depends
+    // on wallet.address, which IS in deps, so the captured fn stays correct.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wallet.address, syncRemoteNotifications]);
 
   const markAsRead = (id: string) => {
     if (wallet.address && notificationIdIsRemote(id)) {
