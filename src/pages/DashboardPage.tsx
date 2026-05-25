@@ -814,6 +814,40 @@ export default function DashboardPage() {
     }
   };
 
+  const [reclaimingEscrowId, setReclaimingEscrowId] = useState<string | null>(null);
+
+  const reclaimSurplus = async (escrowId: string) => {
+    setReclaimingEscrowId(escrowId);
+    try {
+      toast({
+        title: "Reclaiming surplus…",
+        description: "Please confirm the transaction in your wallet",
+      });
+      await writeContractAsync({
+        address: CONTRACTS.SECUREFLOW_ESCROW as `0x${string}`,
+        abi: (await import("@/lib/web3/SecureFlowABI.json")).default.abi,
+        functionName: "emergencyRefundAfterDeadline",
+        args: [BigInt(escrowId)],
+      });
+      toast({
+        title: "Surplus reclaimed",
+        description: "Unallocated funds have been returned to your wallet.",
+      });
+      await fetchUserEscrows(true);
+    } catch (error: any) {
+      let msg = error.message || "Transaction failed";
+      if (msg.includes("EmergencyPeriodNotReached"))
+        msg = "Emergency period not reached yet — wait until 30 days after the deadline expires.";
+      toast({
+        title: "Reclaim failed",
+        description: msg,
+        variant: "destructive",
+      });
+    } finally {
+      setReclaimingEscrowId(null);
+    }
+  };
+
   const rejectMilestone = async (
     escrowId: string,
     milestoneIndex: number,
@@ -1100,6 +1134,8 @@ export default function DashboardPage() {
                   getDaysLeftMessage={getDaysLeftMessage}
                   onRaiseOverdueDispute={raiseOverdueDispute}
                   onExtendDeadline={extendDeadline}
+                  onReclaimSurplus={reclaimSurplus}
+                  reclaimingFunds={reclaimingEscrowId === escrow.id}
                 />
               ))}
           </div>
