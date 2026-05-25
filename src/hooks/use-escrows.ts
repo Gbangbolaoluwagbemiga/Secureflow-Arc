@@ -247,15 +247,44 @@ export function useCreateEscrow() {
 
       return { hash, escrowId: escrowId || "unknown" };
     },
-    onSuccess: (data) => {
+    onSuccess: async (data, params) => {
       queryClient.invalidateQueries({ queryKey: ["user-escrows"] });
       queryClient.invalidateQueries({ queryKey: ["escrows"] });
-      toast({ 
-        title: "Escrow created", 
-        description: data.escrowId !== "unknown" 
-          ? `Escrow #${data.escrowId} created successfully` 
-          : "Your escrow was created successfully" 
+      toast({
+        title: "Escrow created",
+        description: data.escrowId !== "unknown"
+          ? `Escrow #${data.escrowId} created successfully`
+          : "Your escrow was created successfully"
       });
+
+      // Notify a directly-assigned freelancer (non-zero beneficiary set at creation).
+      // Open-job freelancers are notified separately when the client accepts them.
+      const directBeneficiary = params.beneficiary?.trim();
+      if (
+        directBeneficiary &&
+        directBeneficiary !== ZERO_ADDRESS &&
+        directBeneficiary !== "0x"
+      ) {
+        try {
+          const { postNotification, isApiConfigured } = await import("@/lib/api");
+          if (isApiConfigured()) {
+            await postNotification({
+              wallet_address: directBeneficiary,
+              type: "escrow",
+              title: "You've been directly assigned a job",
+              message: `A client has assigned you to "${params.project_title || `Escrow #${data.escrowId}`}". Review the milestones on your Freelancer dashboard and start work when ready.`,
+              action_url: "/freelancer",
+              data: {
+                escrowId: data.escrowId,
+                projectTitle: params.project_title,
+              },
+            });
+          }
+        } catch (e) {
+          // Non-fatal — escrow is already created, just log
+          console.warn("[secureflow] Failed to notify directly assigned freelancer:", e);
+        }
+      }
     },
     onError: (error: Error) => {
       // Format error message to be more readable
@@ -468,10 +497,16 @@ export function useEmergencyRefund() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["escrow"] });
       queryClient.invalidateQueries({ queryKey: ["user-escrows"] });
-      toast({ title: "Refund executed", description: "Funds have been returned to your wallet." });
+      toast({
+        title: "Surplus reclaimed",
+        description: "Unallocated funds have been returned to your wallet.",
+      });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message || "Failed to execute refund", variant: "destructive" });
+      let msg = error.message || "Failed to reclaim surplus";
+      if (msg.includes("EmergencyPeriodNotReached"))
+        msg = "Emergency period not reached yet — wait until 30 days after the deadline.";
+      toast({ title: "Reclaim failed", description: msg, variant: "destructive" });
     },
   });
 }

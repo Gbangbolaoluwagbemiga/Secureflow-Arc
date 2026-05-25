@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { motion } from "framer-motion";
-import { Clock, DollarSign, ChevronDown, ChevronUp, Star, AlertTriangle, CalendarPlus, Scale, Paperclip, MessageCircle } from "lucide-react";
+import { Clock, DollarSign, ChevronDown, ChevronUp, Star, AlertTriangle, CalendarPlus, Scale, Paperclip, MessageCircle, CircleDollarSign, Loader2 } from "lucide-react";
 import { MilestoneActions } from "@/components/milestone-actions";
 import { MilestoneNegotiation } from "@/components/milestone-negotiation";
 import { JobManagement } from "@/components/job-management";
@@ -42,6 +42,8 @@ interface EscrowCardProps {
   };
   onRaiseOverdueDispute?: (escrowId: string, reason: string) => void;
   onExtendDeadline?: (escrowId: string, extraDays: number) => void;
+  onReclaimSurplus?: (escrowId: string) => void;
+  reclaimingFunds?: boolean;
 }
 
 export function EscrowCard({
@@ -53,6 +55,8 @@ export function EscrowCard({
   getDaysLeftMessage,
   onRaiseOverdueDispute,
   onExtendDeadline,
+  onReclaimSurplus,
+  reclaimingFunds = false,
 }: EscrowCardProps) {
   const { toast } = useToast();
   const [showRatingDialog, setShowRatingDialog] = useState(false);
@@ -66,8 +70,31 @@ export function EscrowCard({
   const [customDays, setCustomDays] = useState("");
   const [disputeReason, setDisputeReason] = useState("");
   const [showDisputeForm, setShowDisputeForm] = useState(false);
+  const [reclaimingFunds, setReclaimingFunds] = useState(false);
 
   const { wallet } = useWeb3();
+
+  // ── Surplus / stuck-funds detection ───────────────────────────────────────
+  // addJobFunds increases totalAmount but doesn't create new milestones, so
+  // sum(milestone.amount) can be < totalAmount after funds are added.
+  // approveMilestone only flips the escrow to Released when paidAmount ==
+  // totalAmount, so the surplus stays locked. emergencyRefundAfterDeadline
+  // (contract constant = deadline + 30 days) is the only on-chain escape hatch.
+  const milestoneAmountSum = escrow.milestones.reduce(
+    (acc, m) => acc + parseFloat(m.amount || "0"),
+    0,
+  );
+  const totalAmountNum = parseFloat(escrow.totalAmount || "0");
+  const surplusAmount = totalAmountNum - milestoneAmountSum;
+  const hasSurplus = escrow.isClient && surplusAmount > 0.000001;
+
+  const EMERGENCY_DELAY_MS = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
+  const emergencyAvailableAt = deadlineAt > 0 ? deadlineAt + EMERGENCY_DELAY_MS : 0;
+  const canEmergencyRefund = hasSurplus && emergencyAvailableAt > 0 && now > emergencyAvailableAt;
+  const emergencyAvailableDate = emergencyAvailableAt
+    ? new Date(emergencyAvailableAt).toLocaleDateString()
+    : null;
+
 
   const now = Date.now();
   const deadlineAt = escrow.deadlineAt ?? 0;
@@ -279,6 +306,39 @@ export function EscrowCard({
                 </div>
               </div>
             </div>
+
+            {/* ── Surplus funds warning banner (client only) ──────────────────── */}
+            {hasSurplus && (
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg border border-amber-400/50 bg-amber-50/80 dark:bg-amber-900/20 dark:border-amber-500/40 px-4 py-3 text-sm">
+                <div className="flex items-start gap-2 flex-1">
+                  <CircleDollarSign className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-amber-800 dark:text-amber-300">
+                      {surplusAmount.toLocaleString(undefined, { maximumFractionDigits: 6 })} surplus funds stuck
+                    </p>
+                    <p className="text-amber-700 dark:text-amber-400 text-xs mt-0.5">
+                      Extra funds were added above milestone amounts. They cannot be released until the
+                      emergency refund window opens ({canEmergencyRefund ? "now available" : `available ${emergencyAvailableDate}`}).
+                    </p>
+                  </div>
+                </div>
+                {canEmergencyRefund && onReclaimSurplus && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-amber-500 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 whitespace-nowrap shrink-0"
+                    onClick={() => onReclaimSurplus(escrow.id)}
+                    disabled={reclaimingFunds}
+                  >
+                    {reclaimingFunds ? (
+                      <><Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> Reclaiming…</>
+                    ) : (
+                      "Reclaim Surplus"
+                    )}
+                  </Button>
+                )}
+              </div>
+            )}
 
             {expandedEscrow === escrow.id && (
               <div className="space-y-4 pt-4 border-t">
