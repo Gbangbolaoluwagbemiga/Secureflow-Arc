@@ -497,7 +497,6 @@ export function EscrowCard({
                   isClient={escrow.isClient || false}
                   totalAmount={escrow.totalAmount}
                   token={escrow.token}
-                  beneficiary={escrow.beneficiary}
                   milestones={escrow.milestones.map((m, idx) => ({
                     index: idx,
                     description: m.originalDescription ?? m.description ?? "",

@@ -43,7 +43,6 @@ interface JobManagementProps {
   totalAmount: string; // wei string
   token: string;
   milestones?: MilestoneSummary[];
-  beneficiary?: string; // freelancer address, if already assigned
   onUpdate?: () => void;
 }
 
@@ -64,7 +63,6 @@ export function JobManagement({
   totalAmount,
   token,
   milestones = [],
-  beneficiary,
   onUpdate,
 }: JobManagementProps) {
   const { writeContractAsync } = useWriteContract();
@@ -98,8 +96,13 @@ export function JobManagement({
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  /** Save allocation intent + notify freelancer (non-fatal, only if already assigned) */
-  async function saveAllocationRequest(
+  /**
+   * Save allocation intent to localStorage.
+   * No freelancer is assigned yet (isOpenJob == true is required to call
+   * addJobFunds / withdrawJobFunds). The allocation request will be picked up
+   * by MilestoneNegotiation once the freelancer is accepted and opens the project.
+   */
+  function saveAllocationRequest(
     milestoneIdx: number,
     currentMilestoneAmountWei: string,
     deltaUsdc: number,
@@ -122,27 +125,6 @@ export function JobManagement({
       );
     } catch {
       // storage full or unavailable — non-fatal
-    }
-
-    // Notify the freelancer if they're already assigned
-    if (beneficiary && beneficiary !== "0x0000000000000000000000000000000000000000") {
-      try {
-        const { postNotification, isApiConfigured } = await import("@/lib/api");
-        if (isApiConfigured()) {
-          await postNotification({
-            wallet_address: beneficiary,
-            type: "escrow",
-            title: isAddition ? "Client added funds — action needed" : "Client reduced funds — FYI",
-            message: isAddition
-              ? `The client added ${deltaUsdc.toFixed(6)} USDC and wants to allocate it to Milestone ${milestoneIdx + 1}. Please propose a budget update so you can receive the funds.`
-              : `The client reduced the budget by ${deltaUsdc.toFixed(6)} USDC from Milestone ${milestoneIdx + 1}.`,
-            action_url: "/freelancer",
-            data: { escrowId, milestoneIndex: milestoneIdx, newAmountUsdc },
-          });
-        }
-      } catch {
-        // non-fatal
-      }
     }
   }
 
@@ -173,13 +155,15 @@ export function JobManagement({
         title: "Funds added ✓",
         description:
           milestones.length > 0 && selectedAddMilestone !== null
-            ? `${addTotalNum.toFixed(6)} USDC added. ${beneficiary ? "The freelancer has been notified to apply the allocation to Milestone " + (selectedAddMilestone + 1) + "." : "Assign a freelancer so they can apply the allocation."}`
+            ? `${addTotalNum.toFixed(6)} USDC added. When you assign a freelancer they'll be prompted to confirm the allocation to Milestone ${selectedAddMilestone + 1}.`
             : `${addTotalNum.toFixed(6)} USDC added to the pool.`,
       });
 
-      // Persist allocation request + notify freelancer
+      // Persist allocation intent — no freelancer yet (isOpenJob == true).
+      // MilestoneNegotiation will surface the "Confirm Budget Update" button
+      // once a freelancer is accepted and opens this milestone.
       if (selectedAddMilestone !== null && milestones[selectedAddMilestone]) {
-        await saveAllocationRequest(
+        saveAllocationRequest(
           selectedAddMilestone,
           milestones[selectedAddMilestone].amount,
           addTotalNum,
@@ -242,12 +226,12 @@ export function JobManagement({
         title: "Funds withdrawn ✓",
         description:
           milestones.length > 0 && selectedWithdrawMilestone !== null
-            ? `${withdrawTotalNum.toFixed(6)} USDC removed from Milestone ${selectedWithdrawMilestone + 1}. ${beneficiary ? "The freelancer has been notified." : ""}`
+            ? `${withdrawTotalNum.toFixed(6)} USDC removed from Milestone ${selectedWithdrawMilestone + 1}. The freelancer will be prompted to confirm the updated amount once assigned.`
             : `${withdrawTotalNum.toFixed(6)} USDC returned to your wallet.`,
       });
 
       if (selectedWithdrawMilestone !== null && milestones[selectedWithdrawMilestone]) {
-        await saveAllocationRequest(
+        saveAllocationRequest(
           selectedWithdrawMilestone,
           milestones[selectedWithdrawMilestone].amount,
           withdrawTotalNum,
