@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useWeb3 } from "@/contexts/web3-context";
 import { CONTRACTS } from "@/lib/web3/config";
-import { PlusCircle, MinusCircle, XCircle, AlertTriangle } from "lucide-react";
+import { PlusCircle, MinusCircle, XCircle, AlertTriangle, Info } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -28,14 +28,33 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { formatTokenAmount } from "@/lib/utils";
+
+interface MilestoneSummary {
+  index: number;
+  description: string;
+  amount: string; // wei string
+}
 
 interface JobManagementProps {
   escrowId: string;
   isOpenJob: boolean;
   isClient: boolean;
-  totalAmount: string;
+  totalAmount: string; // wei string
   token: string;
+  milestones?: MilestoneSummary[];
+  beneficiary?: string; // freelancer address, if already assigned
   onUpdate?: () => void;
+}
+
+const DECIMALS = 6; // Arc USDC
+
+function weiToUsdc(wei: string): number {
+  return parseFloat(wei) / 10 ** DECIMALS;
+}
+
+function usdcToWei(usdc: number): bigint {
+  return BigInt(Math.round(usdc * 10 ** DECIMALS));
 }
 
 export function JobManagement({
@@ -44,33 +63,97 @@ export function JobManagement({
   isClient,
   totalAmount,
   token,
+  milestones = [],
+  beneficiary,
   onUpdate,
 }: JobManagementProps) {
   const { writeContractAsync } = useWriteContract();
   const { toast } = useToast();
   const { wallet } = useWeb3();
-  const [isAddingFunds, setIsAddingFunds] = useState(false);
-  const [isWithdrawing, setIsWithdrawing] = useState(false);
-  const [additionalAmount, setAdditionalAmount] = useState("");
-  const [withdrawAmount, setWithdrawAmount] = useState("");
+
+  // ── Add Funds ────────────────────────────────────────────────────────────
+  const [addOpen, setAddOpen] = useState(false);
+  const [addTotal, setAddTotal] = useState("");
+  // Per-milestone allocation map: milestoneIndex → amount to add (USDC string)
+  const [addAllocations, setAddAllocations] = useState<Record<number, string>>({});
+  const [selectedAddMilestone, setSelectedAddMilestone] = useState<number | null>(
+    milestones.length === 1 ? 0 : null,
+  );
+
+  // ── Withdraw Funds ────────────────────────────────────────────────────────
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [withdrawTotal, setWithdrawTotal] = useState("");
+  const [selectedWithdrawMilestone, setSelectedWithdrawMilestone] = useState<number | null>(
+    milestones.length === 1 ? 0 : null,
+  );
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isNativeToken = token === "0x0000000000000000000000000000000000000000";
-  // Arc Testnet USDC uses 6 decimals, not 18
-  const currentAmount = parseFloat(totalAmount) / 1e6;
+  const currentTotal = weiToUsdc(totalAmount);
+  const addTotalNum = parseFloat(addTotal || "0");
+  const withdrawTotalNum = parseFloat(withdrawTotal || "0");
 
-  // Only show for open jobs (no freelancer assigned yet)
-  if (!isOpenJob || !isClient) {
-    return null;
+  // Only show for open jobs before freelancer assigned, client only
+  if (!isOpenJob || !isClient) return null;
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  /** Save allocation intent + notify freelancer (non-fatal, only if already assigned) */
+  async function saveAllocationRequest(
+    milestoneIdx: number,
+    currentMilestoneAmountWei: string,
+    deltaUsdc: number,
+    isAddition: boolean,
+  ) {
+    const newAmountUsdc = weiToUsdc(currentMilestoneAmountWei) + (isAddition ? deltaUsdc : -deltaUsdc);
+    if (newAmountUsdc <= 0) return;
+
+    const key = `allocation_request_${escrowId}_${milestoneIdx}`;
+    try {
+      localStorage.setItem(
+        key,
+        JSON.stringify({
+          milestoneIndex: milestoneIdx,
+          newAmountUsdc,
+          requestedAt: Date.now(),
+          requestedBy: wallet.address,
+          isAddition,
+        }),
+      );
+    } catch {
+      // storage full or unavailable — non-fatal
+    }
+
+    // Notify the freelancer if they're already assigned
+    if (beneficiary && beneficiary !== "0x0000000000000000000000000000000000000000") {
+      try {
+        const { postNotification, isApiConfigured } = await import("@/lib/api");
+        if (isApiConfigured()) {
+          await postNotification({
+            wallet_address: beneficiary,
+            type: "escrow",
+            title: isAddition ? "Client added funds — action needed" : "Client reduced funds — FYI",
+            message: isAddition
+              ? `The client added ${deltaUsdc.toFixed(6)} USDC and wants to allocate it to Milestone ${milestoneIdx + 1}. Please propose a budget update so you can receive the funds.`
+              : `The client reduced the budget by ${deltaUsdc.toFixed(6)} USDC from Milestone ${milestoneIdx + 1}.`,
+            action_url: "/freelancer",
+            data: { escrowId, milestoneIndex: milestoneIdx, newAmountUsdc },
+          });
+        }
+      } catch {
+        // non-fatal
+      }
+    }
   }
 
+  // ── Add Funds handler ─────────────────────────────────────────────────────
   const handleAddFunds = async () => {
-    if (!additionalAmount || parseFloat(additionalAmount) <= 0) {
-      toast({
-        title: "Invalid Amount",
-        description: "Please enter a valid amount",
-        variant: "destructive",
-      });
+    if (addTotalNum <= 0) {
+      toast({ title: "Invalid amount", description: "Enter a positive USDC amount.", variant: "destructive" });
+      return;
+    }
+    if (milestones.length > 0 && selectedAddMilestone === null) {
+      toast({ title: "Select a milestone", description: "Choose which milestone these funds go to.", variant: "destructive" });
       return;
     }
 
@@ -79,53 +162,65 @@ export function JobManagement({
       const { ContractService } = await import("@/lib/web3/contract-service");
       const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
 
-      toast({
-        title: "Adding funds...",
-        description: "Please confirm the transaction in your wallet",
-      });
+      toast({ title: "Adding funds…", description: "Confirm in your wallet." });
 
       await cs.addJobFunds(
-        {
-          escrow_id: Number(escrowId),
-          additional_amount: additionalAmount,
-          depositor: wallet.address || "",
-        },
-        writeContractAsync
+        { escrow_id: Number(escrowId), additional_amount: addTotal, depositor: wallet.address || "" },
+        writeContractAsync,
       );
 
       toast({
-        title: "Funds Added",
-        description: `Successfully added ${additionalAmount} USDC to the job`,
+        title: "Funds added ✓",
+        description:
+          milestones.length > 0 && selectedAddMilestone !== null
+            ? `${addTotalNum.toFixed(6)} USDC added. ${beneficiary ? "The freelancer has been notified to apply the allocation to Milestone " + (selectedAddMilestone + 1) + "." : "Assign a freelancer so they can apply the allocation."}`
+            : `${addTotalNum.toFixed(6)} USDC added to the pool.`,
       });
 
-      setIsAddingFunds(false);
-      setAdditionalAmount("");
+      // Persist allocation request + notify freelancer
+      if (selectedAddMilestone !== null && milestones[selectedAddMilestone]) {
+        await saveAllocationRequest(
+          selectedAddMilestone,
+          milestones[selectedAddMilestone].amount,
+          addTotalNum,
+          true,
+        );
+      }
+
+      setAddOpen(false);
+      setAddTotal("");
+      setSelectedAddMilestone(milestones.length === 1 ? 0 : null);
       onUpdate?.();
     } catch (error: any) {
-      toast({
-        title: "Failed to Add Funds",
-        description: error.message || "Transaction failed",
-        variant: "destructive",
-      });
+      toast({ title: "Failed to add funds", description: error.message || "Transaction failed", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // ── Withdraw Funds handler ────────────────────────────────────────────────
   const handleWithdrawFunds = async () => {
-    if (!withdrawAmount || parseFloat(withdrawAmount) <= 0) {
-      toast({
-        title: "Invalid Amount",
-        description: "Please enter a valid amount",
-        variant: "destructive",
-      });
+    if (withdrawTotalNum <= 0) {
+      toast({ title: "Invalid amount", description: "Enter a positive USDC amount.", variant: "destructive" });
       return;
     }
-
-    if (parseFloat(withdrawAmount) > currentAmount) {
+    if (withdrawTotalNum > currentTotal) {
+      toast({ title: "Exceeds balance", description: `Cannot withdraw more than ${currentTotal.toFixed(6)} USDC.`, variant: "destructive" });
+      return;
+    }
+    if (milestones.length > 0 && selectedWithdrawMilestone === null) {
+      toast({ title: "Select a milestone", description: "Choose which milestone to reduce.", variant: "destructive" });
+      return;
+    }
+    // Guard: don't let client reduce below zero for the chosen milestone
+    if (
+      selectedWithdrawMilestone !== null &&
+      milestones[selectedWithdrawMilestone] &&
+      withdrawTotalNum > weiToUsdc(milestones[selectedWithdrawMilestone].amount)
+    ) {
       toast({
-        title: "Invalid Amount",
-        description: "Cannot withdraw more than the current amount",
+        title: "Amount too large",
+        description: `Milestone ${selectedWithdrawMilestone + 1} only has ${weiToUsdc(milestones[selectedWithdrawMilestone].amount).toFixed(6)} USDC. Reduce a smaller amount.`,
         variant: "destructive",
       });
       return;
@@ -136,172 +231,265 @@ export function JobManagement({
       const { ContractService } = await import("@/lib/web3/contract-service");
       const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
 
-      toast({
-        title: "Withdrawing funds...",
-        description: "Please confirm the transaction in your wallet",
-      });
+      toast({ title: "Withdrawing funds…", description: "Confirm in your wallet." });
 
       await cs.withdrawJobFunds(
-        {
-          escrow_id: Number(escrowId),
-          withdraw_amount: withdrawAmount,
-          depositor: wallet.address || "",
-        },
-        writeContractAsync
+        { escrow_id: Number(escrowId), withdraw_amount: withdrawTotal, depositor: wallet.address || "" },
+        writeContractAsync,
       );
 
       toast({
-        title: "Funds Withdrawn",
-        description: `Successfully withdrew ${withdrawAmount} USDC from the job`,
+        title: "Funds withdrawn ✓",
+        description:
+          milestones.length > 0 && selectedWithdrawMilestone !== null
+            ? `${withdrawTotalNum.toFixed(6)} USDC removed from Milestone ${selectedWithdrawMilestone + 1}. ${beneficiary ? "The freelancer has been notified." : ""}`
+            : `${withdrawTotalNum.toFixed(6)} USDC returned to your wallet.`,
       });
 
-      setIsWithdrawing(false);
-      setWithdrawAmount("");
+      if (selectedWithdrawMilestone !== null && milestones[selectedWithdrawMilestone]) {
+        await saveAllocationRequest(
+          selectedWithdrawMilestone,
+          milestones[selectedWithdrawMilestone].amount,
+          withdrawTotalNum,
+          false,
+        );
+      }
+
+      setWithdrawOpen(false);
+      setWithdrawTotal("");
+      setSelectedWithdrawMilestone(milestones.length === 1 ? 0 : null);
       onUpdate?.();
     } catch (error: any) {
-      toast({
-        title: "Failed to Withdraw Funds",
-        description: error.message || "Transaction failed",
-        variant: "destructive",
-      });
+      toast({ title: "Failed to withdraw", description: error.message || "Transaction failed", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // ── Cancel Job handler ────────────────────────────────────────────────────
   const handleCancelJob = async () => {
     setIsSubmitting(true);
     try {
       const { ContractService } = await import("@/lib/web3/contract-service");
       const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
-
-      toast({
-        title: "Cancelling job...",
-        description: "Please confirm the transaction in your wallet",
-      });
-
-      await cs.cancelJob(
-        {
-          escrow_id: Number(escrowId),
-          depositor: wallet.address || "",
-        },
-        writeContractAsync
-      );
-
-      toast({
-        title: "Job Cancelled",
-        description: "Your funds have been refunded",
-      });
-
+      toast({ title: "Cancelling job…", description: "Confirm in your wallet." });
+      await cs.cancelJob({ escrow_id: Number(escrowId), depositor: wallet.address || "" }, writeContractAsync);
+      toast({ title: "Job cancelled", description: "Your funds have been refunded." });
       onUpdate?.();
     } catch (error: any) {
-      toast({
-        title: "Failed to Cancel Job",
-        description: error.message || "Transaction failed",
-        variant: "destructive",
-      });
+      toast({ title: "Failed to cancel", description: error.message || "Transaction failed", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <Card className="glass border-primary/20 p-4 mt-4">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold">Job Management</h3>
         <span className="text-sm text-muted-foreground">
-          Current Budget: {currentAmount.toFixed(4)} USDC
+          Budget: {currentTotal.toFixed(4)} USDC
         </span>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {/* Add Funds Dialog */}
-        <Dialog open={isAddingFunds} onOpenChange={setIsAddingFunds}>
+        {/* ── Add Funds Dialog ─────────────────────────────────────────── */}
+        <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger asChild>
             <Button variant="outline" size="sm" className="gap-2">
               <PlusCircle className="h-4 w-4" />
               Add Funds
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="sm:max-w-[480px]">
             <DialogHeader>
-              <DialogTitle>Add Funds to Job</DialogTitle>
+              <DialogTitle>Add Funds &amp; Allocate to Milestone</DialogTitle>
               <DialogDescription>
-                Increase the budget for this job before assigning a freelancer.
+                Choose how much to add and which milestone should receive the new funds.
+                {beneficiary && (
+                  <span className="block mt-1 text-blue-600 dark:text-blue-400">
+                    The freelancer will be notified to confirm the allocation on-chain.
+                  </span>
+                )}
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="add-amount">Additional Amount (USDC)</Label>
+
+            <div className="space-y-5 py-3">
+              {/* Total amount */}
+              <div className="space-y-1.5">
+                <Label htmlFor="add-total">Amount to Add (USDC)</Label>
                 <Input
-                  id="add-amount"
+                  id="add-total"
                   type="number"
-                  step="0.001"
-                  placeholder="0.5"
-                  value={additionalAmount}
-                  onChange={(e) => setAdditionalAmount(e.target.value)}
+                  step="0.000001"
+                  min="0"
+                  placeholder="e.g. 5"
+                  value={addTotal}
+                  onChange={(e) => setAddTotal(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  New total: {(currentAmount + parseFloat(additionalAmount || "0")).toFixed(4)}{" "}
-                  USDC
+                  New total: {(currentTotal + addTotalNum).toFixed(6)} USDC
                 </p>
               </div>
+
+              {/* Milestone allocation picker */}
+              {milestones.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label>Allocate to Milestone</Label>
+                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                    {milestones.map((m) => {
+                      const currentAmt = weiToUsdc(m.amount);
+                      const selected = selectedAddMilestone === m.index;
+                      return (
+                        <button
+                          key={m.index}
+                          type="button"
+                          onClick={() => setSelectedAddMilestone(m.index)}
+                          className={`w-full text-left flex items-start justify-between gap-3 rounded-md border px-3 py-2.5 text-sm transition-colors ${
+                            selected
+                              ? "border-primary bg-primary/10 ring-1 ring-primary"
+                              : "border-muted hover:border-primary/50"
+                          }`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium text-muted-foreground">
+                              Milestone {m.index + 1}
+                            </div>
+                            <div className="truncate">{m.description || "—"}</div>
+                          </div>
+                          <div className="text-xs font-semibold whitespace-nowrap">
+                            {currentAmt.toFixed(4)} USDC
+                            {selected && addTotalNum > 0 && (
+                              <span className="block text-green-600 dark:text-green-400">
+                                → {(currentAmt + addTotalNum).toFixed(4)}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Info box */}
+              <div className="flex gap-2 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-2.5 text-xs text-blue-700 dark:text-blue-300">
+                <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <span>
+                  Funds are added to the escrow pool immediately. The on-chain milestone amount
+                  updates when the freelancer proposes the new value and you approve it.
+                </span>
+              </div>
             </div>
+
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsAddingFunds(false)}>
+              <Button variant="outline" onClick={() => setAddOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleAddFunds} disabled={isSubmitting}>
-                {isSubmitting ? "Adding..." : "Add Funds"}
+              <Button onClick={handleAddFunds} disabled={isSubmitting || addTotalNum <= 0}>
+                {isSubmitting ? "Adding…" : "Add Funds"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {/* Withdraw Funds Dialog */}
-        <Dialog open={isWithdrawing} onOpenChange={setIsWithdrawing}>
+        {/* ── Withdraw Funds Dialog ─────────────────────────────────────── */}
+        <Dialog open={withdrawOpen} onOpenChange={setWithdrawOpen}>
           <DialogTrigger asChild>
             <Button variant="outline" size="sm" className="gap-2">
               <MinusCircle className="h-4 w-4" />
               Withdraw Funds
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="sm:max-w-[480px]">
             <DialogHeader>
-              <DialogTitle>Withdraw Funds from Job</DialogTitle>
+              <DialogTitle>Withdraw Funds from Milestone</DialogTitle>
               <DialogDescription>
-                Reduce the budget for this job before assigning a freelancer.
+                Choose which milestone to reduce and how much to withdraw. Funds are returned to
+                your wallet immediately.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="withdraw-amount">Withdraw Amount (USDC)</Label>
+
+            <div className="space-y-5 py-3">
+              {/* Milestone picker */}
+              {milestones.length > 0 && (
+                <div className="space-y-1.5">
+                  <Label>Reduce from Milestone</Label>
+                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                    {milestones.map((m) => {
+                      const currentAmt = weiToUsdc(m.amount);
+                      const selected = selectedWithdrawMilestone === m.index;
+                      return (
+                        <button
+                          key={m.index}
+                          type="button"
+                          onClick={() => setSelectedWithdrawMilestone(m.index)}
+                          className={`w-full text-left flex items-start justify-between gap-3 rounded-md border px-3 py-2.5 text-sm transition-colors ${
+                            selected
+                              ? "border-primary bg-primary/10 ring-1 ring-primary"
+                              : "border-muted hover:border-primary/50"
+                          }`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium text-muted-foreground">
+                              Milestone {m.index + 1}
+                            </div>
+                            <div className="truncate">{m.description || "—"}</div>
+                          </div>
+                          <div className="text-xs font-semibold whitespace-nowrap">
+                            {currentAmt.toFixed(4)} USDC
+                            {selected && withdrawTotalNum > 0 && (
+                              <span className={`block ${withdrawTotalNum > currentAmt ? "text-red-500" : "text-amber-600 dark:text-amber-400"}`}>
+                                → {Math.max(0, currentAmt - withdrawTotalNum).toFixed(4)}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Amount */}
+              <div className="space-y-1.5">
+                <Label htmlFor="withdraw-total">Amount to Withdraw (USDC)</Label>
                 <Input
-                  id="withdraw-amount"
+                  id="withdraw-total"
                   type="number"
-                  step="0.001"
-                  placeholder="0.5"
-                  max={currentAmount}
-                  value={withdrawAmount}
-                  onChange={(e) => setWithdrawAmount(e.target.value)}
+                  step="0.000001"
+                  min="0"
+                  max={
+                    selectedWithdrawMilestone !== null && milestones[selectedWithdrawMilestone]
+                      ? weiToUsdc(milestones[selectedWithdrawMilestone].amount)
+                      : currentTotal
+                  }
+                  placeholder="e.g. 2"
+                  value={withdrawTotal}
+                  onChange={(e) => setWithdrawTotal(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Remaining: {(currentAmount - parseFloat(withdrawAmount || "0")).toFixed(4)} USDC
+                  Remaining in escrow: {Math.max(0, currentTotal - withdrawTotalNum).toFixed(6)} USDC
                 </p>
               </div>
             </div>
+
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsWithdrawing(false)}>
+              <Button variant="outline" onClick={() => setWithdrawOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleWithdrawFunds} disabled={isSubmitting}>
-                {isSubmitting ? "Withdrawing..." : "Withdraw Funds"}
+              <Button
+                onClick={handleWithdrawFunds}
+                disabled={isSubmitting || withdrawTotalNum <= 0 || withdrawTotalNum > currentTotal}
+              >
+                {isSubmitting ? "Withdrawing…" : "Withdraw Funds"}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {/* Cancel Job Alert Dialog */}
+        {/* ── Cancel Job ───────────────────────────────────────────────── */}
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="destructive" size="sm" className="gap-2">
@@ -316,9 +504,8 @@ export function JobManagement({
                 Cancel This Job?
               </AlertDialogTitle>
               <AlertDialogDescription>
-                This will cancel the job and refund all your funds (including platform fees).
-                This action cannot be undone. You can only cancel jobs that haven't been assigned
-                to a freelancer yet.
+                This cancels the job and refunds all funds (including platform fees) to your wallet.
+                This action cannot be undone. You can only cancel before a freelancer is assigned.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -328,7 +515,7 @@ export function JobManagement({
                 disabled={isSubmitting}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
-                {isSubmitting ? "Cancelling..." : "Cancel Job"}
+                {isSubmitting ? "Cancelling…" : "Cancel Job"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -336,7 +523,7 @@ export function JobManagement({
       </div>
 
       <p className="text-xs text-muted-foreground mt-4">
-        💡 You can only manage funds before assigning a freelancer to this job.
+        💡 Fund management is available until a freelancer is assigned to this job.
       </p>
     </Card>
   );
