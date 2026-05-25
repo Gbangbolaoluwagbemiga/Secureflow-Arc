@@ -16,11 +16,39 @@ const app = express();
 const port = Number(process.env.PORT) || 8787;
 const apiSecret = process.env.API_SECRET;
 
-// Lock CORS to the configured frontend origin in production
-const allowedOrigin = process.env.FRONTEND_URL ?? true;
+// Build a CORS origin matcher that supports:
+//  - FRONTEND_URL: comma-separated list of exact origins, e.g.
+//      https://secureflow-arc.vercel.app,https://my-preview.vercel.app
+//  - FRONTEND_URL_PATTERN: a regex string to allow preview deployments, e.g.
+//      https://secureflow.*\.vercel\.app
+//  - If neither is set, allow all origins (open for local dev).
+const rawOrigins = (process.env.FRONTEND_URL ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+const rawPattern = process.env.FRONTEND_URL_PATTERN?.trim();
+
+function buildOriginMatcher(): cors.CorsOptions["origin"] {
+  const exactSet = new Set(rawOrigins);
+  const pattern = rawPattern ? new RegExp(rawPattern) : null;
+
+  if (exactSet.size === 0 && !pattern) {
+    // No restriction configured — allow all (dev / unconfigured)
+    return true;
+  }
+
+  return (origin, callback) => {
+    // Non-browser requests (curl, server-to-server) have no origin
+    if (!origin) return callback(null, true);
+    if (exactSet.has(origin)) return callback(null, true);
+    if (pattern && pattern.test(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin '${origin}' not allowed`));
+  };
+}
+
 app.use(
   cors({
-    origin: allowedOrigin,
+    origin: buildOriginMatcher(),
     credentials: true,
   }),
 );
