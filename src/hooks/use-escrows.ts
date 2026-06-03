@@ -48,8 +48,9 @@ export function useEscrows(escrowIds: number[]) {
   return useQuery({
     queryKey: ["escrows", escrowIds],
     queryFn: async () => {
-      const results = await Promise.all(escrowIds.map((id) => contractService.getEscrow(id)));
-      return results.filter(Boolean);
+      // Single multicall round trip instead of N sequential RPCs
+      const batch = await contractService.getEscrowsBatch(escrowIds);
+      return escrowIds.map((id) => batch[id]).filter(Boolean);
     },
     enabled: escrowIds.length > 0,
     staleTime: 30_000,

@@ -182,18 +182,25 @@ export default function DashboardPage() {
       const { ContractService } = await import("@/lib/web3/contract-service");
       const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
 
-      const nextEscrowId = await contractService.getNextEscrowId();
-
       const userEscrows: Escrow[] = [];
-
       const nowSeconds = Math.floor(Date.now() / 1000);
 
-      // Fetch user's escrows from the contract
-      // Check if there are any escrows created yet (nextEscrowId > 1 means at least one escrow exists)
-      const maxEscrowsToCheck = Math.min(nextEscrowId - 1, 20);
-      for (let i = 1; i <= maxEscrowsToCheck; i++) {
+      // 1 RPC: get all escrow IDs for this wallet
+      const escrowIds = await contractService.getUserEscrows(wallet.address);
+
+      if (escrowIds.length === 0) {
+        setEscrows([]);
+        return;
+      }
+
+      // 1 multicall: fetch all escrow structs at once
+      const escrowBatch = await contractService.getEscrowsBatch(escrowIds);
+      // 1 multicall: fetch all milestones at once
+      const milestonesBatch = await contractService.getMilestonesBatch(escrowIds);
+
+      for (const i of escrowIds) {
         try {
-          const escrowData = await contractService.getEscrow(i);
+          const escrowData = escrowBatch[i];
 
           if (!escrowData) {
             continue;
@@ -208,21 +215,13 @@ export default function DashboardPage() {
             escrowData.beneficiary.toLowerCase().trim() ===
               wallet.address.toLowerCase().trim();
 
-
           if (isPayer || isBeneficiary) {
             const approxCreatedAt = Date.now();
             const deadlineSeconds = Number(escrowData.deadline ?? 0);
             const remainingSeconds = Math.max(0, deadlineSeconds - nowSeconds);
             const durationInSeconds = remainingSeconds;
 
-            // Fetch milestones for this escrow
-            let milestonesData: any[] = [];
-            try {
-              milestonesData = await contractService.getMilestones(i);
-            } catch (milestoneError) {
-              // Continue with empty milestones array if fetch fails
-              milestonesData = [];
-            }
+            const milestonesData: any[] = milestonesBatch[i] ?? [];
             const milestones = milestonesData
               .map((m: any, milestoneIndex: number) => {
                 try {
