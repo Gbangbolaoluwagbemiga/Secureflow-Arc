@@ -657,13 +657,22 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
 
     /**
      * @notice Add more funds to an open job (before freelancer is assigned)
+     *         and allocate them to a specific milestone so the sum invariant
+     *         (sum(milestoneAmounts) == totalAmount) is always maintained.
+     * @param milestoneIndex The milestone that receives the additional funds.
      */
-    function addJobFunds(uint256 escrowId, uint256 additionalAmount) external payable nonReentrant whenNotPaused {
+    function addJobFunds(uint256 escrowId, uint256 additionalAmount, uint256 milestoneIndex)
+        external payable nonReentrant whenNotPaused
+    {
         Escrow storage esc = _requireEscrow(escrowId);
         if (msg.sender != esc.depositor) revert Unauthorized();
         if (!esc.isOpenJob) revert CannotCancelAssignedJob();
         if (esc.status != EscrowStatus.Pending) revert InvalidEscrowStatus();
         if (additionalAmount == 0) revert InvalidAmount();
+
+        // Validate milestone index before any state changes
+        Milestone storage m = _getMilestone(escrowId, milestoneIndex);
+        if (m.status != MilestoneStatus.NotStarted) revert MilestoneAlreadyProcessed();
 
         uint256 additionalFee = (additionalAmount * platformFeeBP) / 10000;
         uint256 totalDeposit = additionalAmount + additionalFee;
@@ -675,31 +684,42 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
             IERC20(esc.token).safeTransferFrom(msg.sender, address(this), totalDeposit);
         }
 
-        uint256 oldAmount = esc.totalAmount;
+        uint256 oldTotal = esc.totalAmount;
         esc.totalAmount += additionalAmount;
         esc.platformFee += additionalFee;
+        m.amount += additionalAmount; // keep sum invariant
 
         escrowedAmount[esc.token] += additionalAmount;
         totalFeesByToken[esc.token] += additionalFee;
 
-        emit JobFundsUpdated(escrowId, oldAmount, esc.totalAmount, true);
+        emit JobFundsUpdated(escrowId, oldTotal, esc.totalAmount, true);
     }
 
     /**
-     * @notice Withdraw funds from an open job (before freelancer is assigned)
+     * @notice Withdraw funds from a specific milestone on an open job
+     *         (before freelancer is assigned). Reduces both totalAmount and
+     *         the chosen milestone's amount to keep the sum invariant.
+     * @param milestoneIndex The milestone to reduce.
      */
-    function withdrawJobFunds(uint256 escrowId, uint256 withdrawAmount) external nonReentrant whenNotPaused {
+    function withdrawJobFunds(uint256 escrowId, uint256 withdrawAmount, uint256 milestoneIndex)
+        external nonReentrant whenNotPaused
+    {
         Escrow storage esc = _requireEscrow(escrowId);
         if (msg.sender != esc.depositor) revert Unauthorized();
         if (!esc.isOpenJob) revert CannotCancelAssignedJob();
         if (esc.status != EscrowStatus.Pending) revert InvalidEscrowStatus();
         if (withdrawAmount == 0 || withdrawAmount > esc.totalAmount) revert InvalidAmount();
 
+        Milestone storage m = _getMilestone(escrowId, milestoneIndex);
+        if (m.status != MilestoneStatus.NotStarted) revert MilestoneAlreadyProcessed();
+        if (withdrawAmount > m.amount) revert InvalidAmount(); // can't reduce below zero
+
         uint256 feeToRefund = (withdrawAmount * platformFeeBP) / 10000;
-        uint256 oldAmount = esc.totalAmount;
+        uint256 oldTotal = esc.totalAmount;
 
         esc.totalAmount -= withdrawAmount;
         esc.platformFee -= feeToRefund;
+        m.amount -= withdrawAmount; // keep sum invariant
 
         escrowedAmount[esc.token] -= withdrawAmount;
         totalFeesByToken[esc.token] -= feeToRefund;
@@ -707,7 +727,7 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
         uint256 totalWithdraw = withdrawAmount + feeToRefund;
         _doTransfer(esc.token, address(this), esc.depositor, totalWithdraw);
 
-        emit JobFundsUpdated(escrowId, oldAmount, esc.totalAmount, false);
+        emit JobFundsUpdated(escrowId, oldTotal, esc.totalAmount, false);
     }
 
     /* ===================== MILESTONE NEGOTIATION ===================== */
