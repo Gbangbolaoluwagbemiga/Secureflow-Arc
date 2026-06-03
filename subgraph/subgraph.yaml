@@ -6,7 +6,7 @@ dataSources:
     name: SecureFlow
     network: arc-testnet
     source:
-      address: "0xaa6a6Ee940803Ba5759d26a8c2FADbeE7d939052"
+      address: "0x3A8527E43beC82415bF8A1C1aa0b072F7b49c24f"
       abi: SecureFlow
       startBlock: 0
     mapping:

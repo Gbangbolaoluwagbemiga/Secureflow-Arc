@@ -291,18 +291,25 @@ export default function FreelancerPage() {
       const { ContractService } = await import("@/lib/web3/contract-service");
       const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
 
-      // Get next escrow ID from blockchain (not hardcoded)
-      const nextEscrowId = await contractService.getNextEscrowId();
-
       const nowSeconds = Math.floor(Date.now() / 1000);
-
       const freelancerEscrows: Escrow[] = [];
 
-      // Fetch escrows where current user is the beneficiary
-      const maxEscrowsToCheck = Math.min(nextEscrowId - 1, 20);
-      for (let i = 1; i <= maxEscrowsToCheck; i++) {
+      // 1 RPC: all escrow IDs for this wallet (depositor + beneficiary)
+      const escrowIds = await contractService.getUserEscrows(wallet.address);
+
+      if (escrowIds.length === 0) {
+        setEscrows([]);
+        return;
+      }
+
+      // 1 multicall: all escrow structs
+      const escrowBatch = await contractService.getEscrowsBatch(escrowIds);
+      // 1 multicall: all milestones
+      const milestonesBatch = await contractService.getMilestonesBatch(escrowIds);
+
+      for (const i of escrowIds) {
         try {
-          const escrowData = await contractService.getEscrow(i);
+          const escrowData = escrowBatch[i];
 
           if (!escrowData) {
             continue;
@@ -319,8 +326,7 @@ export default function FreelancerPage() {
             const remainingSeconds = Math.max(0, deadlineSeconds - nowSeconds);
             const durationInSeconds = remainingSeconds;
 
-            // Fetch milestones for this escrow
-            const milestonesData = await contractService.getMilestones(i);
+            const milestonesData: any[] = milestonesBatch[i] ?? [];
 
             const allMilestones = milestonesData.map(
               (m: any, index: number) => {

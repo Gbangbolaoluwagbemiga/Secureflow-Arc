@@ -228,21 +228,20 @@ export default function JobsPage() {
 
       const openJobs: Escrow[] = [];
 
-      // Fetch open jobs from the contract
-      // escrowCount is the next available ID, so if it's 2, that means 1 escrow exists
-      // But if it times out and returns 1, we should still check escrow 1 directly
-      // Increased limit to 100 to show more jobs
-      const maxEscrowsToFetch = 100; // Increased from 20 to 100
-      const escrowsToCheck = Math.min(
-        Math.max(escrowCount - 1, 1),
-        maxEscrowsToFetch
-      );
+      // Build the list of IDs to check (all escrows up to 100)
+      const maxEscrowsToFetch = 100;
+      const escrowsToCheck = Math.min(Math.max(escrowCount - 1, 0), maxEscrowsToFetch);
+      const allIds = Array.from({ length: escrowsToCheck }, (_, k) => k + 1);
 
-      // Always check at least escrow 1, even if escrowCount is 1 (might be timeout default)
+      // 1 multicall round trip for all escrow structs
+      const escrowBatch = escrowsToCheck > 0
+        ? await contractService.getEscrowsBatch(allIds)
+        : {};
+
       if (escrowsToCheck > 0) {
-        for (let i = 1; i <= escrowsToCheck; i++) {
+        for (const i of allIds) {
           try {
-            const escrowData = await contractService.getEscrow(i);
+            const escrowData = escrowBatch[i];
             if (!escrowData) {
               continue;
             }

@@ -19,14 +19,16 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 export class ContractService {
   private client;
   private contract: any; // typed loosely to avoid viem generic constraints
+  readonly addr: Address;
 
   constructor(contractAddress: string = CONTRACTS.SECUREFLOW_ESCROW) {
+    this.addr = contractAddress as Address;
     this.client = createPublicClient({
       chain: arcTestnet,
       transport: http(),
     });
     this.contract = getContract({
-      address: contractAddress as Address,
+      address: this.addr,
       abi: SecureFlowABI.abi,
       client: this.client,
     });
@@ -57,6 +59,85 @@ export class ContractService {
       };
     } catch (error) {
       return null;
+    }
+  }
+
+  /**
+   * Batch-fetch multiple escrows in a single multicall3 RPC round trip.
+   * Falls back to sequential individual reads for any IDs that fail.
+   */
+  async getEscrowsBatch(ids: number[]): Promise<Record<number, Awaited<ReturnType<typeof this.getEscrow>>>> {
+    if (ids.length === 0) return {};
+
+    try {
+      const calls = ids.map((id) => ({
+        address: this.addr,
+        abi: SecureFlowABI.abi,
+        functionName: "getEscrow",
+        args: [BigInt(id)],
+      }));
+
+      const results = await this.client.multicall({ contracts: calls, allowFailure: true });
+
+      const out: Record<number, Awaited<ReturnType<typeof this.getEscrow>>> = {};
+      for (let i = 0; i < ids.length; i++) {
+        const r = results[i];
+        if (r.status === "success" && r.result) {
+          const e = r.result as any;
+          out[ids[i]] = {
+            depositor: e.depositor,
+            beneficiary: e.beneficiary,
+            token: e.token,
+            totalAmount: e.totalAmount,
+            paidAmount: e.paidAmount,
+            deadline: e.deadline,
+            status: e.status,
+            workStarted: e.workStarted,
+            platformFee: e.platformFee,
+            isOpenJob: e.isOpenJob,
+            projectTitle: e.projectTitle,
+            projectDescription: e.projectDescription,
+          };
+        } else {
+          // individual fallback
+          out[ids[i]] = await this.getEscrow(ids[i]);
+        }
+      }
+      return out;
+    } catch {
+      // full fallback — sequential
+      const out: Record<number, Awaited<ReturnType<typeof this.getEscrow>>> = {};
+      await Promise.all(ids.map(async (id) => { out[id] = await this.getEscrow(id); }));
+      return out;
+    }
+  }
+
+  /**
+   * Batch-fetch milestones for multiple escrows in one multicall round trip.
+   */
+  async getMilestonesBatch(ids: number[]): Promise<Record<number, any[]>> {
+    if (ids.length === 0) return {};
+
+    try {
+      const calls = ids.map((id) => ({
+        address: this.addr,
+        abi: SecureFlowABI.abi,
+        functionName: "getMilestones",
+        args: [BigInt(id)],
+      }));
+
+      const results = await this.client.multicall({ contracts: calls, allowFailure: true });
+
+      const out: Record<number, any[]> = {};
+      for (let i = 0; i < ids.length; i++) {
+        const r = results[i];
+        out[ids[i]] = r.status === "success" && Array.isArray(r.result) ? (r.result as any[]) : [];
+      }
+      return out;
+    } catch {
+      const out: Record<number, any[]> = {};
+      await Promise.all(ids.map(async (id) => { out[id] = await this.getMilestones(id); }));
+      return out;
     }
   }
 
