@@ -8,14 +8,14 @@ contract WhitelistUSDCScript is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         // Hardcode the deployed contract address
-        address payable secureFlowAddress = payable(0xcF1dbED572C954b147EB91daf9Ff3875960461f2);
+        address payable secureFlowAddress = payable(0x3A8527E43beC82415bF8A1C1aa0b072F7b49c24f);
         
         vm.startBroadcast(deployerPrivateKey);
 
         SecureFlow secureFlow = SecureFlow(secureFlowAddress);
         
         // Arc Testnet USDC address (address(0) represents native USDC)
-        address usdcAddress = 0x0000000000000000000000000000000000000000;
+        address usdcAddress = 0x3600000000000000000000000000000000000000;
         
         // Whitelist USDC
         secureFlow.whitelistToken(usdcAddress);

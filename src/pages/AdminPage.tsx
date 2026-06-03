@@ -8,7 +8,7 @@ import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { contractService } from "@/lib/web3/contract-service";
 import { useWriteContract } from "wagmi";
-import { Shield, CheckCircle2, AlertCircle, Loader2, Coins, Lock } from "lucide-react";
+import { Shield, CheckCircle2, AlertCircle, Loader2, Coins, Lock, Percent } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ArbiterManagement } from "@/components/admin/arbiter-management";
 
@@ -26,9 +26,39 @@ export default function AdminPage() {
   const [tokenAddress, setTokenAddress] = useState(USDC_ADDRESS);
   const [isWhitelisting, setIsWhitelisting] = useState(false);
 
+  // Platform fee state
+  const [currentFeeBP, setCurrentFeeBP] = useState<number | null>(null);
+  const [newFeePercent, setNewFeePercent] = useState("");
+  const [isSettingFee, setIsSettingFee] = useState(false);
+
   useEffect(() => {
     checkOwnership();
   }, [wallet.address]);
+
+  useEffect(() => {
+    if (!isOwner) return;
+    contractService.getPlatformFeeBP().then(setCurrentFeeBP);
+  }, [isOwner]);
+
+  const handleSetPlatformFee = async () => {
+    const pct = parseFloat(newFeePercent);
+    if (isNaN(pct) || pct < 0 || pct > 15) {
+      toast({ title: "Invalid fee", description: "Enter a percentage between 0 and 15.", variant: "destructive" });
+      return;
+    }
+    const bp = Math.round(pct * 100);
+    setIsSettingFee(true);
+    try {
+      await contractService.setPlatformFee(bp, (args) => writeContractAsync(args));
+      setCurrentFeeBP(bp);
+      setNewFeePercent("");
+      toast({ title: "Platform fee updated", description: `Fee set to ${pct}% (${bp} basis points).` });
+    } catch (error: any) {
+      toast({ title: "Failed to update fee", description: error?.message || "Transaction failed.", variant: "destructive" });
+    } finally {
+      setIsSettingFee(false);
+    }
+  };
 
   const checkOwnership = async () => {
     if (!wallet.address) {
@@ -358,6 +388,51 @@ export default function AdminPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Platform Fee */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Percent className="h-5 w-5" />
+              Platform Fee
+            </CardTitle>
+            <CardDescription>
+              Current fee:{" "}
+              {currentFeeBP === null ? (
+                <Loader2 className="inline h-3 w-3 animate-spin" />
+              ) : (
+                <strong>{(currentFeeBP / 100).toFixed(2)}% ({currentFeeBP} bp)</strong>
+              )}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="newFee">New Fee (%)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="newFee"
+                  type="number"
+                  min="0"
+                  max="15"
+                  step="0.01"
+                  placeholder="e.g. 2.5"
+                  value={newFeePercent}
+                  onChange={(e) => setNewFeePercent(e.target.value)}
+                />
+                <Button
+                  onClick={handleSetPlatformFee}
+                  disabled={isSettingFee || !newFeePercent}
+                  className="shrink-0"
+                >
+                  {isSettingFee ? <Loader2 className="h-4 w-4 animate-spin" /> : "Set Fee"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Enter 0–15%. Value is stored as basis points (1% = 100 bp). Applies to all future escrow deposits.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Arbiter Management */}
         <ArbiterManagement onArbiterAdded={() => {

@@ -94,39 +94,6 @@ export function JobManagement({
   // Only show for open jobs before freelancer assigned, client only
   if (!isOpenJob || !isClient) return null;
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-
-  /**
-   * Save allocation intent to localStorage.
-   * No freelancer is assigned yet (isOpenJob == true is required to call
-   * addJobFunds / withdrawJobFunds). The allocation request will be picked up
-   * by MilestoneNegotiation once the freelancer is accepted and opens the project.
-   */
-  function saveAllocationRequest(
-    milestoneIdx: number,
-    currentMilestoneAmountWei: string,
-    deltaUsdc: number,
-    isAddition: boolean,
-  ) {
-    const newAmountUsdc = weiToUsdc(currentMilestoneAmountWei) + (isAddition ? deltaUsdc : -deltaUsdc);
-    if (newAmountUsdc <= 0) return;
-
-    const key = `allocation_request_${escrowId}_${milestoneIdx}`;
-    try {
-      localStorage.setItem(
-        key,
-        JSON.stringify({
-          milestoneIndex: milestoneIdx,
-          newAmountUsdc,
-          requestedAt: Date.now(),
-          requestedBy: wallet.address,
-          isAddition,
-        }),
-      );
-    } catch {
-      // storage full or unavailable — non-fatal
-    }
-  }
 
   // ── Add Funds handler ─────────────────────────────────────────────────────
   const handleAddFunds = async () => {
@@ -147,29 +114,21 @@ export function JobManagement({
       toast({ title: "Adding funds…", description: "Confirm in your wallet." });
 
       await cs.addJobFunds(
-        { escrow_id: Number(escrowId), additional_amount: addTotal, depositor: wallet.address || "" },
+        {
+          escrow_id: Number(escrowId),
+          additional_amount: addTotal,
+          depositor: wallet.address || "",
+          milestone_index: selectedAddMilestone ?? 0,
+        },
         writeContractAsync,
       );
 
       toast({
         title: "Funds added ✓",
-        description:
-          milestones.length > 0 && selectedAddMilestone !== null
-            ? `${addTotalNum.toFixed(6)} USDC added. When you assign a freelancer they'll be prompted to confirm the allocation to Milestone ${selectedAddMilestone + 1}.`
-            : `${addTotalNum.toFixed(6)} USDC added to the pool.`,
+        description: selectedAddMilestone !== null
+          ? `${addTotalNum.toFixed(6)} USDC added to Milestone ${selectedAddMilestone + 1}.`
+          : `${addTotalNum.toFixed(6)} USDC added.`,
       });
-
-      // Persist allocation intent — no freelancer yet (isOpenJob == true).
-      // MilestoneNegotiation will surface the "Confirm Budget Update" button
-      // once a freelancer is accepted and opens this milestone.
-      if (selectedAddMilestone !== null && milestones[selectedAddMilestone]) {
-        saveAllocationRequest(
-          selectedAddMilestone,
-          milestones[selectedAddMilestone].amount,
-          addTotalNum,
-          true,
-        );
-      }
 
       setAddOpen(false);
       setAddTotal("");
@@ -218,26 +177,21 @@ export function JobManagement({
       toast({ title: "Withdrawing funds…", description: "Confirm in your wallet." });
 
       await cs.withdrawJobFunds(
-        { escrow_id: Number(escrowId), withdraw_amount: withdrawTotal, depositor: wallet.address || "" },
+        {
+          escrow_id: Number(escrowId),
+          withdraw_amount: withdrawTotal,
+          depositor: wallet.address || "",
+          milestone_index: selectedWithdrawMilestone ?? 0,
+        },
         writeContractAsync,
       );
 
       toast({
         title: "Funds withdrawn ✓",
-        description:
-          milestones.length > 0 && selectedWithdrawMilestone !== null
-            ? `${withdrawTotalNum.toFixed(6)} USDC removed from Milestone ${selectedWithdrawMilestone + 1}. The freelancer will be prompted to confirm the updated amount once assigned.`
-            : `${withdrawTotalNum.toFixed(6)} USDC returned to your wallet.`,
+        description: selectedWithdrawMilestone !== null
+          ? `${withdrawTotalNum.toFixed(6)} USDC removed from Milestone ${selectedWithdrawMilestone + 1}.`
+          : `${withdrawTotalNum.toFixed(6)} USDC returned to your wallet.`,
       });
-
-      if (selectedWithdrawMilestone !== null && milestones[selectedWithdrawMilestone]) {
-        saveAllocationRequest(
-          selectedWithdrawMilestone,
-          milestones[selectedWithdrawMilestone].amount,
-          withdrawTotalNum,
-          false,
-        );
-      }
 
       setWithdrawOpen(false);
       setWithdrawTotal("");
@@ -361,8 +315,8 @@ export function JobManagement({
               <div className="flex gap-2 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-2.5 text-xs text-blue-700 dark:text-blue-300">
                 <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                 <span>
-                  Funds are added to the escrow pool immediately. The on-chain milestone amount
-                  updates when the freelancer proposes the new value and you approve it.
+                  Funds and the milestone amount are updated on-chain in the same transaction.
+                  Freelancers will see the updated amount immediately when they browse the job.
                 </span>
               </div>
             </div>

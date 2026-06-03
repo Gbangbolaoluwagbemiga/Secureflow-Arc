@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useWeb3 } from "@/contexts/web3-context";
 import { CONTRACTS } from "@/lib/web3/config";
-import { Check, X, Edit, CircleDollarSign } from "lucide-react";
+import { Check, X, Edit } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -52,26 +52,6 @@ export function MilestoneNegotiation({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const hasProposal = milestone.status === "proposal_pending";
-
-  // Read pending allocation request set by client's "Add Funds" / "Withdraw Funds" popup.
-  // Shape: { milestoneIndex, newAmountUsdc, requestedAt, requestedBy, isAddition }
-  const allocationKey = `allocation_request_${escrowId}_${milestoneIndex}`;
-  const [allocationRequest, setAllocationRequest] = useState<{
-    newAmountUsdc: number;
-    isAddition: boolean;
-  } | null>(() => {
-    try {
-      const raw = localStorage.getItem(allocationKey);
-      return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
-  });
-
-  // Pre-fill proposed amount from allocation request if present
-  useEffect(() => {
-    if (allocationRequest && !proposedAmount) {
-      setProposedAmount(allocationRequest.newAmountUsdc.toString());
-    }
-  }, [allocationKey]); // only on mount
 
   const handleProposeChange = async () => {
     if (!proposedAmount || parseFloat(proposedAmount) <= 0) {
@@ -119,13 +99,9 @@ export function MilestoneNegotiation({
         writeContractAsync
       );
 
-      // Clear the allocation request from localStorage once submitted
-      try { localStorage.removeItem(allocationKey); } catch { /* ignore */ }
-      setAllocationRequest(null);
-
       toast({
-        title: "Budget update proposed",
-        description: "The client will review and approve your proposed amount.",
+        title: "Proposal submitted",
+        description: "The client will review and approve your proposed changes.",
       });
 
       // Dispatch escrowUpdated event for auto-refresh
@@ -346,82 +322,6 @@ export function MilestoneNegotiation({
     }
   };
 
-  // Show allocation-confirmation button for freelancers ONLY when the client has
-  // stored an allocation request for this milestone (via Add/Withdraw Funds popup).
-  // Freelancers cannot proactively propose budget changes — it must be client-initiated.
-  if (isFreelancer && milestone.status === "pending" && !hasProposal && allocationRequest) {
-    const currentUsdc = parseFloat(milestone.amount) / 1e6;
-    const delta = allocationRequest.newAmountUsdc - currentUsdc;
-    return (
-      <div className="mt-2">
-        <div className="flex items-start gap-2 rounded-md border border-blue-400/50 bg-blue-50/80 dark:bg-blue-900/20 px-3 py-2.5 text-sm mb-2">
-          <CircleDollarSign className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
-          <div>
-            <p className="font-medium text-blue-800 dark:text-blue-200">
-              Client {allocationRequest.isAddition ? "added" : "reduced"} budget for this milestone
-            </p>
-            <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
-              New amount: <strong>{allocationRequest.newAmountUsdc.toFixed(6)} USDC</strong>
-              {" "}({delta >= 0 ? "+" : ""}{delta.toFixed(6)} USDC from current {currentUsdc.toFixed(6)}).
-              Click below to confirm on-chain.
-            </p>
-          </div>
-        </div>
-
-        <Dialog open={isProposing} onOpenChange={setIsProposing}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-2 border-blue-400 text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30">
-              <CircleDollarSign className="h-4 w-4" />
-              Confirm Budget Update
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[480px]">
-            <DialogHeader>
-              <DialogTitle>Confirm Milestone Budget Update</DialogTitle>
-              <DialogDescription>
-                The client has requested a budget change for this milestone. Review the new amount
-                and submit to apply it on-chain. The client will approve it.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="amount">New Amount (USDC)</Label>
-                <Input
-                  id="amount"
-                  type="number"
-                  step="0.000001"
-                  min="0"
-                  value={proposedAmount}
-                  onChange={(e) => setProposedAmount(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Current on-chain: {currentUsdc.toFixed(6)} USDC →{" "}
-                  <strong>{parseFloat(proposedAmount || "0").toFixed(6)} USDC</strong>
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Milestone Description</Label>
-                <Textarea
-                  id="description"
-                  value={proposedDescription}
-                  onChange={(e) => setProposedDescription(e.target.value)}
-                  rows={3}
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsProposing(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleProposeChange} disabled={isSubmitting}>
-                {isSubmitting ? "Submitting…" : "Submit for Approval"}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-    );
-  }
 
   // Show pending proposal for clients
   if (isClient && hasProposal && milestone.proposedAmount) {
