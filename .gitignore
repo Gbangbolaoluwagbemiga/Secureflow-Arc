@@ -82,7 +82,18 @@ coverage/
 out/
 cache/
 broadcast/
+foundry.lock
 
 # contract deployment artifacts
 .contract-id
 .contract-address
+
+# Subgraph build output
+subgraph/build/
+subgraph/generated/
+
+# Rust / cargo (not used at runtime)
+.cargo/
+
+# IDE
+.config/
