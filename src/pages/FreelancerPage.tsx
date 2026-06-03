@@ -17,6 +17,9 @@ import {
 } from "@/lib/milestone-cache";
 import { useWeb3 } from "@/contexts/web3-context";
 import { CONTRACTS } from "@/lib/web3/config";
+import { isGraphConfigured, graphQuery } from "@/lib/graph/client";
+import { GET_USER_ESCROWS, type UserEscrowsResponse } from "@/lib/graph/queries";
+import { normalizeEscrow, dedupeEscrows } from "@/lib/graph/normalize";
 
 import {
   useNotifications,
@@ -287,7 +290,26 @@ export default function FreelancerPage() {
         return;
       }
 
-      // Use ContractService instead of contract.call - it reads from blockchain
+      // ── Try subgraph first ────────────────────────────────────────────────
+      if (isGraphConfigured()) {
+        try {
+          const data = await graphQuery<UserEscrowsResponse>(
+            GET_USER_ESCROWS,
+            { address: wallet.address.toLowerCase() },
+          );
+          // Freelancer page: only escrows where wallet is beneficiary
+          const raw = dedupeEscrows(data.deposited ?? [], data.assigned ?? []).filter(
+            (g) => g.beneficiary?.toLowerCase() === wallet.address.toLowerCase(),
+          );
+          const normalized = raw.map((g) => normalizeEscrow(g, wallet.address));
+          setEscrows(normalized);
+          return;
+        } catch (graphErr) {
+          console.warn("[freelancer] subgraph query failed, falling back to RPC:", graphErr);
+        }
+      }
+
+      // ── RPC fallback ──────────────────────────────────────────────────────
       const { ContractService } = await import("@/lib/web3/contract-service");
       const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
 
