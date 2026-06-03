@@ -5,6 +5,9 @@ import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
 import { contractService } from "@/lib/web3/contract-service";
+import { isGraphConfigured, graphQuery } from "@/lib/graph/client";
+import { GET_OPEN_JOBS, type OpenJobsResponse } from "@/lib/graph/queries";
+import { normalizeEscrow } from "@/lib/graph/normalize";
 
 import {
   useNotifications,
@@ -211,29 +214,32 @@ export default function JobsPage() {
   const fetchOpenJobs = async () => {
     setLoading(true);
     try {
-      // Fetch all data from blockchain via contractService.getEscrow()
-      // This ensures all displayed data is from the blockchain, not mock data
+      // ── Try subgraph first ──────────────────────────────────────────────
+      if (isGraphConfigured()) {
+        try {
+          const data = await graphQuery<OpenJobsResponse>(GET_OPEN_JOBS);
+          const normalized = (data.escrows ?? []).map((g) =>
+            normalizeEscrow(g, wallet.address ?? ""),
+          );
+          setTotalEscrowsCount(normalized.length);
+          setJobs(normalized);
+          return;
+        } catch (graphErr) {
+          console.warn("[jobs] subgraph query failed, falling back to RPC:", graphErr);
+        }
+      }
 
-      // Current time in seconds (Arc EVM uses Unix timestamps, not ledger sequences)
+      // ── RPC fallback (multicall) ────────────────────────────────────────
       const nowSeconds = Math.floor(Date.now() / 1000);
-
-      // Get total number of escrows using contract service
-      // NO TIMEOUT - let it complete fully to get accurate count from blockchain
       const escrowCount = await contractService.getNextEscrowId();
-
-      // Set the actual escrow count from blockchain
-      // escrowCount is the next available ID, so actual count is escrowCount - 1
       const actualCount = Math.max(0, escrowCount - 1);
       setTotalEscrowsCount(actualCount);
 
       const openJobs: Escrow[] = [];
-
-      // Build the list of IDs to check (all escrows up to 100)
       const maxEscrowsToFetch = 100;
       const escrowsToCheck = Math.min(Math.max(escrowCount - 1, 0), maxEscrowsToFetch);
       const allIds = Array.from({ length: escrowsToCheck }, (_, k) => k + 1);
 
-      // 1 multicall round trip for all escrow structs
       const escrowBatch = escrowsToCheck > 0
         ? await contractService.getEscrowsBatch(allIds)
         : {};

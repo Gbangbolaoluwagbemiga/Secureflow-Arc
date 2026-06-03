@@ -8,7 +8,7 @@ dataSources:
     source:
       address: "0x3A8527E43beC82415bF8A1C1aa0b072F7b49c24f"
       abi: SecureFlow
-      startBlock: 0
+      startBlock: 44116317
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7

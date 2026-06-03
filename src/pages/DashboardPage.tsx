@@ -4,6 +4,9 @@ import { Card } from "@/components/ui/card";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
+import { isGraphConfigured, graphQuery } from "@/lib/graph/client";
+import { GET_USER_ESCROWS, type UserEscrowsResponse } from "@/lib/graph/queries";
+import { normalizeEscrow, dedupeEscrows } from "@/lib/graph/normalize";
 import {
   cacheOriginalDescription,
   cacheOriginalDescriptions,
@@ -179,6 +182,25 @@ export default function DashboardPage() {
         return;
       }
 
+      // ── Try subgraph first (fast), fall back to multicall RPC ────────────
+      if (isGraphConfigured()) {
+        try {
+          const data = await graphQuery<UserEscrowsResponse>(
+            GET_USER_ESCROWS,
+            { address: wallet.address.toLowerCase() },
+          );
+          const raw = dedupeEscrows(data.deposited ?? [], data.assigned ?? []);
+          const normalized = raw.map((g) => normalizeEscrow(g, wallet.address));
+          if (normalized.length > 0 || previousEscrowsCount === 0) {
+            setEscrows(normalized);
+          }
+          return; // subgraph succeeded — skip RPC path
+        } catch (graphErr) {
+          console.warn("[dashboard] subgraph query failed, falling back to RPC:", graphErr);
+        }
+      }
+
+      // ── RPC fallback (multicall) ──────────────────────────────────────────
       const { ContractService } = await import("@/lib/web3/contract-service");
       const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
 
