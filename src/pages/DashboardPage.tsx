@@ -190,7 +190,7 @@ export default function DashboardPage() {
             { address: wallet.address.toLowerCase() },
           );
           const raw = dedupeEscrows(data.deposited ?? [], data.assigned ?? []);
-          const normalized = raw.map((g) => normalizeEscrow(g, wallet.address));
+          const normalized = raw.map((g) => normalizeEscrow(g, wallet.address ?? ""));
           if (normalized.length > 0 || previousEscrowsCount === 0) {
             setEscrows(normalized);
           }

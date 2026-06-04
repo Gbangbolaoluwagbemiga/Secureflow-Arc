@@ -87,16 +87,15 @@ export function EscrowCard({
   const surplusAmount = totalAmountNum - milestoneAmountSum;
   const hasSurplus = escrow.isClient && surplusAmount > 0.000001;
 
-  const EMERGENCY_DELAY_MS = 30 * 24 * 60 * 60 * 1000; // 30 days in ms
+  const now = Date.now();
+  const deadlineAt = escrow.deadlineAt ?? 0;
+
+  const EMERGENCY_DELAY_MS = 30 * 24 * 60 * 60 * 1000;
   const emergencyAvailableAt = deadlineAt > 0 ? deadlineAt + EMERGENCY_DELAY_MS : 0;
   const canEmergencyRefund = hasSurplus && emergencyAvailableAt > 0 && now > emergencyAvailableAt;
   const emergencyAvailableDate = emergencyAvailableAt
     ? new Date(emergencyAvailableAt).toLocaleDateString()
     : null;
-
-
-  const now = Date.now();
-  const deadlineAt = escrow.deadlineAt ?? 0;
   const isOverdue = deadlineAt > 0 && now > deadlineAt;
   const isActive = escrow.status === "active" || escrow.status === "pending";
   const isSettled =

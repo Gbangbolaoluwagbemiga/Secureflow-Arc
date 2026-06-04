@@ -72,9 +72,9 @@ export class ContractService {
     try {
       const calls = ids.map((id) => ({
         address: this.addr,
-        abi: SecureFlowABI.abi,
-        functionName: "getEscrow",
-        args: [BigInt(id)],
+        abi: SecureFlowABI.abi as any,
+        functionName: "getEscrow" as const,
+        args: [BigInt(id)] as const,
       }));
 
       const results = await this.client.multicall({ contracts: calls, allowFailure: true });
@@ -121,9 +121,9 @@ export class ContractService {
     try {
       const calls = ids.map((id) => ({
         address: this.addr,
-        abi: SecureFlowABI.abi,
-        functionName: "getMilestones",
-        args: [BigInt(id)],
+        abi: SecureFlowABI.abi as any,
+        functionName: "getMilestones" as const,
+        args: [BigInt(id)] as const,
       }));
 
       const results = await this.client.multicall({ contracts: calls, allowFailure: true });

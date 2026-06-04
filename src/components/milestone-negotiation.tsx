@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useWeb3 } from "@/contexts/web3-context";
 import { CONTRACTS } from "@/lib/web3/config";
-import { Check, X, Edit } from "lucide-react";
+import { Check, X, Edit, MessageSquare } from "lucide-react";
 import {
   Dialog,
   DialogContent,

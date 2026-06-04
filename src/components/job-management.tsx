@@ -43,6 +43,7 @@ interface JobManagementProps {
   totalAmount: string; // wei string
   token: string;
   milestones?: MilestoneSummary[];
+  beneficiary?: string;
   onUpdate?: () => void;
 }
 
@@ -63,6 +64,7 @@ export function JobManagement({
   totalAmount,
   token,
   milestones = [],
+  beneficiary,
   onUpdate,
 }: JobManagementProps) {
   const { writeContractAsync } = useWriteContract();

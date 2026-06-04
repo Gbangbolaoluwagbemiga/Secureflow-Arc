@@ -99,9 +99,9 @@ interface Escrow {
   deadlineAt?: number;
   milestones: Milestone[];
   projectTitle?: string;
-  projectDescription: string;
-  isOpenJob: boolean;
-  milestoneCount: number;
+  projectDescription?: string;
+  isOpenJob?: boolean;
+  milestoneCount?: number;
 }
 
 interface Milestone {
@@ -298,11 +298,12 @@ export default function FreelancerPage() {
             { address: wallet.address.toLowerCase() },
           );
           // Freelancer page: only escrows where wallet is beneficiary
+          const addr = wallet.address ?? "";
           const raw = dedupeEscrows(data.deposited ?? [], data.assigned ?? []).filter(
-            (g) => g.beneficiary?.toLowerCase() === wallet.address.toLowerCase(),
+            (g) => g.beneficiary?.toLowerCase() === addr.toLowerCase(),
           );
-          const normalized = raw.map((g) => normalizeEscrow(g, wallet.address));
-          setEscrows(normalized);
+          const normalized = raw.map((g) => normalizeEscrow(g, addr));
+          setEscrows(normalized as any);
           return;
         } catch (graphErr) {
           console.warn("[freelancer] subgraph query failed, falling back to RPC:", graphErr);
@@ -1510,7 +1511,7 @@ export default function FreelancerPage() {
                   // Search filter
                   const matchesSearch =
                     !searchQuery ||
-                    escrow.projectDescription
+                    (escrow.projectDescription ?? "")
                       .toLowerCase()
                       .includes(searchQuery.toLowerCase());
 
