@@ -52,6 +52,12 @@ export default function DashboardPage() {
   const { addNotification } = useNotifications();
   const [escrows, setEscrows] = useState<Escrow[]>([]);
   const escrowsRef = useRef<Escrow[]>([]);
+  const [archivedIds, setArchivedIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(`archived_escrows_${wallet.address ?? ""}`);
+      return new Set(raw ? JSON.parse(raw) : []);
+    } catch { return new Set(); }
+  });
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -870,6 +876,19 @@ export default function DashboardPage() {
     }
   };
 
+  const archiveEscrow = (escrowId: string) => {
+    const next = new Set(archivedIds);
+    next.add(escrowId);
+    setArchivedIds(next);
+    try {
+      localStorage.setItem(
+        `archived_escrows_${wallet.address ?? ""}`,
+        JSON.stringify([...next]),
+      );
+    } catch { /* non-fatal */ }
+    toast({ title: "Archived", description: "Escrow hidden from your dashboard. Refresh to see it again if needed." });
+  };
+
   const rejectMilestone = async (
     escrowId: string,
     milestoneIndex: number,
@@ -1116,6 +1135,7 @@ export default function DashboardPage() {
 
                 return matchesStatus && matchesSearch;
               })
+              .filter((e) => !archivedIds.has(e.id))
               .sort((a, b) => {
                 if (sortFilter === "newest") {
                   return b.createdAt - a.createdAt;
@@ -1158,6 +1178,7 @@ export default function DashboardPage() {
                   onExtendDeadline={extendDeadline}
                   onReclaimSurplus={reclaimSurplus}
                   reclaimingFunds={reclaimingEscrowId === escrow.id}
+                  onArchive={archiveEscrow}
                 />
               ))}
           </div>

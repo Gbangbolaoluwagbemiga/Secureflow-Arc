@@ -27,7 +27,7 @@ SecureFlow is a decentralized freelancer marketplace built on Arc EVM. Clients d
 | Resource | Link |
 |---|---|
 | Frontend | [secureflow-arc.vercel.app](https://secureflow-arc.vercel.app) |
-| Contract | [`0x3A8527E43beC82415bF8A1C1aa0b072F7b49c24f`](https://testnet.arcscan.app/address/0x3A8527E43beC82415bF8A1C1aa0b072F7b49c24f) |
+| Contract | [`0xA17d98FFc3949e9E0046d3C8342bB82F8B05567e`](https://testnet.arcscan.app/address/0xA17d98FFc3949e9E0046d3C8342bB82F8B05567e) |
 | Subgraph | [Goldsky — secureflow/v1](https://api.goldsky.com/api/public/project_cmpyopkeb3cxh01v51s4wg5nc/subgraphs/secureflow/v1/gn) |
 | Explorer | [testnet.arcscan.app](https://testnet.arcscan.app) |
 | Chain | Arc EVM Testnet · ID `5042002` |
@@ -223,7 +223,7 @@ npm run dev
 **Frontend (`.env`)**
 
 ```env
-VITE_SECUREFLOW_CONTRACT_ADDRESS=0x3A8527E43beC82415bF8A1C1aa0b072F7b49c24f
+VITE_SECUREFLOW_CONTRACT_ADDRESS=0xA17d98FFc3949e9E0046d3C8342bB82F8B05567e
 VITE_USDC_TOKEN_CONTRACT=0x3600000000000000000000000000000000000000
 VITE_ARC_RPC_URL=https://rpc.drpc.testnet.arc.network
 VITE_ARC_CHAIN_ID=5042002
@@ -245,7 +245,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_PROJECT_ID=
 RELAYER_PRIVATE_KEY=             # EIP-2771 relayer wallet
-CONTRACT_ADDRESS=0x3A8527E43beC82415bF8A1C1aa0b072F7b49c24f
+CONTRACT_ADDRESS=0xA17d98FFc3949e9E0046d3C8342bB82F8B05567e
 FRONTEND_URL=https://secureflow-arc.vercel.app
 ```
 

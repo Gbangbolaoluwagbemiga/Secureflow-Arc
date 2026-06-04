@@ -174,6 +174,7 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
     event PlatformFeeUpdated(uint256 feeBp);
     event FeeCollectorUpdated(address indexed feeCollector);
     event FeesWithdrawn(address indexed token, uint256 amount, address indexed to);
+    event EscrowDeleted(uint256 indexed escrowId, address indexed deletedBy);
     event JobCancelled(uint256 indexed escrowId, address indexed depositor, uint256 refundAmount);
     event JobFundsUpdated(uint256 indexed escrowId, uint256 oldAmount, uint256 newAmount, bool isIncrease);
     event MilestoneProposalSubmitted(uint256 indexed escrowId, uint256 indexed milestoneIndex, address indexed freelancer, uint256 proposedAmount, string proposedDescription);
@@ -833,6 +834,38 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
         emit TokenBlacklisted(token);
     }
 
+    /**
+     * @notice Permanently delete an escrow record (owner only).
+     * @dev Requires zero remaining funds — i.e. all value has been paid out,
+     *      refunded, or the escrow was cancelled with nothing deposited.
+     *      Status must be Released, Refunded, Expired, or Cancelled.
+     *      This deletes the storage slot; the escrow ID can never be reused.
+     */
+    function deleteEscrow(uint256 escrowId) external onlyOwner nonReentrant {
+        Escrow storage esc = _requireEscrow(escrowId);
+
+        // Must be in a terminal state with no funds remaining
+        bool isTerminal = (
+            esc.status == EscrowStatus.Released  ||
+            esc.status == EscrowStatus.Refunded  ||
+            esc.status == EscrowStatus.Expired   ||
+            esc.status == EscrowStatus.Cancelled
+        );
+        if (!isTerminal) revert InvalidEscrowStatus();
+
+        uint256 remaining = esc.totalAmount - esc.paidAmount;
+        if (remaining > 0) revert InvalidAmount(); // funds still locked
+
+        delete escrows[escrowId];
+        // Remove from depositor and beneficiary index arrays
+        _removeFromUserEscrows(esc.depositor, escrowId);
+        if (esc.beneficiary != address(0)) {
+            _removeFromUserEscrows(esc.beneficiary, escrowId);
+        }
+
+        emit EscrowDeleted(escrowId, msg.sender);
+    }
+
     function setPlatformFee(uint256 _platformFeeBP) external onlyOwner {
         if (_platformFeeBP > MAX_PLATFORM_FEE_BP) revert InvalidConfig();
         platformFeeBP = _platformFeeBP;
@@ -931,6 +964,18 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
     function _getMilestone(uint256 escrowId, uint256 index) private view returns (Milestone storage) {
         if (index >= escrowMilestones[escrowId].length) revert InvalidMilestone();
         return escrowMilestones[escrowId][index];
+    }
+
+    function _removeFromUserEscrows(address user, uint256 escrowId) private {
+        uint256[] storage arr = userEscrows[user];
+        uint256 len = arr.length;
+        for (uint256 i; i < len; ++i) {
+            if (arr[i] == escrowId) {
+                arr[i] = arr[len - 1];
+                arr.pop();
+                return;
+            }
+        }
     }
 
     function _doTransfer(address token, address from, address to, uint256 amount) private {

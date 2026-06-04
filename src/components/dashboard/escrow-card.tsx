@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { motion } from "framer-motion";
-import { Clock, DollarSign, ChevronDown, ChevronUp, Star, AlertTriangle, CalendarPlus, Scale, Paperclip, MessageCircle, CircleDollarSign, Loader2 } from "lucide-react";
+import { Clock, DollarSign, ChevronDown, ChevronUp, Star, AlertTriangle, CalendarPlus, Scale, Paperclip, MessageCircle, CircleDollarSign, Loader2, Archive } from "lucide-react";
 import { MilestoneActions } from "@/components/milestone-actions";
 import { MilestoneNegotiation } from "@/components/milestone-negotiation";
 import { JobManagement } from "@/components/job-management";
@@ -45,6 +45,7 @@ interface EscrowCardProps {
   onExtendDeadline?: (escrowId: string, extraDays: number) => void;
   onReclaimSurplus?: (escrowId: string) => void;
   reclaimingFunds?: boolean;
+  onArchive?: (escrowId: string) => void;
 }
 
 export function EscrowCard({
@@ -58,6 +59,7 @@ export function EscrowCard({
   onExtendDeadline,
   onReclaimSurplus,
   reclaimingFunds = false,
+  onArchive,
 }: EscrowCardProps) {
   const { toast } = useToast();
   const [showRatingDialog, setShowRatingDialog] = useState(false);
@@ -334,6 +336,20 @@ export function EscrowCard({
                     ) : (
                       "Reclaim Surplus"
                     )}
+                  </Button>
+                )}
+
+                {/* Archive button — client only, settled escrows only */}
+                {escrow.isClient && isSettled && onArchive && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-muted-foreground hover:text-foreground gap-1.5 shrink-0"
+                    onClick={() => onArchive(escrow.id)}
+                    title="Hide this escrow from your dashboard"
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                    Archive
                   </Button>
                 )}
               </div>

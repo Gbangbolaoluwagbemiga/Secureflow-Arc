@@ -687,6 +687,15 @@ export class ContractService {
     });
   }
 
+  async deleteEscrow(escrowId: number, write: WagmiWrite): Promise<`0x${string}`> {
+    return write({
+      address: this.addr,
+      abi: SecureFlowABI.abi,
+      functionName: "deleteEscrow",
+      args: [BigInt(escrowId)],
+    });
+  }
+
   async emergencyRefundAfterDeadline(escrowId: number, _from: string, write: WagmiWrite): Promise<`0x${string}`> {
     return write({
       address: this.addr,

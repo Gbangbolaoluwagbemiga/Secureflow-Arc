@@ -8,7 +8,8 @@ import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { contractService } from "@/lib/web3/contract-service";
 import { useWriteContract } from "wagmi";
-import { Shield, CheckCircle2, AlertCircle, Loader2, Coins, Lock, Percent } from "lucide-react";
+import { Shield, CheckCircle2, AlertCircle, Loader2, Coins, Lock, Percent, Trash2 } from "lucide-react";
+import { decodeJobId, encodeJobId } from "@/lib/id-codec";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ArbiterManagement } from "@/components/admin/arbiter-management";
 
@@ -30,6 +31,10 @@ export default function AdminPage() {
   const [currentFeeBP, setCurrentFeeBP] = useState<number | null>(null);
   const [newFeePercent, setNewFeePercent] = useState("");
   const [isSettingFee, setIsSettingFee] = useState(false);
+
+  // Delete escrow state
+  const [deleteInput, setDeleteInput] = useState(""); // accepts SF-XXXXX or raw number
+  const [isDeletingEscrow, setIsDeletingEscrow] = useState(false);
 
   useEffect(() => {
     checkOwnership();
@@ -57,6 +62,40 @@ export default function AdminPage() {
       toast({ title: "Failed to update fee", description: error?.message || "Transaction failed.", variant: "destructive" });
     } finally {
       setIsSettingFee(false);
+    }
+  };
+
+  const handleDeleteEscrow = async () => {
+    const raw = deleteInput.trim();
+    if (!raw) return;
+
+    // Accept both encoded "SF-XXXXX" and raw numeric IDs
+    const onChainId = raw.startsWith("SF-") ? decodeJobId(raw) : parseInt(raw, 10);
+    if (!Number.isFinite(onChainId) || onChainId <= 0) {
+      toast({ title: "Invalid ID", description: "Enter a valid escrow ID (e.g. SF-LK4Q1 or 7).", variant: "destructive" });
+      return;
+    }
+
+    setIsDeletingEscrow(true);
+    try {
+      await contractService.deleteEscrow(onChainId, (args) => writeContractAsync(args));
+      toast({
+        title: "Escrow deleted",
+        description: `${encodeJobId(onChainId)} (on-chain #${onChainId}) has been permanently removed.`,
+      });
+      setDeleteInput("");
+    } catch (error: any) {
+      const msg: string = error?.message || "Transaction failed.";
+      const friendly = msg.includes("InvalidEscrowStatus")
+        ? "Escrow must be in a terminal state (released, refunded, expired, or cancelled) before deletion."
+        : msg.includes("InvalidAmount")
+        ? "Escrow still has funds. Ensure all funds are withdrawn or paid out first."
+        : msg.includes("EscrowNotFound")
+        ? "No escrow found with that ID."
+        : msg;
+      toast({ title: "Delete failed", description: friendly, variant: "destructive" });
+    } finally {
+      setIsDeletingEscrow(false);
     }
   };
 
@@ -388,6 +427,47 @@ export default function AdminPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Delete Escrow */}
+        <Card className="border-red-200 dark:border-red-900/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
+              <Trash2 className="h-5 w-5" />
+              Delete Escrow
+            </CardTitle>
+            <CardDescription>
+              Permanently removes an escrow record from on-chain storage.
+              The escrow must be in a terminal state (released, refunded, expired,
+              or cancelled) with zero remaining funds.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="deleteId">Escrow ID</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="deleteId"
+                  placeholder="SF-LK4Q1 or raw number"
+                  value={deleteInput}
+                  onChange={(e) => setDeleteInput(e.target.value)}
+                  className="font-mono"
+                />
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteEscrow}
+                  disabled={isDeletingEscrow || !deleteInput.trim()}
+                  className="shrink-0"
+                >
+                  {isDeletingEscrow ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Accepts the encoded ID (e.g. <code>SF-LK4Q1</code>) or the raw
+                on-chain number. This action is irreversible.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Platform Fee */}
         <Card>

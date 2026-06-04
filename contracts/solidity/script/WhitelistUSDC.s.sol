@@ -8,7 +8,7 @@ contract WhitelistUSDCScript is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         // Hardcode the deployed contract address
-        address payable secureFlowAddress = payable(0x3A8527E43beC82415bF8A1C1aa0b072F7b49c24f);
+        address payable secureFlowAddress = payable(0xA17d98FFc3949e9E0046d3C8342bB82F8B05567e);
         
         vm.startBroadcast(deployerPrivateKey);
 
