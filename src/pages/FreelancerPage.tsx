@@ -72,6 +72,7 @@ import {
   ChevronUp,
   AlertTriangle,
   Scale,
+  Archive,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -190,6 +191,12 @@ export default function FreelancerPage() {
   const [escrows, setEscrows] = useState<Escrow[]>([]);
   const [loading, setLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [archivedIds, setArchivedIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(`freelancer_archived_${wallet.address ?? ""}`);
+      return new Set(raw ? JSON.parse(raw) : []);
+    } catch { return new Set(); }
+  });
   const [expandedEscrow, setExpandedEscrow] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<
@@ -630,6 +637,19 @@ export default function FreelancerPage() {
 
   const handleRefresh = () => {
     fetchFreelancerEscrows(true);
+  };
+
+  const archiveEscrow = (escrowId: string) => {
+    const next = new Set(archivedIds);
+    next.add(escrowId);
+    setArchivedIds(next);
+    try {
+      localStorage.setItem(
+        `freelancer_archived_${wallet.address ?? ""}`,
+        JSON.stringify([...next]),
+      );
+    } catch { /* non-fatal */ }
+    toast({ title: "Archived", description: "Project hidden from your dashboard." });
   };
 
   const startWork = async (escrowId: string) => {
@@ -1518,6 +1538,7 @@ export default function FreelancerPage() {
 
                   return matchesStatus && matchesSearch;
                 })
+                .filter((e) => !archivedIds.has(e.id))
                 .sort((a, b) => {
                   if (sortFilter === "newest") {
                     return b.createdAt - a.createdAt;
@@ -1708,6 +1729,25 @@ export default function FreelancerPage() {
                               </div>
                             )}
                         </div>
+
+                        {/* Archive button — settled/completed escrows only */}
+                        {(escrow.status === "completed" ||
+                          escrow.status === "cancelled" ||
+                          escrow.status === "refunded" ||
+                          escrow.status === "expired") && (
+                          <div className="flex justify-end mt-2">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-muted-foreground hover:text-foreground gap-1.5"
+                              onClick={() => archiveEscrow(escrow.id)}
+                              title="Hide this project from your dashboard"
+                            >
+                              <Archive className="h-3.5 w-3.5" />
+                              Archive
+                            </Button>
+                          </div>
+                        )}
 
                         {/* Milestones - Compact Design */}
                         {expandedEscrow === escrow.id && (
