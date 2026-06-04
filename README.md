@@ -28,7 +28,7 @@ SecureFlow is a decentralized freelancer marketplace built on Arc EVM. Clients d
 |---|---|
 | Frontend | [secureflow-arc.vercel.app](https://secureflow-arc.vercel.app) |
 | Contract | [`0xA17d98FFc3949e9E0046d3C8342bB82F8B05567e`](https://testnet.arcscan.app/address/0xA17d98FFc3949e9E0046d3C8342bB82F8B05567e) |
-| Subgraph | [Goldsky — secureflow/v1](https://api.goldsky.com/api/public/project_cmpyopkeb3cxh01v51s4wg5nc/subgraphs/secureflow/v1/gn) |
+| Subgraph | [Goldsky — secureflow/v1](https://api.goldsky.com/api/public/project_cmpyopkeb3cxh01v51s4wg5nc/subgraphs/secureflow/v2/gn) |
 | Explorer | [testnet.arcscan.app](https://testnet.arcscan.app) |
 | Chain | Arc EVM Testnet · ID `5042002` |
 | Token | Circle USDC · `0x3600000000000000000000000000000000000000` |
@@ -293,7 +293,7 @@ npm run build
 goldsky subgraph deploy secureflow/v1 --path .
 ```
 
-Endpoint: `https://api.goldsky.com/api/public/project_cmpyopkeb3cxh01v51s4wg5nc/subgraphs/secureflow/v1/gn`
+Endpoint: `https://api.goldsky.com/api/public/project_cmpyopkeb3cxh01v51s4wg5nc/subgraphs/secureflow/v2/gn`
 
 The frontend automatically uses the subgraph when `VITE_GRAPH_URL` is set and silently falls back to RPC multicall if the endpoint is unreachable.
 
