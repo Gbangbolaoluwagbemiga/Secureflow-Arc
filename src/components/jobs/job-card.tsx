@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { encodeJobId } from "@/lib/id-codec";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -64,7 +65,7 @@ export function JobCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-3 mb-3 flex-wrap">
               <h3 className="text-xl font-bold">
-                {job.projectTitle || job.projectDescription || `Job #${job.id}`}
+                {job.projectTitle || job.projectDescription || encodeJobId(job.id)}
               </h3>
               <Badge variant="secondary" className="gap-1">
                 <Clock className="h-3 w-3" />

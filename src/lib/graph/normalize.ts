@@ -8,9 +8,9 @@ function escrowStatus(n: number): Escrow["status"] {
     case 0: return "pending";
     case 1: return "active";
     case 2: return "completed";
-    case 3: return "cancelled"; // refunded → map to cancelled (closest in union)
+    case 3: return "refunded";
     case 4: return "disputed";
-    case 5: return "cancelled"; // expired → map to cancelled
+    case 5: return "expired";
     case 6: return "cancelled";
     default: return "pending";
   }

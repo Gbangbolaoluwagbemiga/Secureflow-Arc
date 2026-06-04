@@ -1,3 +1,4 @@
+import { encodeJobId } from "@/lib/id-codec";
 import { useState } from "react";
 import { useWriteContract } from "wagmi";
 import { Button } from "@/components/ui/button";
@@ -337,7 +338,7 @@ export function MilestoneActions({
                 {
                   type: "dispute",
                   title: "New Dispute Raised",
-                  message: `Escrow #${escrowId}, Milestone ${milestoneIndex}: ${disputeReason}`,
+                  message: `${encodeJobId(escrowId)}, Milestone ${milestoneIndex}: ${disputeReason}`,
                   actionUrl: `/admin`,
                   data: { escrowId, milestoneIndex, reason: disputeReason },
                 },

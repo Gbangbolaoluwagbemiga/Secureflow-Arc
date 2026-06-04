@@ -1,4 +1,5 @@
 
+import { encodeJobId } from "@/lib/id-codec";
 import {
   createContext,
   use,
@@ -1070,7 +1071,7 @@ export const createApplicationNotification = (
       return {
         type: "application",
         title: "New Job Application",
-        message: `Someone applied to your job: ${additionalData?.jobTitle || `Job #${jobId}`}`,
+        message: `Someone applied to your job: ${additionalData?.jobTitle || encodeJobId(jobId)}`,
         actionUrl: `/approvals?job=${jobId}`,
         data: baseData,
       };
@@ -1078,7 +1079,7 @@ export const createApplicationNotification = (
       return {
         type: "application",
         title: "Application Approved!",
-        message: `Your application for ${additionalData?.jobTitle || `Job #${jobId}`} has been approved`,
+        message: `Your application for ${additionalData?.jobTitle || encodeJobId(jobId)} has been approved`,
         actionUrl: `/freelancer?job=${jobId}`,
         data: baseData,
       };
@@ -1086,7 +1087,7 @@ export const createApplicationNotification = (
       return {
         type: "application",
         title: "Application Rejected",
-        message: `Your application for ${additionalData?.jobTitle || `Job #${jobId}`} was not selected`,
+        message: `Your application for ${additionalData?.jobTitle || encodeJobId(jobId)} was not selected`,
         actionUrl: `/freelancer?job=${jobId}`,
         data: baseData,
       };
@@ -1094,7 +1095,7 @@ export const createApplicationNotification = (
       return {
         type: "application",
         title: "Application Update",
-        message: `Application status updated for ${additionalData?.jobTitle || `Job #${jobId}`}`,
+        message: `Application status updated for ${additionalData?.jobTitle || encodeJobId(jobId)}`,
         actionUrl: `/approvals?job=${jobId}`,
         data: baseData,
       };

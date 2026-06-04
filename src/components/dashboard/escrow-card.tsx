@@ -21,6 +21,7 @@ import { useWeb3 } from "@/contexts/web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { isApiConfigured } from "@/lib/api";
 import type { Escrow } from "@/lib/web3/types";
+import { encodeJobId } from "@/lib/id-codec";
 
 
 interface EscrowCardProps {
@@ -100,8 +101,8 @@ export function EscrowCard({
   const isActive = escrow.status === "active" || escrow.status === "pending";
   const isSettled =
     escrow.status === "completed" ||
-    (escrow as any).status === "refunded" ||
-    (escrow as any).status === "expired";
+    escrow.status === "refunded" ||
+    escrow.status === "expired";
 
   // Check if rating exists for this escrow
   useEffect(() => {
@@ -205,7 +206,7 @@ export function EscrowCard({
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <CardTitle className="text-lg mb-1">
-                {escrow.projectTitle || `Escrow #${escrow.id}`}
+                {escrow.projectTitle || encodeJobId(escrow.id)}
               </CardTitle>
               {escrow.projectDescription && (
                 <p className="text-sm text-muted-foreground mb-2">

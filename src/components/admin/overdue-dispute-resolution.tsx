@@ -1,3 +1,4 @@
+import { encodeJobId } from "@/lib/id-codec";
 import { useState, useEffect, useCallback } from "react";
 import { useWriteContract, usePublicClient } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -385,7 +386,7 @@ export function OverdueDisputeResolution({ onResolved }: Props) {
                             <div className="min-w-0">
                               <p className="font-medium truncate">{c.projectTitle}</p>
                               <p className="text-xs text-muted-foreground mt-0.5">
-                                Escrow #{c.escrowId} · Raised by{" "}
+                                {encodeJobId(c.escrowId)} · Raised by{" "}
                                 <span className="font-mono">
                                   {c.requesterAddress.slice(0, 6)}…
                                   {c.requesterAddress.slice(-4)}

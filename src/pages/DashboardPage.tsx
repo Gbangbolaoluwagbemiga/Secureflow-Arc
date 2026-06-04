@@ -1,3 +1,4 @@
+import { encodeJobId } from "@/lib/id-codec";
 import { useState, useEffect, useRef } from "react";
 import { useWriteContract } from "wagmi";
 import { Card } from "@/components/ui/card";
@@ -529,7 +530,7 @@ export default function DashboardPage() {
             {
               type: "dispute",
               title: "New Dispute Raised",
-              message: `Escrow #${escrowId}, Milestone ${milestoneIndex}: Disputed by client`,
+              message: `${encodeJobId(escrowId)}, Milestone ${milestoneIndex}: Disputed by client`,
               actionUrl: `/admin`,
               data: { escrowId, milestoneIndex, reason: "Disputed by client" },
             },
@@ -637,7 +638,7 @@ export default function DashboardPage() {
             {
               type: "dispute",
               title: "New Dispute Raised",
-              message: `Escrow #${escrowId}, Milestone 0: General dispute`,
+              message: `${encodeJobId(escrowId)}, Milestone 0: General dispute`,
               actionUrl: `/admin`,
               data: { escrowId, milestoneIndex: 0, reason: "General dispute" },
             },

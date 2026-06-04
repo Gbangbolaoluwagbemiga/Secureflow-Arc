@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { encodeJobId } from "@/lib/id-codec";
 import { useWriteContract, useReadContract } from "wagmi";
 import { contractService } from "@/lib/web3/contract-service";
 import { CONTRACTS } from "@/lib/web3/config";
@@ -254,7 +255,7 @@ export function useCreateEscrow() {
       toast({
         title: "Escrow created",
         description: data.escrowId !== "unknown"
-          ? `Escrow #${data.escrowId} created successfully`
+          ? `${encodeJobId(data.escrowId)} created successfully`
           : "Your escrow was created successfully"
       });
 
@@ -273,7 +274,7 @@ export function useCreateEscrow() {
               wallet_address: directBeneficiary,
               type: "escrow",
               title: "You've been directly assigned a job",
-              message: `A client has assigned you to "${params.project_title || `Escrow #${data.escrowId}`}". Review the milestones on your Freelancer dashboard and start work when ready.`,
+              message: `A client has assigned you to "${params.project_title || `${encodeJobId(data.escrowId)}`}". Review the milestones on your Freelancer dashboard and start work when ready.`,
               action_url: "/freelancer",
               data: {
                 escrowId: data.escrowId,
@@ -539,7 +540,7 @@ export function useApplyToJob() {
             jobId: params.escrow_id,
             freelancerAddress: address,
             clientAddress: escrow.depositor,
-            jobTitle: escrow.projectTitle || `Job #${params.escrow_id}`,
+            jobTitle: escrow.projectTitle || encodeJobId(params.escrow_id),
             freelancerName: `${address.slice(0, 6)}...${address.slice(-4)}`,
             coverLetter: params.cover_letter,
             proposedTimeline: params.proposed_timeline,

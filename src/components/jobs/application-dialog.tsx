@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { encodeJobId } from "@/lib/id-codec";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -121,7 +122,7 @@ export function ApplicationDialog({
     setAiLoading(true);
     try {
       const { coverLetter: next } = await postCoverLetterDraft({
-        jobTitle: job.projectTitle ?? job.projectDescription ?? `Job #${job.id}`,
+        jobTitle: job.projectTitle ?? job.projectDescription ?? encodeJobId(job.id),
         jobDescription: desc,
         proposedTimelineDays: proposedTimeline.trim() || undefined,
         tone: "professional",
@@ -182,7 +183,7 @@ export function ApplicationDialog({
       <DialogContent className="glass-thick w-[min(92vw,56rem)] max-w-4xl p-4 sm:p-7 max-h-[90vh] overflow-y-auto">
         <DialogHeader className="space-y-2">
           <DialogTitle className="leading-snug">
-            Apply to {job?.projectTitle?.trim() || `Job #${job?.id || "Unknown"}`}
+            Apply to {job?.projectTitle?.trim() || (job?.id ? encodeJobId(job.id) : "Unknown")}
           </DialogTitle>
           <DialogDescription>
             Submit your application for this freelance opportunity.

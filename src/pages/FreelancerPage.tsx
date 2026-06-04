@@ -1,3 +1,4 @@
+import { encodeJobId } from "@/lib/id-codec";
 import { useState, useEffect } from "react";
 import { useWriteContract } from "wagmi";
 import {
@@ -1178,7 +1179,7 @@ export default function FreelancerPage() {
             {
               type: "dispute",
               title: "New Dispute Raised",
-              message: `Escrow #${escrowId}, Milestone ${milestoneIndex}: ${reason}`,
+              message: `${encodeJobId(escrowId)}, Milestone ${milestoneIndex}: ${reason}`,
               actionUrl: `/admin`,
               data: { escrowId, milestoneIndex, reason },
             },

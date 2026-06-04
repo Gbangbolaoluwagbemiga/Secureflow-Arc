@@ -1,3 +1,4 @@
+import { encodeJobId } from "@/lib/id-codec";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,7 +45,7 @@ export function ViewEvidenceButton({
         <DialogHeader>
           <DialogTitle>Dispute Evidence</DialogTitle>
           <DialogDescription>
-            View and submit evidence for Escrow #{escrowId}, Milestone {milestoneIndex}
+            View and submit evidence for {encodeJobId(escrowId)}, Milestone {milestoneIndex}
           </DialogDescription>
         </DialogHeader>
 

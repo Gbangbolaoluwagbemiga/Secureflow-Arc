@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useWriteContract } from "wagmi";
 import { Card } from "@/components/ui/card";
 import { useWeb3 } from "@/contexts/web3-context";
+import { encodeJobId } from "@/lib/id-codec";
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
 import { contractService } from "@/lib/web3/contract-service";
@@ -445,7 +446,7 @@ export default function JobsPage() {
           Number(job.id),
           wallet.address!,
           {
-            jobTitle: job.projectTitle || `Job #${job.id}`,
+            jobTitle: job.projectTitle || encodeJobId(job.id),
             freelancerName:
               wallet.address!.slice(0, 6) + "..." + wallet.address!.slice(-4),
           }

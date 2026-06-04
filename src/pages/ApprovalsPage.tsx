@@ -1,3 +1,4 @@
+import { encodeJobId } from "@/lib/id-codec";
 import { useState, useEffect } from "react";
 import { useWriteContract } from "wagmi";
 import { Card } from "@/components/ui/card";
@@ -65,20 +66,16 @@ export default function ApprovalsPage() {
 
   const getStatusFromNumber = (
     status: number
-  ): "pending" | "active" | "completed" | "disputed" => {
+  ): Escrow["status"] => {
     switch (status) {
-      case 0:
-        return "pending";
-      case 1:
-        return "active";
-      case 2:
-        return "completed";
-      case 3:
-        return "disputed";
-      case 4:
-        return "pending"; // Map cancelled to pending
-      default:
-        return "pending";
+      case 0: return "pending";
+      case 1: return "active";
+      case 2: return "completed";
+      case 3: return "refunded";
+      case 4: return "disputed";
+      case 5: return "expired";
+      case 6: return "cancelled";
+      default: return "pending";
     }
   };
 
@@ -238,11 +235,11 @@ export default function ApprovalsPage() {
         {
           type: "application",
           title: "🎉 You've Been Accepted!",
-          message: `Congratulations! You've been accepted for "${selectedJobForApproval.projectTitle || `Job #${selectedJobForApproval.id}`}". Work is ready to start!`,
+          message: `Congratulations! You've been accepted for "${selectedJobForApproval.projectTitle || `${encodeJobId(selectedJobForApproval.id)}`}". Work is ready to start!`,
           actionUrl: `/freelancer?escrow=${selectedJobForApproval.id}`,
           data: {
             escrowId: selectedJobForApproval.id,
-            projectTitle: selectedJobForApproval.projectTitle || `Job #${selectedJobForApproval.id}`,
+            projectTitle: selectedJobForApproval.projectTitle || `${encodeJobId(selectedJobForApproval.id)}`,
             clientAddress: wallet.address,
             action: "freelancer_accepted",
           },
@@ -255,10 +252,10 @@ export default function ApprovalsPage() {
       window.dispatchEvent(new CustomEvent("freelancerAccepted", {
         detail: {
           escrowId: selectedJobForApproval.id,
-          projectTitle: selectedJobForApproval.projectTitle || `Job #${selectedJobForApproval.id}`,
+          projectTitle: selectedJobForApproval.projectTitle || `${encodeJobId(selectedJobForApproval.id)}`,
           clientAddress: wallet.address,
           freelancerAddress: selectedFreelancer.freelancerAddress,
-          jobTitle: selectedJobForApproval.projectTitle || `Job #${selectedJobForApproval.id}`,
+          jobTitle: selectedJobForApproval.projectTitle || `${encodeJobId(selectedJobForApproval.id)}`,
         }
       }));
 
@@ -267,7 +264,7 @@ export default function ApprovalsPage() {
         {
           type: "application",
           title: "Freelancer Approved",
-          message: `You approved ${selectedFreelancer.freelancerAddress.slice(0, 6)}...${selectedFreelancer.freelancerAddress.slice(-4)} for "${selectedJobForApproval.projectTitle || `Job #${selectedJobForApproval.id}`}"`,
+          message: `You approved ${selectedFreelancer.freelancerAddress.slice(0, 6)}...${selectedFreelancer.freelancerAddress.slice(-4)} for "${selectedJobForApproval.projectTitle || `${encodeJobId(selectedJobForApproval.id)}`}"`,
           actionUrl: `/dashboard?job=${selectedJobForApproval.id}`,
           data: {
             jobId: Number(selectedJobForApproval.id),
@@ -288,7 +285,7 @@ export default function ApprovalsPage() {
           {
             type: "application",
             title: "Job Position Filled",
-            message: `The position for "${selectedJobForApproval.projectTitle || `Job #${selectedJobForApproval.id}`}" has been filled. Thank you for your application!`,
+            message: `The position for "${selectedJobForApproval.projectTitle || `${encodeJobId(selectedJobForApproval.id)}`}" has been filled. Thank you for your application!`,
             actionUrl: `/browse-jobs`,
             data: {
               jobId: Number(selectedJobForApproval.id),

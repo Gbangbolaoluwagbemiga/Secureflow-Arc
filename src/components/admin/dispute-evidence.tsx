@@ -1,3 +1,4 @@
+import { encodeJobId } from "@/lib/id-codec";
 import { useState, useEffect } from "react";
 import { useWriteContract, usePublicClient } from "wagmi";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -192,7 +193,7 @@ export function DisputeEvidence({
               <Badge variant="outline" className="ml-2">{evidence.length} Submissions</Badge>
             </CardTitle>
             <CardDescription>
-              Evidence and communication thread for Escrow #{escrowId}, Milestone {milestoneIndex}
+              Evidence and communication thread for {encodeJobId(escrowId)}, Milestone {milestoneIndex}
             </CardDescription>
           </div>
           <Button 
