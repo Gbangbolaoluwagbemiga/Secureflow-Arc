@@ -70,7 +70,6 @@ export function EscrowCard({
   const [customDays, setCustomDays] = useState("");
   const [disputeReason, setDisputeReason] = useState("");
   const [showDisputeForm, setShowDisputeForm] = useState(false);
-  const [reclaimingFunds, setReclaimingFunds] = useState(false);
 
   const { wallet } = useWeb3();
 

@@ -528,8 +528,6 @@ export class ContractService {
 
   /* ─── WRITE METHODS (require wagmi writeContractAsync) ─── */
 
-  private get addr() { return this.contract.address as `0x${string}`; }
-
   async startWork(escrowId: number, _from: string, write: WagmiWrite): Promise<`0x${string}`> {
     return write({ address: this.addr, abi: SecureFlowABI.abi, functionName: "startWork", args: [BigInt(escrowId)] });
   }
