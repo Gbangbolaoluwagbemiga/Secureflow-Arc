@@ -149,7 +149,7 @@ export function ApplicationDialog({
 
     let fileUrl: string | undefined = uploadedFile?.url;
 
-    // Upload file if one was selected but not yet uploaded
+    // Upload file if one was selected but not yet uploaded (optional — failure doesn't block submit)
     if (selectedFile && !uploadedFile && isApiConfigured()) {
       setUploading(true);
       try {
@@ -159,12 +159,10 @@ export function ApplicationDialog({
         fileUrl = result.url;
       } catch (e) {
         toast({
-          title: "Upload failed",
+          title: "Upload failed — submitting without attachment",
           description: e instanceof Error ? e.message : "Could not upload file",
           variant: "destructive",
         });
-        setUploading(false);
-        return;
       } finally {
         setUploading(false);
       }

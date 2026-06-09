@@ -247,6 +247,7 @@ export default function FreelancerPage() {
   >(null);
   const [resubmitFile, setResubmitFile] = useState<File | null>(null);
   const [resubmitUploading, setResubmitUploading] = useState(false);
+  const [startingWorkId, setStartingWorkId] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -699,6 +700,7 @@ export default function FreelancerPage() {
   };
 
   const startWork = async (escrowId: string) => {
+    setStartingWorkId(escrowId);
     try {
       if (!wallet.address) {
         toast({
@@ -749,25 +751,11 @@ export default function FreelancerPage() {
       // Refresh escrows
       await fetchFreelancerEscrows();
     } catch (error: any) {
-
-      // Check for specific error codes
       const errorMessage = error.message || "";
+
       if (
         errorMessage.includes("1102") ||
-        errorMessage.includes("InvalidEscrowStatus")
-      ) {
-        // Work may have already started - refresh to get latest status
-        toast({
-          title: "Work Already Started",
-          description:
-            "Work has already been started on this escrow. Refreshing...",
-        });
-        // Refresh escrows to get latest status
-        await fetchFreelancerEscrows();
-        return;
-      }
-
-      if (
+        errorMessage.includes("InvalidEscrowStatus") ||
         errorMessage.includes("1103") ||
         errorMessage.includes("WorkAlreadyStarted")
       ) {
@@ -775,35 +763,43 @@ export default function FreelancerPage() {
           title: "Work Already Started",
           description: "Work has already been started on this escrow.",
         });
-        // Refresh escrows to get latest status
         await fetchFreelancerEscrows();
-        return;
-      }
-
-      // Check for MetaMask disconnection
-      if (
-        error.message?.includes("Disconnected from MetaMask") ||
-        error.message?.includes("Premature close") ||
+      } else if (
+        errorMessage.includes("User rejected") ||
+        errorMessage.includes("user rejected") ||
+        errorMessage.includes("4001") ||
+        error.code === 4001
+      ) {
+        toast({
+          title: "Transaction Cancelled",
+          description: "You rejected the transaction in your wallet.",
+          variant: "destructive",
+        });
+      } else if (
+        errorMessage.includes("Disconnected from MetaMask") ||
+        errorMessage.includes("Premature close") ||
         error.code === "UNPREDICTABLE_GAS_LIMIT"
       ) {
         toast({
-          title: "MetaMask Connection Lost",
-          description: "Please refresh the page and reconnect your wallet",
+          title: "Wallet Disconnected",
+          description: "Please refresh the page and reconnect your wallet.",
           variant: "destructive",
         });
-      } else if (error.message?.includes("Only beneficiary")) {
+      } else if (errorMessage.includes("Only beneficiary")) {
         toast({
           title: "Not Authorized",
-          description: "Only the beneficiary can start work on this escrow",
+          description: "Only the assigned freelancer can start work on this escrow.",
           variant: "destructive",
         });
       } else {
         toast({
-          title: "Failed to start work",
-          description: errorMessage || "Could not start work on this escrow",
+          title: "Failed to Start Work",
+          description: "Something went wrong. Please try again.",
           variant: "destructive",
         });
       }
+    } finally {
+      setStartingWorkId(null);
     }
   };
 
@@ -2586,10 +2582,20 @@ export default function FreelancerPage() {
                           {escrow.status === "pending" && (
                             <Button
                               onClick={() => startWork(escrow.id)}
+                              disabled={startingWorkId === escrow.id}
                               className="flex items-center gap-2"
                             >
-                              <Play className="h-4 w-4" />
-                              Start Work
+                              {startingWorkId === escrow.id ? (
+                                <>
+                                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                                  Starting…
+                                </>
+                              ) : (
+                                <>
+                                  <Play className="h-4 w-4" />
+                                  Start Work
+                                </>
+                              )}
                             </Button>
                           )}
                           {escrow.status === "active" && (
