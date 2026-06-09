@@ -1,6 +1,6 @@
 import { encodeJobId } from "@/lib/id-codec";
 import { useState } from "react";
-import { useWriteContract } from "wagmi";
+import { useWriteContract, usePublicClient } from "wagmi";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -60,6 +60,7 @@ export function MilestoneActions({
 }: MilestoneActionsProps) {
   const { wallet } = useWeb3();
   const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient();
   const { addNotification } = useNotifications();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -106,7 +107,7 @@ export function MilestoneActions({
     setIsLoading(true);
 
     try {
-      let txHash: string | undefined;
+      let txHash: `0x${string}` | undefined;
 
       switch (actionType) {
         case "start": {
@@ -189,6 +190,11 @@ export function MilestoneActions({
       }
 
       if (txHash) {
+        // Wait for the transaction to be mined before refreshing UI
+        if (publicClient) {
+          await publicClient.waitForTransactionReceipt({ hash: txHash });
+        }
+
         const successMessages: Record<
           string,
           { title: string; description: string }

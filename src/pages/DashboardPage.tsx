@@ -230,6 +230,7 @@ export default function DashboardPage() {
                         approvedAt: existing?.approvedAt,
                         proposedAmount: m.proposedAmount?.toString() || existing?.proposedAmount,
                         proposedDescription: m.proposedDescription || existing?.proposedDescription,
+                        rejectionReason: m.rejectionReason || existing?.rejectionReason,
                       };
                     })
                   : e.milestones;

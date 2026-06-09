@@ -1,6 +1,6 @@
 import { encodeJobId } from "@/lib/id-codec";
 import { useState, useEffect } from "react";
-import { useWriteContract } from "wagmi";
+import { useWriteContract, usePublicClient } from "wagmi";
 import {
   uploadMilestoneFile,
   isApiConfigured,
@@ -185,6 +185,7 @@ function OverdueFreelancerBanner({
 export default function FreelancerPage() {
   const { wallet, getContract } = useWeb3();
   const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient();
   const { addNotification } = useNotifications();
   // Arc EVM uses standard EOA wallets
   // const { executeTransaction, isSmartAccountReady } = useSmartAccount();
@@ -267,9 +268,8 @@ export default function FreelancerPage() {
         return;
       }
 
-      // Single refresh per new cross-party notification — the notification
-      // only fires after the counterparty's tx is confirmed.
-      fetchFreelancerEscrows(true);
+      // Single refresh per new cross-party notification — bypass subgraph (it lags behind).
+      fetchFreelancerEscrows(true, true);
     };
 
     window.addEventListener("escrowUpdated", handleEscrowUpdated);
@@ -288,7 +288,7 @@ export default function FreelancerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet.address]);
 
-  const fetchFreelancerEscrows = async (isManualRefresh = false) => {
+  const fetchFreelancerEscrows = async (isManualRefresh = false, forceRPC = false) => {
     if (isManualRefresh) {
       setIsRefreshing(true);
     } else {
@@ -300,7 +300,7 @@ export default function FreelancerPage() {
       }
 
       // ── Try subgraph first ────────────────────────────────────────────────
-      if (isGraphConfigured()) {
+      if (!forceRPC && isGraphConfigured()) {
         try {
           const data = await graphQuery<UserEscrowsResponse>(
             GET_USER_ESCROWS,
@@ -343,6 +343,7 @@ export default function FreelancerPage() {
                         approvedAt: existing?.approvedAt,
                         proposedAmount: m.proposedAmount?.toString() || existing?.proposedAmount,
                         proposedDescription: m.proposedDescription || existing?.proposedDescription,
+                        rejectionReason: m.rejectionReason || existing?.rejectionReason,
                       };
                     })
                   : e.milestones;
@@ -1134,16 +1135,18 @@ export default function FreelancerPage() {
       const { ContractService } = await import("@/lib/web3/contract-service");
       const contractService = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
 
-      await contractService.resubmitMilestone({
+      const resubmitHash = await contractService.resubmitMilestone({
         escrow_id: Number(escrowId),
         milestone_index: milestoneIndex,
         description: finalDescription,
         beneficiary: wallet.address || "",
       }, writeContractAsync);
 
-      // Transaction is already confirmed via waitForConfirmation in web3-context
-      // Wait for tx confirmation
-      // The transaction hash is returned after confirmation
+      // Wait for the transaction to be mined so RPC reflects the new state
+      if (publicClient && resubmitHash) {
+        await publicClient.waitForTransactionReceipt({ hash: resubmitHash });
+      }
+
       toast({
         title: "Milestone resubmitted!",
         description: "Your milestone has been resubmitted for client review",
@@ -1170,8 +1173,8 @@ export default function FreelancerPage() {
       setSelectedResubmitEscrow(null);
       setSelectedResubmitMilestone(null);
 
-      // Refresh escrows
-      await fetchFreelancerEscrows();
+      // Force RPC refresh — subgraph lags behind the chain
+      await fetchFreelancerEscrows(true, true);
 
       // Dispatch event to notify other components
       window.dispatchEvent(new CustomEvent("milestoneResubmitted"));
