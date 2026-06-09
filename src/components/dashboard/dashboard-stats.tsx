@@ -14,12 +14,12 @@ interface DashboardStatsProps {
 
 export function DashboardStats({ escrows }: DashboardStatsProps) {
   const totalValue = escrows.reduce(
-    (sum, escrow) => sum + Number.parseFloat(escrow.totalAmount) / 1e18,
+    (sum, escrow) => sum + Number.parseFloat(escrow.totalAmount) / 1e6,
     0
   );
 
   const totalReleased = escrows.reduce(
-    (sum, escrow) => sum + Number.parseFloat(escrow.releasedAmount) / 1e18,
+    (sum, escrow) => sum + Number.parseFloat(escrow.releasedAmount) / 1e6,
     0
   );
 

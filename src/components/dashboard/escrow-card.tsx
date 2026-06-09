@@ -88,7 +88,7 @@ export function EscrowCard({
   );
   const totalAmountNum = parseFloat(escrow.totalAmount || "0");
   const surplusAmount = totalAmountNum - milestoneAmountSum;
-  const hasSurplus = escrow.isClient && surplusAmount > 0.000001;
+  const hasSurplus = escrow.isClient && surplusAmount >= 1000; // ≥ 0.001 USDC in raw units
 
   const now = Date.now();
   const deadlineAt = escrow.deadlineAt ?? 0;
@@ -315,7 +315,7 @@ export function EscrowCard({
                   <CircleDollarSign className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
                   <div>
                     <p className="font-semibold text-amber-800 dark:text-amber-300">
-                      {surplusAmount.toLocaleString(undefined, { maximumFractionDigits: 6 })} surplus funds stuck
+                      {formatTokenAmount(surplusAmount.toFixed(0), escrow.token)} surplus funds stuck
                     </p>
                     <p className="text-amber-700 dark:text-amber-400 text-xs mt-0.5">
                       Extra funds were added above milestone amounts. They cannot be released until the

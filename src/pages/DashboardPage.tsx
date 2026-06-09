@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
 import { isGraphConfigured, graphQuery } from "@/lib/graph/client";
 import { GET_USER_ESCROWS, type UserEscrowsResponse } from "@/lib/graph/queries";
-import { normalizeEscrow, dedupeEscrows } from "@/lib/graph/normalize";
+import { normalizeEscrow, dedupeEscrows, rpcMilestoneStatus } from "@/lib/graph/normalize";
 import {
   cacheOriginalDescription,
   cacheOriginalDescriptions,
@@ -145,10 +145,8 @@ export default function DashboardPage() {
         return;
       }
 
-      // Single refresh per new cross-party notification — the notification
-      // only fires after the counterparty's tx is confirmed, so chain state
-      // is already current.
-      fetchUserEscrows(true);
+      // Bypass subgraph (it lags behind the chain) and read directly from RPC.
+      fetchUserEscrows(true, true);
     };
 
     window.addEventListener("escrowUpdated", handleEscrowUpdated);
@@ -167,7 +165,7 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet.address]);
 
-  const fetchUserEscrows = async (isManualRefresh = false) => {
+  const fetchUserEscrows = async (isManualRefresh = false, forceRPC = false) => {
     // Use ref to get the most current escrows, not the stale closure value
     const previousEscrows = escrowsRef.current;
     const previousEscrowsCount = previousEscrows.length;
@@ -190,14 +188,63 @@ export default function DashboardPage() {
       }
 
       // ── Try subgraph first (fast), fall back to multicall RPC ────────────
-      if (isGraphConfigured()) {
+      // Skip subgraph on forced RPC refreshes (post-mutation) — the subgraph
+      // lags 10-30 s behind the chain on testnet, so we'd read stale data.
+      if (!forceRPC && isGraphConfigured()) {
         try {
           const data = await graphQuery<UserEscrowsResponse>(
             GET_USER_ESCROWS,
             { address: wallet.address.toLowerCase() },
           );
           const raw = dedupeEscrows(data.deposited ?? [], data.assigned ?? []);
-          const normalized = raw.map((g) => normalizeEscrow(g, wallet.address ?? ""));
+          let normalized = raw.map((g) => normalizeEscrow(g, wallet.address ?? ""));
+
+          // Subgraph doesn't index projectTitle/projectDescription (not in the EscrowCreated
+          // event) and only creates Milestone entities on submission events — so pending jobs
+          // have empty milestone arrays with 0 amounts. Enrich everything from RPC.
+          const allIds = normalized
+            .map((e) => parseInt(e.id, 10))
+            .filter((id) => Number.isFinite(id));
+
+          if (allIds.length > 0) {
+            try {
+              const { ContractService: CS } = await import("@/lib/web3/contract-service");
+              const svc = new CS(CONTRACTS.SECUREFLOW_ESCROW);
+              const [rpcBatch, milestonesBatch] = await Promise.all([
+                svc.getEscrowsBatch(allIds),
+                svc.getMilestonesBatch(allIds),
+              ]);
+              normalized = normalized.map((e) => {
+                const id = parseInt(e.id, 10);
+                const rpc = rpcBatch[id];
+                const rpcMs = milestonesBatch[id];
+                const milestones = rpcMs && rpcMs.length > 0
+                  ? rpcMs.map((m: any, idx: number) => {
+                      const existing = e.milestones[idx];
+                      return {
+                        description: existing?.description || m.description || "",
+                        originalDescription: existing?.originalDescription,
+                        amount: m.amount?.toString() || "0",
+                        status: existing?.status ?? rpcMilestoneStatus(Number(m.status)),
+                        submittedAt: existing?.submittedAt,
+                        approvedAt: existing?.approvedAt,
+                        proposedAmount: m.proposedAmount?.toString() || existing?.proposedAmount,
+                        proposedDescription: m.proposedDescription || existing?.proposedDescription,
+                      };
+                    })
+                  : e.milestones;
+                return {
+                  ...e,
+                  projectTitle: rpc?.projectTitle || e.projectTitle || "",
+                  projectDescription: rpc?.projectDescription || e.projectDescription || "",
+                  totalAmount: rpc?.totalAmount != null ? rpc.totalAmount.toString() : e.totalAmount,
+                  releasedAmount: rpc?.paidAmount != null ? rpc.paidAmount.toString() : e.releasedAmount,
+                  milestones,
+                };
+              });
+            } catch { /* non-critical — subgraph data still usable */ }
+          }
+
           if (normalized.length > 0 || previousEscrowsCount === 0) {
             setEscrows(normalized);
           }
@@ -488,7 +535,7 @@ export default function DashboardPage() {
   };
 
   const handleRefresh = () => {
-    fetchUserEscrows(true);
+    fetchUserEscrows(true, true); // always hit RPC on manual refresh
   };
 
   const disputeMilestone = async (escrowId: string, milestoneIndex: number) => {

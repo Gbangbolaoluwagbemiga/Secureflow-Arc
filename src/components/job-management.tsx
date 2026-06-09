@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useWriteContract } from "wagmi";
+import { useWriteContract, usePublicClient } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -68,6 +68,7 @@ export function JobManagement({
   onUpdate,
 }: JobManagementProps) {
   const { writeContractAsync } = useWriteContract();
+  const publicClient = usePublicClient();
   const { toast } = useToast();
   const { wallet } = useWeb3();
 
@@ -115,7 +116,7 @@ export function JobManagement({
 
       toast({ title: "Adding funds…", description: "Confirm in your wallet." });
 
-      await cs.addJobFunds(
+      const addHash = await cs.addJobFunds(
         {
           escrow_id: Number(escrowId),
           additional_amount: addTotal,
@@ -124,6 +125,11 @@ export function JobManagement({
         },
         writeContractAsync,
       );
+
+      // Wait for the block to be confirmed before refreshing UI state
+      if (publicClient && addHash) {
+        await publicClient.waitForTransactionReceipt({ hash: addHash });
+      }
 
       toast({
         title: "Funds added ✓",
@@ -178,7 +184,7 @@ export function JobManagement({
 
       toast({ title: "Withdrawing funds…", description: "Confirm in your wallet." });
 
-      await cs.withdrawJobFunds(
+      const withdrawHash = await cs.withdrawJobFunds(
         {
           escrow_id: Number(escrowId),
           withdraw_amount: withdrawTotal,
@@ -187,6 +193,11 @@ export function JobManagement({
         },
         writeContractAsync,
       );
+
+      // Wait for confirmation before refreshing
+      if (publicClient && withdrawHash) {
+        await publicClient.waitForTransactionReceipt({ hash: withdrawHash });
+      }
 
       toast({
         title: "Funds withdrawn ✓",
@@ -242,20 +253,20 @@ export function JobManagement({
               Add Funds
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[480px]">
+          <DialogContent className="max-w-[min(480px,calc(100vw-2rem))] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Add Funds &amp; Allocate to Milestone</DialogTitle>
               <DialogDescription>
                 Choose how much to add and which milestone should receive the new funds.
                 {beneficiary && (
                   <span className="block mt-1 text-blue-600 dark:text-blue-400">
-                    The freelancer will be notified to confirm the allocation on-chain.
+                    Freelancer will see the updated milestone amount immediately.
                   </span>
                 )}
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-5 py-3">
+            <div className="space-y-4 py-2">
               {/* Total amount */}
               <div className="space-y-1.5">
                 <Label htmlFor="add-total">Amount to Add (USDC)</Label>
@@ -277,7 +288,7 @@ export function JobManagement({
               {milestones.length > 0 && (
                 <div className="space-y-1.5">
                   <Label>Allocate to Milestone</Label>
-                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                  <div className="space-y-2 max-h-48 overflow-y-auto overflow-x-hidden pr-1">
                     {milestones.map((m) => {
                       const currentAmt = weiToUsdc(m.amount);
                       const selected = selectedAddMilestone === m.index;
@@ -286,19 +297,19 @@ export function JobManagement({
                           key={m.index}
                           type="button"
                           onClick={() => setSelectedAddMilestone(m.index)}
-                          className={`w-full text-left flex items-start justify-between gap-3 rounded-md border px-3 py-2.5 text-sm transition-colors ${
+                          className={`w-full text-left flex items-start justify-between gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
                             selected
                               ? "border-primary bg-primary/10 ring-1 ring-primary"
                               : "border-muted hover:border-primary/50"
                           }`}
                         >
-                          <div className="flex-1 min-w-0">
+                          <div className="flex-1 min-w-0 overflow-hidden">
                             <div className="text-xs font-medium text-muted-foreground">
                               Milestone {m.index + 1}
                             </div>
-                            <div className="truncate">{m.description || "—"}</div>
+                            <div className="text-sm truncate max-w-[260px]">{m.description || "—"}</div>
                           </div>
-                          <div className="text-xs font-semibold whitespace-nowrap">
+                          <div className="text-xs font-semibold whitespace-nowrap shrink-0 text-right">
                             {currentAmt.toFixed(4)} USDC
                             {selected && addTotalNum > 0 && (
                               <span className="block text-green-600 dark:text-green-400">
@@ -314,11 +325,10 @@ export function JobManagement({
               )}
 
               {/* Info box */}
-              <div className="flex gap-2 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-2.5 text-xs text-blue-700 dark:text-blue-300">
+              <div className="flex gap-2 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-2 text-xs text-blue-700 dark:text-blue-300">
                 <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                 <span>
                   Funds and the milestone amount are updated on-chain in the same transaction.
-                  Freelancers will see the updated amount immediately when they browse the job.
                 </span>
               </div>
             </div>
@@ -342,7 +352,7 @@ export function JobManagement({
               Withdraw Funds
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[480px]">
+          <DialogContent className="max-w-[min(480px,calc(100vw-2rem))] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Withdraw Funds from Milestone</DialogTitle>
               <DialogDescription>
@@ -351,12 +361,12 @@ export function JobManagement({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-5 py-3">
+            <div className="space-y-4 py-2">
               {/* Milestone picker */}
               {milestones.length > 0 && (
                 <div className="space-y-1.5">
                   <Label>Reduce from Milestone</Label>
-                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                  <div className="space-y-2 max-h-48 overflow-y-auto overflow-x-hidden pr-1">
                     {milestones.map((m) => {
                       const currentAmt = weiToUsdc(m.amount);
                       const selected = selectedWithdrawMilestone === m.index;
@@ -365,19 +375,19 @@ export function JobManagement({
                           key={m.index}
                           type="button"
                           onClick={() => setSelectedWithdrawMilestone(m.index)}
-                          className={`w-full text-left flex items-start justify-between gap-3 rounded-md border px-3 py-2.5 text-sm transition-colors ${
+                          className={`w-full text-left flex items-start justify-between gap-2 rounded-md border px-3 py-2 text-sm transition-colors ${
                             selected
                               ? "border-primary bg-primary/10 ring-1 ring-primary"
                               : "border-muted hover:border-primary/50"
                           }`}
                         >
-                          <div className="flex-1 min-w-0">
+                          <div className="flex-1 min-w-0 overflow-hidden">
                             <div className="text-xs font-medium text-muted-foreground">
                               Milestone {m.index + 1}
                             </div>
-                            <div className="truncate">{m.description || "—"}</div>
+                            <div className="text-sm truncate max-w-[260px]">{m.description || "—"}</div>
                           </div>
-                          <div className="text-xs font-semibold whitespace-nowrap">
+                          <div className="text-xs font-semibold whitespace-nowrap shrink-0 text-right">
                             {currentAmt.toFixed(4)} USDC
                             {selected && withdrawTotalNum > 0 && (
                               <span className={`block ${withdrawTotalNum > currentAmt ? "text-red-500" : "text-amber-600 dark:text-amber-400"}`}>

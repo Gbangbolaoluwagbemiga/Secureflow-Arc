@@ -16,6 +16,19 @@ function escrowStatus(n: number): Escrow["status"] {
   }
 }
 
+/** Contract (RPC) milestone status int → app milestone status string (exported for enrichment) */
+export function rpcMilestoneStatus(n: number): Milestone["status"] {
+  switch (n) {
+    case 0: return "pending";
+    case 1: return "submitted";
+    case 2: return "approved";
+    case 3: return "rejected";
+    case 4: return "disputed";
+    case 5: return "proposal_pending";
+    default: return "pending";
+  }
+}
+
 /** Subgraph milestone status int → app milestone status string */
 function milestoneStatus(n: number): Milestone["status"] {
   switch (n) {
@@ -71,6 +84,7 @@ export function normalizeEscrow(
     payer: g.depositor ?? "",
     beneficiary: g.beneficiary ?? "",
     isClient: isPayer || undefined,
+    isJobCreator: isPayer || undefined,
     isFreelancer: isBeneficiary || undefined,
     token: g.token ?? "",
     totalAmount: g.totalAmount ?? "0",

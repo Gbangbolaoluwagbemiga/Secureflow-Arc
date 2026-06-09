@@ -219,9 +219,35 @@ export default function JobsPage() {
       if (isGraphConfigured()) {
         try {
           const data = await graphQuery<OpenJobsResponse>(GET_OPEN_JOBS);
-          const normalized = (data.escrows ?? []).map((g) =>
+          let normalized = (data.escrows ?? []).map((g) =>
             normalizeEscrow(g, wallet.address ?? ""),
           );
+
+          // Enrich all escrows via RPC: subgraph may have stale totalAmount and
+          // doesn't index projectTitle/projectDescription from the event.
+          const allIds = normalized
+            .map((e) => parseInt(e.id, 10))
+            .filter((id) => Number.isFinite(id));
+
+          if (allIds.length > 0) {
+            try {
+              const rpcBatch = await contractService.getEscrowsBatch(allIds);
+              normalized = normalized.map((e) => {
+                const rpc = rpcBatch[parseInt(e.id, 10)];
+                if (!rpc) return e;
+                return {
+                  ...e,
+                  projectTitle: rpc.projectTitle || e.projectTitle || "",
+                  projectDescription: rpc.projectDescription || e.projectDescription || "",
+                  totalAmount: rpc.totalAmount != null ? rpc.totalAmount.toString() : e.totalAmount,
+                  releasedAmount: rpc.paidAmount != null ? rpc.paidAmount.toString() : e.releasedAmount,
+                };
+              });
+            } catch {
+              // Enrichment failed — data falls back to subgraph values
+            }
+          }
+
           setTotalEscrowsCount(normalized.length);
           setJobs(normalized);
           return;
@@ -287,7 +313,6 @@ export default function JobsPage() {
               // deadline is a Unix timestamp (seconds) — directly from block.timestamp
               const deadlineSeconds = Number(escrowData.deadline ?? 0);
               const remainingSeconds = Math.max(0, deadlineSeconds - nowSeconds);
-              const durationInDays = Math.max(1, Math.round(remainingSeconds / 86400));
               const approxCreatedAt = Date.now(); // creation time not stored on-chain
 
               const job: Escrow = {
@@ -299,7 +324,7 @@ export default function JobsPage() {
                 releasedAmount: escrowData.paidAmount?.toString() ?? "0",
                 status: getStatusFromNumber(escrowData.status),
                 createdAt: approxCreatedAt,
-                duration: durationInDays,
+                duration: remainingSeconds,
                 deadlineAt: deadlineSeconds * 1000,
                 milestones: [],
                 projectTitle: escrowData.projectTitle || "",

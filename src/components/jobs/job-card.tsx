@@ -69,7 +69,7 @@ export function JobCard({
               </h3>
               <Badge variant="secondary" className="gap-1">
                 <Clock className="h-3 w-3" />
-                {job.duration > 0 ? Math.round(job.duration) : 0} days
+                {job.duration > 0 ? Math.max(1, Math.round(job.duration / 86400)) : 0} days
               </Badge>
               <Badge className={getStatusColor(job.status)}>{job.status}</Badge>
             </div>

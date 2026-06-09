@@ -20,7 +20,7 @@ import { useWeb3 } from "@/contexts/web3-context";
 import { CONTRACTS } from "@/lib/web3/config";
 import { isGraphConfigured, graphQuery } from "@/lib/graph/client";
 import { GET_USER_ESCROWS, type UserEscrowsResponse } from "@/lib/graph/queries";
-import { normalizeEscrow, dedupeEscrows } from "@/lib/graph/normalize";
+import { normalizeEscrow, dedupeEscrows, rpcMilestoneStatus } from "@/lib/graph/normalize";
 
 import {
   useNotifications,
@@ -310,7 +310,53 @@ export default function FreelancerPage() {
           const raw = dedupeEscrows(data.deposited ?? [], data.assigned ?? []).filter(
             (g) => g.beneficiary?.toLowerCase() === addr.toLowerCase(),
           );
-          const normalized = raw.map((g) => normalizeEscrow(g, addr));
+          let normalized = raw.map((g) => normalizeEscrow(g, addr));
+
+          // Subgraph doesn't index title/description and has no milestone amounts at creation.
+          // Enrich everything from RPC via one multicall pair.
+          const allIds = normalized
+            .map((e) => parseInt(e.id, 10))
+            .filter((id) => Number.isFinite(id));
+
+          if (allIds.length > 0) {
+            try {
+              const { ContractService: CS } = await import("@/lib/web3/contract-service");
+              const svc = new CS(CONTRACTS.SECUREFLOW_ESCROW);
+              const [rpcBatch, milestonesBatch] = await Promise.all([
+                svc.getEscrowsBatch(allIds),
+                svc.getMilestonesBatch(allIds),
+              ]);
+              normalized = normalized.map((e) => {
+                const id = parseInt(e.id, 10);
+                const rpc = rpcBatch[id];
+                const rpcMs = milestonesBatch[id];
+                const milestones = rpcMs && rpcMs.length > 0
+                  ? rpcMs.map((m: any, idx: number) => {
+                      const existing = e.milestones[idx];
+                      return {
+                        description: existing?.description || m.description || "",
+                        originalDescription: existing?.originalDescription,
+                        amount: m.amount?.toString() || "0",
+                        status: existing?.status ?? rpcMilestoneStatus(Number(m.status)),
+                        submittedAt: existing?.submittedAt,
+                        approvedAt: existing?.approvedAt,
+                        proposedAmount: m.proposedAmount?.toString() || existing?.proposedAmount,
+                        proposedDescription: m.proposedDescription || existing?.proposedDescription,
+                      };
+                    })
+                  : e.milestones;
+                return {
+                  ...e,
+                  projectTitle: rpc?.projectTitle || e.projectTitle || "",
+                  projectDescription: rpc?.projectDescription || e.projectDescription || "",
+                  totalAmount: rpc?.totalAmount != null ? rpc.totalAmount.toString() : e.totalAmount,
+                  releasedAmount: rpc?.paidAmount != null ? rpc.paidAmount.toString() : e.releasedAmount,
+                  milestones,
+                };
+              });
+            } catch { /* non-critical */ }
+          }
+
           setEscrows(normalized as any);
           return;
         } catch (graphErr) {
