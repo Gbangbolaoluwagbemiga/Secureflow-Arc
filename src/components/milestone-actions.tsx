@@ -531,23 +531,26 @@ export function MilestoneActions({
             
             {/* Resolution Details */}
             {(() => {
-              const freelancerAmount = milestone.resolutionAmount ? Number(milestone.resolutionAmount) : 0;
-              const clientAmount = milestone.resolutionClientAmount ? Number(milestone.resolutionClientAmount) : 0;
               const milestoneAmount = Number(milestone.amount);
-              
-              // Try multiple ways to get the resolution reason
-              const resolutionReasonKey = `resolution_${escrowId}_${milestoneIndex}`;
-              let resolutionReason = localStorage.getItem(resolutionReasonKey);
-              
-              // Also try with string escrowId (in case it was stored differently)
-              if (!resolutionReason) {
-                resolutionReason = localStorage.getItem(`resolution_${String(escrowId)}_${milestoneIndex}`);
-              }
-              
-              // Fallback to milestone property
-              if (!resolutionReason && milestone.resolutionReason) {
-                resolutionReason = milestone.resolutionReason;
-              }
+              const idStr = String(escrowId);
+              const idxStr = String(milestoneIndex);
+
+              // Resolution reason: try both key formats
+              let resolutionReason =
+                localStorage.getItem(`resolution_${idStr}_${idxStr}`) ||
+                localStorage.getItem(`resolution_${escrowId}_${milestoneIndex}`) ||
+                milestone.resolutionReason ||
+                null;
+
+              // Resolution amounts: prefer on-milestone props, fall back to localStorage
+              const lsFA = localStorage.getItem(`resolution_fa_${idStr}_${idxStr}`);
+              const lsCA = localStorage.getItem(`resolution_ca_${idStr}_${idxStr}`);
+              const freelancerAmount = milestone.resolutionAmount
+                ? Number(milestone.resolutionAmount)
+                : lsFA ? Number(lsFA) : 0;
+              const clientAmount = milestone.resolutionClientAmount
+                ? Number(milestone.resolutionClientAmount)
+                : lsCA ? Number(lsCA) : 0;
               
               // Get the original dispute reason
               const disputeReason = milestone.disputeReason;
@@ -578,46 +581,56 @@ export function MilestoneActions({
                     </div>
                   )}
                   
-                  {/* Money Split */}
-                  <div className="space-y-2 text-xs">
-                    <div className="flex justify-between items-center p-2 bg-white dark:bg-blue-950 rounded border border-blue-100 dark:border-blue-800">
-                      <span className="text-muted-foreground">Freelancer receives:</span>
-                      <span className="font-semibold text-green-600 dark:text-green-400">
-                        {formatTokenAmount(freelancerAmount, tokenAddress)}
-                      </span>
-                    </div>
-                    
-                    <div className="flex justify-between items-center p-2 bg-white dark:bg-blue-950 rounded border border-blue-100 dark:border-blue-800">
-                      <span className="text-muted-foreground">Client receives:</span>
-                      <span className="font-semibold text-orange-600 dark:text-orange-400">
-                        {formatTokenAmount(clientAmount, tokenAddress)}
-                      </span>
-                    </div>
-                    
-                    <div className="flex justify-between items-center p-2 bg-white dark:bg-blue-950 rounded border border-blue-100 dark:border-blue-800">
-                      <span className="text-muted-foreground">Total milestone:</span>
-                      <span className="font-semibold text-blue-600 dark:text-blue-400">
-                        {formatTokenAmount(milestoneAmount, tokenAddress)}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  {/* Resolution Summary */}
-                  <div className="pt-2 border-t border-blue-200 dark:border-blue-800">
-                    {freelancerAmount > 0 && clientAmount > 0 ? (
+                  {/* Money Split — only shown when amounts are known */}
+                  {(freelancerAmount > 0 || clientAmount > 0) ? (
+                    <>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between items-center p-2 bg-white dark:bg-blue-950 rounded border border-blue-100 dark:border-blue-800">
+                          <span className="text-muted-foreground">Freelancer receives:</span>
+                          <span className="font-semibold text-green-600 dark:text-green-400">
+                            {formatTokenAmount(freelancerAmount, tokenAddress)}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between items-center p-2 bg-white dark:bg-blue-950 rounded border border-blue-100 dark:border-blue-800">
+                          <span className="text-muted-foreground">Client receives:</span>
+                          <span className="font-semibold text-orange-600 dark:text-orange-400">
+                            {formatTokenAmount(clientAmount, tokenAddress)}
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between items-center p-2 bg-white dark:bg-blue-950 rounded border border-blue-100 dark:border-blue-800">
+                          <span className="text-muted-foreground">Total milestone:</span>
+                          <span className="font-semibold text-blue-600 dark:text-blue-400">
+                            {formatTokenAmount(milestoneAmount, tokenAddress)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Resolution Summary */}
+                      <div className="pt-2 border-t border-blue-200 dark:border-blue-800">
+                        {freelancerAmount > 0 && clientAmount > 0 ? (
+                          <p className="text-xs text-blue-700 dark:text-blue-300">
+                            ✅ <strong>Split Decision:</strong> The admin awarded {formatTokenAmount(freelancerAmount, tokenAddress)} to the freelancer and {formatTokenAmount(clientAmount, tokenAddress)} back to the client.
+                          </p>
+                        ) : freelancerAmount > 0 ? (
+                          <p className="text-xs text-green-700 dark:text-green-300">
+                            ✅ <strong>Freelancer Won:</strong> The admin awarded the full {formatTokenAmount(freelancerAmount, tokenAddress)} to the freelancer.
+                          </p>
+                        ) : (
+                          <p className="text-xs text-orange-700 dark:text-orange-300">
+                            ✅ <strong>Client Won:</strong> The admin refunded the full {formatTokenAmount(clientAmount, tokenAddress)} to the client.
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="pt-2 border-t border-blue-200 dark:border-blue-800">
                       <p className="text-xs text-blue-700 dark:text-blue-300">
-                        ✅ <strong>Split Decision:</strong> The admin awarded {formatTokenAmount(freelancerAmount, tokenAddress)} to the freelancer and {formatTokenAmount(clientAmount, tokenAddress)} back to the client.
+                        ✅ <strong>Dispute resolved by admin.</strong> Check the escrow balance for payment details.
                       </p>
-                    ) : freelancerAmount > 0 ? (
-                      <p className="text-xs text-green-700 dark:text-green-300">
-                        ✅ <strong>Freelancer Won:</strong> The admin awarded the full {formatTokenAmount(freelancerAmount, tokenAddress)} to the freelancer.
-                      </p>
-                    ) : (
-                      <p className="text-xs text-orange-700 dark:text-orange-300">
-                        ✅ <strong>Client Won:</strong> The admin refunded the full {formatTokenAmount(clientAmount, tokenAddress)} to the client.
-                      </p>
-                    )}
-                  </div>
+                    </div>
+                  )}
                   
                   {/* Resolution Timestamp */}
                   {milestone.resolvedAt && (

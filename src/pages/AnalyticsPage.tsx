@@ -158,8 +158,8 @@ export default function AnalyticsPage() {
             const milestones = await cs.getMilestones(i);
             for (const m of milestones) {
               const milestoneStatus = Number(m.status || 0);
-              // Status 4 = Disputed, or check if milestone has resolution amounts (was disputed and resolved)
-              if (milestoneStatus === 4 || (m.resolutionFreelancerAmount && BigInt(m.resolutionFreelancerAmount) > 0n)) {
+              // Status 4 = Disputed, or resolvedAt > 0 means it was disputed and resolved by admin
+              if (milestoneStatus === 4 || (m.resolvedAt && BigInt(m.resolvedAt) > 0n)) {
                 hasDisputedMilestone = true;
                 break;
               }

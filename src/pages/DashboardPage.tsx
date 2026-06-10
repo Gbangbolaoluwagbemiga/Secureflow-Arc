@@ -221,16 +221,21 @@ export default function DashboardPage() {
                 const milestones = rpcMs && rpcMs.length > 0
                   ? rpcMs.map((m: any, idx: number) => {
                       const existing = e.milestones[idx];
+                      const resolvedAtRaw = m.resolvedAt ? Number(m.resolvedAt) : 0;
+                      const resolvedByRaw = m.resolvedBy && m.resolvedBy !== "0x0000000000000000000000000000000000000000" ? m.resolvedBy : undefined;
                       return {
                         description: existing?.description || m.description || "",
                         originalDescription: existing?.originalDescription,
                         amount: m.amount?.toString() || "0",
-                        status: existing?.status ?? rpcMilestoneStatus(Number(m.status)),
+                        status: resolvedAtRaw > 0 ? "resolved" as const : (existing?.status ?? rpcMilestoneStatus(Number(m.status))),
                         submittedAt: existing?.submittedAt,
                         approvedAt: existing?.approvedAt,
                         proposedAmount: m.proposedAmount?.toString() || existing?.proposedAmount,
                         proposedDescription: m.proposedDescription || existing?.proposedDescription,
-                        rejectionReason: m.rejectionReason || existing?.rejectionReason,
+                        rejectionReason: m.rejectionReason || existing?.rejectionReason || undefined,
+                        disputeReason: m.disputeReason || existing?.disputeReason || undefined,
+                        resolvedAt: resolvedAtRaw > 0 ? resolvedAtRaw * 1000 : existing?.resolvedAt,
+                        resolvedBy: resolvedByRaw || existing?.resolvedBy || undefined,
                       };
                     })
                   : e.milestones;
@@ -383,8 +388,8 @@ export default function DashboardPage() {
                   
                   let status = statusMap[statusNumber] || "pending";
                   
-                  // If milestone is approved AND has resolution amounts, it was a resolved dispute
-                  if (status === "approved" && m.resolutionFreelancerAmount && BigInt(m.resolutionFreelancerAmount) > 0n) {
+                  // If milestone is approved AND has a resolvedAt timestamp, it was a resolved dispute
+                  if (status === "approved" && m.resolvedAt && BigInt(m.resolvedAt) > 0n) {
                     status = "resolved";
                   }
 

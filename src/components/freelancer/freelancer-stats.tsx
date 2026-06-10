@@ -40,19 +40,21 @@ export function FreelancerStats({
     0
   );
 
-  // Helper function to check if an escrow has issues (disputed or rejected milestones)
+  // Helper function to check if an escrow has/had issues (disputed, rejected, or resolved-via-dispute)
   const isEscrowTerminated = (escrow: any) => {
     return escrow.milestones.some(
       (milestone: any) =>
-        milestone.status === "disputed" || milestone.status === "rejected"
+        milestone.status === "disputed" ||
+        milestone.status === "rejected" ||
+        milestone.status === "resolved"
     );
   };
 
   const completedProjects = escrows.filter((escrow) => {
-    // A project is completed if all milestones are approved
+    // A project is completed if all milestones are approved or resolved (dispute-resolved counts as closed)
     if (escrow.milestones.length === 0) return false;
     return escrow.milestones.every(
-      (milestone) => milestone.status === "approved"
+      (milestone) => milestone.status === "approved" || milestone.status === "resolved"
     );
   }).length;
 

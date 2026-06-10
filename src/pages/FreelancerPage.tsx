@@ -116,7 +116,9 @@ interface Milestone {
   approvedAt?: number;
   disputeReason?: string;
   rejectionReason?: string;
-  resolutionAmount?: string; // Amount paid to beneficiary in resolution (0 = client wins, >0 = freelancer wins)
+  resolvedAt?: number;
+  resolvedBy?: string;
+  resolutionAmount?: string;
 }
 
 function OverdueFreelancerBanner({
@@ -334,16 +336,21 @@ export default function FreelancerPage() {
                 const milestones = rpcMs && rpcMs.length > 0
                   ? rpcMs.map((m: any, idx: number) => {
                       const existing = e.milestones[idx];
+                      const resolvedAtRaw = m.resolvedAt ? Number(m.resolvedAt) : 0;
+                      const resolvedByRaw = m.resolvedBy && m.resolvedBy !== "0x0000000000000000000000000000000000000000" ? m.resolvedBy : undefined;
                       return {
                         description: existing?.description || m.description || "",
                         originalDescription: existing?.originalDescription,
                         amount: m.amount?.toString() || "0",
-                        status: existing?.status ?? rpcMilestoneStatus(Number(m.status)),
+                        status: resolvedAtRaw > 0 ? "resolved" as const : (existing?.status ?? rpcMilestoneStatus(Number(m.status))),
                         submittedAt: existing?.submittedAt,
                         approvedAt: existing?.approvedAt,
                         proposedAmount: m.proposedAmount?.toString() || existing?.proposedAmount,
                         proposedDescription: m.proposedDescription || existing?.proposedDescription,
-                        rejectionReason: m.rejectionReason || existing?.rejectionReason,
+                        rejectionReason: m.rejectionReason || existing?.rejectionReason || undefined,
+                        disputeReason: m.disputeReason || existing?.disputeReason || undefined,
+                        resolvedAt: resolvedAtRaw > 0 ? resolvedAtRaw * 1000 : existing?.resolvedAt,
+                        resolvedBy: resolvedByRaw || existing?.resolvedBy || undefined,
                       };
                     })
                   : e.milestones;
@@ -490,8 +497,8 @@ export default function FreelancerPage() {
                 
                 let status = statusMap[statusNumber] || "pending";
 
-                // If milestone is approved AND has resolution amounts, it was a resolved dispute
-                if (status === "approved" && m.resolutionFreelancerAmount && BigInt(m.resolutionFreelancerAmount) > 0n) {
+                // If milestone is approved AND has a resolvedAt timestamp, it was a resolved dispute
+                if (status === "approved" && m.resolvedAt && BigInt(m.resolvedAt) > 0n) {
                   status = "resolved";
                 }
 
@@ -529,9 +536,8 @@ export default function FreelancerPage() {
                   approvedAt,
                   disputeReason: m.disputeReason || undefined,
                   rejectionReason: m.rejectionReason || undefined,
-                  resolutionAmount: m.resolutionFreelancerAmount?.toString() || undefined,
-                  resolutionClientAmount: m.resolutionClientAmount?.toString() || undefined,
-                  resolutionReason: m.resolutionReason || undefined,
+                  resolvedAt: m.resolvedAt && Number(m.resolvedAt) > 0 ? Number(m.resolvedAt) * 1000 : undefined,
+                  resolvedBy: m.resolvedBy && m.resolvedBy !== "0x0000000000000000000000000000000000000000" ? m.resolvedBy : undefined,
                   proposedAmount: m.proposedAmount?.toString() || undefined,
                   proposedDescription: m.proposedDescription || undefined,
                 };
@@ -2030,76 +2036,6 @@ export default function FreelancerPage() {
                                       </div>
                                     )}
 
-                                    {/* Show resolved status with winner info */}
-                                    {milestone.status === "resolved" && (
-                                      <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                        <div className="flex items-center gap-2 mb-2">
-                                          <Badge className="bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200">
-                                            Resolved
-                                          </Badge>
-                                        </div>
-                                        {(() => {
-                                          // Determine winner based on resolution amount or escrow state
-                                          if (
-                                            milestone.resolutionAmount !==
-                                            undefined
-                                          ) {
-                                            const resolutionAmount = Number(
-                                              milestone.resolutionAmount
-                                            );
-                                            return (
-                                              <div className="text-sm">
-                                                {resolutionAmount > 0 ? (
-                                                  <p className="text-green-600 dark:text-green-400 font-medium">
-                                                    ✅ You won!{" "}
-                                                    {formatEth(resolutionAmount)} awarded
-                                                  </p>
-                                                ) : (
-                                                  <p className="text-orange-600 dark:text-orange-400 font-medium">
-                                                    ❌ Client won - Full refund
-                                                    issued
-                                                  </p>
-                                                )}
-                                              </div>
-                                            );
-                                          }
-                                          // Infer from escrow state
-                                          if (
-                                            escrow.releasedAmount &&
-                                            escrow.totalAmount
-                                          ) {
-                                            const released = Number(
-                                              escrow.releasedAmount
-                                            );
-                                            const milestoneAmount = Number(
-                                              milestone.amount
-                                            );
-                                            if (
-                                              released >=
-                                              milestoneAmount * 0.9
-                                            ) {
-                                              return (
-                                                <p className="text-green-600 dark:text-green-400 font-medium text-sm">
-                                                  ✅ You won! Payment released
-                                                </p>
-                                              );
-                                            } else {
-                                              return (
-                                                <p className="text-orange-600 dark:text-orange-400 font-medium text-sm">
-                                                  ❌ Client won - Refund issued
-                                                </p>
-                                              );
-                                            }
-                                          }
-                                          return (
-                                            <p className="text-sm text-blue-700 dark:text-blue-300">
-                                              Dispute has been resolved by admin
-                                            </p>
-                                          );
-                                        })()}
-                                      </div>
-                                    )}
-
                                     {/* Show milestone negotiation component for pending milestones */}
                                     {milestone.status === "pending" && (
                                       <div className="mt-3">
@@ -2128,7 +2064,7 @@ export default function FreelancerPage() {
                                     )}
 
                                     {/* Show resolved status if milestone was disputed and is now resolved */}
-                                    {milestone.status === "disputed" && (milestone as any).resolvedAt && (
+                                    {(milestone.status === "resolved" || (milestone.status === "disputed" && milestone.resolvedAt)) && (
                                       <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                                         <div className="flex items-center gap-2 mb-2">
                                           <Badge className="bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200">
@@ -2136,52 +2072,39 @@ export default function FreelancerPage() {
                                           </Badge>
                                         </div>
                                         {(() => {
-                                          // Check resolution details
-                                          if ((milestone as any).resolutionAmount !== undefined) {
-                                            const resolutionAmt = Number((milestone as any).resolutionAmount);
-                                            const milestoneAmt = Number(milestone.amount);
-                                            if (resolutionAmt === 0) {
+                                          // Read freelancer amount: prefer milestone prop, fall back to localStorage
+                                          const lsFA = localStorage.getItem(`resolution_fa_${escrow.id}_${index}`);
+                                          const freelancerAmt = milestone.resolutionAmount !== undefined
+                                            ? Number(milestone.resolutionAmount)
+                                            : lsFA !== null ? Number(lsFA) : null;
+                                          const milestoneAmt = Number(milestone.amount);
+
+                                          if (freelancerAmt !== null) {
+                                            if (freelancerAmt === 0) {
                                               return (
                                                 <p className="text-orange-600 dark:text-orange-400 font-medium">
-                                                  ❌ Client won - Full refund issued
+                                                  ❌ Client won — Full refund issued
                                                 </p>
                                               );
-                                            } else if (resolutionAmt >= milestoneAmt) {
+                                            } else if (freelancerAmt >= milestoneAmt) {
                                               return (
                                                 <p className="text-green-600 dark:text-green-400 font-medium">
                                                   ✅ You won! Full payment released
                                                 </p>
                                               );
                                             } else {
-                                              const percentage = Math.round((resolutionAmt / milestoneAmt) * 100);
+                                              const percentage = Math.round((freelancerAmt / milestoneAmt) * 100);
                                               return (
                                                 <p className="text-blue-600 dark:text-blue-400 font-medium">
-                                                  ⚖️ Split decision - You received {percentage}% of milestone amount
+                                                  ⚖️ Split decision — You received {percentage}% of milestone amount
                                                 </p>
                                               );
                                             }
                                           }
-                                          // Infer from escrow state
-                                          if (escrow.releasedAmount && escrow.totalAmount) {
-                                            const released = Number(escrow.releasedAmount);
-                                            const milestoneAmount = Number(milestone.amount);
-                                            if (released >= milestoneAmount * 0.9) {
-                                              return (
-                                                <p className="text-green-600 dark:text-green-400 font-medium text-sm">
-                                                  ✅ You won! Payment released
-                                                </p>
-                                              );
-                                            } else {
-                                              return (
-                                                <p className="text-orange-600 dark:text-orange-400 font-medium text-sm">
-                                                  ❌ Client won - Refund issued
-                                                </p>
-                                              );
-                                            }
-                                          }
+                                          // No amount data available — show neutral message
                                           return (
                                             <p className="text-sm text-blue-700 dark:text-blue-300">
-                                              Dispute has been resolved by admin
+                                              Dispute resolved by admin. Check your earnings balance for payment details.
                                             </p>
                                           );
                                         })()}
@@ -2189,7 +2112,7 @@ export default function FreelancerPage() {
                                     )}
 
                                     {/* Show disputed status if milestone is disputed AND NOT resolved */}
-                                    {milestone.status === "disputed" && !(milestone as any).resolvedAt && (
+                                    {milestone.status === "disputed" && !milestone.resolvedAt && (
                                       <div className="mt-3 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
                                         <div className="flex items-center gap-2 mb-2">
                                           <Badge className="bg-orange-100 dark:bg-orange-800 text-orange-800 dark:text-orange-200">

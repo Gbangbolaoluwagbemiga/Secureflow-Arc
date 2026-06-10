@@ -593,8 +593,16 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       const customEvent = event as CustomEvent;
       const { escrowId, milestoneIndex, clientAddress, freelancerAddress, freelancerAmount, clientAmount, reason } = customEvent.detail || {};
       
-      if (reason && escrowId && milestoneIndex !== undefined) {
-        localStorage.setItem(`resolution_${escrowId}_${milestoneIndex}`, reason);
+      if (escrowId && milestoneIndex !== undefined) {
+        if (reason) {
+          localStorage.setItem(`resolution_${escrowId}_${milestoneIndex}`, reason);
+        }
+        if (freelancerAmount) {
+          localStorage.setItem(`resolution_fa_${escrowId}_${milestoneIndex}`, freelancerAmount.toString());
+        }
+        if (clientAmount) {
+          localStorage.setItem(`resolution_ca_${escrowId}_${milestoneIndex}`, clientAmount.toString());
+        }
       }
       
       // Notify both client and freelancer with resolution details
