@@ -51,14 +51,15 @@ export function FreelancerStats({
   };
 
   const completedProjects = escrows.filter((escrow) => {
-    // A project is completed if all milestones are approved or resolved (dispute-resolved counts as closed)
+    // A project is completed only if every milestone is approved AND there were no disputes
     if (escrow.milestones.length === 0) return false;
-    return escrow.milestones.every(
-      (milestone) => milestone.status === "approved" || milestone.status === "resolved"
+    return (
+      escrow.milestones.every((milestone: any) => milestone.status === "approved") &&
+      !isEscrowTerminated(escrow)
     );
   }).length;
 
-  // Count projects with issues (disputed/rejected milestones)
+  // Count projects with issues (disputed, rejected, or resolved-via-dispute) — mutually exclusive with Completed
   const terminatedProjects = escrows.filter((escrow) => {
     return isEscrowTerminated(escrow);
   }).length;
@@ -106,7 +107,7 @@ export function FreelancerStats({
 
       <Card className="glass border-destructive/20 p-4 md:p-6">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">Issues</CardTitle>
+          <CardTitle className="text-sm font-medium">Disputed</CardTitle>
           <AlertTriangle className="h-4 w-4 text-muted-foreground" />
         </CardHeader>
         <CardContent>
