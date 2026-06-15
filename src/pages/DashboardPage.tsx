@@ -407,6 +407,7 @@ export default function DashboardPage() {
 
                   return {
                     description: currentDescription,
+                    requirements: m.requirements || originalDescription || undefined,
                     originalDescription,
                     amount: m.amount?.toString() || "0",
                     status,

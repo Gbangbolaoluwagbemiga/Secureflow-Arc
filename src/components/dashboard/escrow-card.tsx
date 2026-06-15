@@ -368,17 +368,19 @@ export function EscrowCard({
                         <div className="flex-1 min-w-0">
                           {(() => {
                             const { body, attachment } = parseAttachment(milestone.description ?? "");
-                            // Once the contract overwrites the original
-                            // description on submit, the cached
-                            // `originalDescription` is the brief and
-                            // `description` is the submission response.
+                            // `requirements` is set at creation and never overwritten.
+                            // Fall back to `originalDescription` (old-contract cache) then body.
+                            const requirementsText =
+                              milestone.requirements || milestone.originalDescription || body;
                             const hasSubmissionResponse =
-                              milestone.originalDescription &&
                               milestone.description &&
-                              milestone.description !== milestone.originalDescription &&
-                              milestone.status !== "pending";
-                            const requirements =
-                              milestone.originalDescription || body;
+                              milestone.status !== "pending" &&
+                              (milestone.requirements
+                                ? true
+                                : milestone.originalDescription
+                                  ? milestone.description !== milestone.originalDescription
+                                  : false);
+                            const requirements = requirementsText;
                             return (
                               <>
                                 <p className="text-xs text-muted-foreground font-medium">

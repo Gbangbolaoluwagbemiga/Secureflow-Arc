@@ -108,7 +108,9 @@ interface Escrow {
 
 interface Milestone {
   description: string;
-  /** Cached original brief — see Milestone in src/lib/web3/types.ts. */
+  /** On-chain requirements field (new contract) */
+  requirements?: string;
+  /** @deprecated Cached original brief fallback for old contract */
   originalDescription?: string;
   amount: string;
   status: string;
@@ -529,6 +531,7 @@ export default function FreelancerPage() {
 
                 return {
                   description: currentDescription,
+                  requirements: m.requirements || originalDescription || undefined,
                   originalDescription,
                   amount: m.amount?.toString() || "0",
                   status,
@@ -1924,18 +1927,17 @@ export default function FreelancerPage() {
                                       </div>
                                     </div>
 
-                                    {/* Client Requirements — prefer the
-                                        cached original brief once the
-                                        contract has overwritten m.description
-                                        with the freelancer's submission. */}
+                                    {/* Client Requirements — on-chain `requirements` field (new contract)
+                                        or cached `originalDescription` (old contract fallback). */}
                                     {(() => {
-                                      const requirements =
+                                      const reqText =
+                                        milestone.requirements ||
                                         milestone.originalDescription ||
-                                        milestone.description;
+                                        (milestone.status === "pending" ? milestone.description : "");
                                       if (
-                                        !requirements ||
-                                        requirements.includes("To be defined") ||
-                                        requirements === `Milestone ${index + 1}`
+                                        !reqText ||
+                                        reqText.includes("To be defined") ||
+                                        reqText === `Milestone ${index + 1}`
                                       ) {
                                         return null;
                                       }
@@ -1945,26 +1947,25 @@ export default function FreelancerPage() {
                                             Requirements:
                                           </span>
                                           <p className="mt-1 whitespace-pre-wrap">
-                                            {requirements}
+                                            {reqText}
                                           </p>
                                         </div>
                                       );
                                     })()}
 
-                                    {/* Freelancer's submission response — only
-                                        when m.description differs from the
-                                        cached original brief (i.e. after
-                                        submitMilestone / resubmit). */}
-                                    {milestone.originalDescription &&
-                                      milestone.description &&
-                                      milestone.description !==
-                                        milestone.originalDescription &&
-                                      milestone.status !== "pending" && (
+                                    {/* Freelancer's submission response — shown when description exists and differs from requirements */}
+                                    {milestone.description &&
+                                      milestone.status !== "pending" &&
+                                      (milestone.requirements
+                                        ? true
+                                        : milestone.originalDescription
+                                          ? milestone.description !== milestone.originalDescription
+                                          : false) && (
                                         <div className="text-xs text-blue-700 dark:text-blue-300 mb-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
                                           <span className="font-medium">
                                             Submission Response:
                                           </span>
-                                          <p className="mt-1 whitespace-pre-wrap break-words">
+                                          <p className="mt-1 whitespace-pre-wrap wrap-break-word">
                                             {milestone.description}
                                           </p>
                                         </div>

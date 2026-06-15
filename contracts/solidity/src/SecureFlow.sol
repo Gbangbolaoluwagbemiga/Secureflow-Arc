@@ -57,7 +57,8 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
 
     struct Milestone {
         uint256 amount;
-        string description;
+        string description;       // freelancer's submission text (overwritten on submit)
+        string requirements;      // original client requirements — set once at creation, never overwritten
         MilestoneStatus status;
         uint256 submittedAt;
         uint256 approvedAt;
@@ -262,7 +263,8 @@ contract SecureFlow is Ownable2Step, ReentrancyGuard, Pausable {
         for (uint256 i; i < milestoneAmounts.length; ++i) {
             escrowMilestones[escrowId].push(Milestone({
                 amount: milestoneAmounts[i],
-                description: milestoneDescriptions[i],
+                description: "",
+                requirements: milestoneDescriptions[i],
                 status: MilestoneStatus.NotStarted,
                 submittedAt: 0,
                 approvedAt: 0,

@@ -1,9 +1,9 @@
 export interface Milestone {
   description: string;
-  /** Original requirement description, cached client-side from the first time the
-   *  milestone was seen as NotStarted. The contract overwrites `description` on
-   *  submit, so this preserves the original brief for display alongside the
-   *  freelancer's submission response. */
+  /** Original client requirements — stored on-chain in the `requirements` field (new contract).
+   *  Falls back to `originalDescription` for escrows from the old contract. */
+  requirements?: string;
+  /** @deprecated Use `requirements` — client-side cache fallback for old contract escrows */
   originalDescription?: string;
   amount: string;
   status:
