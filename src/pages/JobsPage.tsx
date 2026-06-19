@@ -248,29 +248,34 @@ export default function JobsPage() {
             }
           }
 
-          setTotalEscrowsCount(normalized.length);
-          setJobs(normalized);
+          // If subgraph returned jobs, use them; otherwise fall through to RPC
+          // (subgraph may be indexing the old contract and return empty for new deployments)
+          if (normalized.length > 0) {
+            setTotalEscrowsCount(normalized.length);
+            setJobs(normalized);
 
-          // Check application status for each job (subgraph path doesn't include this)
-          if (wallet.address && allIds.length > 0) {
-            try {
-              const statuses = await Promise.all(
-                allIds.map((id) =>
-                  contractService.hasUserApplied(id, wallet.address!).then(
-                    (applied) => [id.toString(), applied] as [string, boolean]
-                  ).catch(() => [id.toString(), false] as [string, boolean])
-                )
-              );
-              setHasApplied((prev) => ({
-                ...prev,
-                ...Object.fromEntries(statuses),
-              }));
-            } catch {
-              // Non-critical — button state falls back to "Apply Now"
+            // Check application status for each job
+            if (wallet.address && allIds.length > 0) {
+              try {
+                const statuses = await Promise.all(
+                  allIds.map((id) =>
+                    contractService.hasUserApplied(id, wallet.address!).then(
+                      (applied) => [id.toString(), applied] as [string, boolean]
+                    ).catch(() => [id.toString(), false] as [string, boolean])
+                  )
+                );
+                setHasApplied((prev) => ({
+                  ...prev,
+                  ...Object.fromEntries(statuses),
+                }));
+              } catch {
+                // Non-critical — button state falls back to "Apply Now"
+              }
             }
-          }
 
-          return;
+            return;
+          }
+          // Subgraph returned 0 jobs — fall through to RPC scan
         } catch (graphErr) {
           console.warn("[jobs] subgraph query failed, falling back to RPC:", graphErr);
         }

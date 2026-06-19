@@ -251,10 +251,14 @@ export default function DashboardPage() {
             } catch { /* non-critical — subgraph data still usable */ }
           }
 
-          if (normalized.length > 0 || previousEscrowsCount === 0) {
+          // Only trust the subgraph result if it returned data — an empty result
+          // likely means the subgraph is indexing the old contract, so fall through
+          // to the RPC scan which reads directly from the current deployment.
+          if (normalized.length > 0) {
             setEscrows(normalized);
+            return; // subgraph had data — skip RPC path
           }
-          return; // subgraph succeeded — skip RPC path
+          // subgraph returned 0 results — fall through to RPC scan
         } catch (graphErr) {
           console.warn("[dashboard] subgraph query failed, falling back to RPC:", graphErr);
         }
