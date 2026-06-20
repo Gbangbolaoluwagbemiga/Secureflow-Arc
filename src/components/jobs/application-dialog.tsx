@@ -83,7 +83,7 @@ export function ApplicationDialog({
         const raw = await svc.getMilestones(Number(job.id));
         if (cancelled) return;
         const parsed: MilestonePreview[] = (raw as any[]).map((m: any) => ({
-          description: m.description ?? "",
+          description: m.requirements || m.description || "",
           amount: m.amount?.toString() ?? "0",
         }));
         setMilestones(parsed);
@@ -215,7 +215,7 @@ export function ApplicationDialog({
                         Milestone {i + 1}
                       </div>
                       {m.description && (
-                        <div className="text-sm whitespace-pre-wrap break-words">
+                        <div className="text-sm whitespace-pre-wrap wrap-break-word">
                           {m.description}
                         </div>
                       )}
