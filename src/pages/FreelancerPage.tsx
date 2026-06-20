@@ -368,8 +368,12 @@ export default function FreelancerPage() {
             } catch { /* non-critical */ }
           }
 
-          setEscrows(normalized as any);
-          return;
+          // Only trust the subgraph if it returned data — empty means it's
+          // indexing the old contract; fall through to RPC scan instead.
+          if (normalized.length > 0) {
+            setEscrows(normalized as any);
+            return;
+          }
         } catch (graphErr) {
           console.warn("[freelancer] subgraph query failed, falling back to RPC:", graphErr);
         }
@@ -759,7 +763,7 @@ export default function FreelancerPage() {
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
       // Refresh escrows
-      await fetchFreelancerEscrows();
+      await fetchFreelancerEscrows(true, true);
     } catch (error: any) {
       const errorMessage = error.message || "";
 
@@ -773,7 +777,7 @@ export default function FreelancerPage() {
           title: "Work Already Started",
           description: "Work has already been started on this escrow.",
         });
-        await fetchFreelancerEscrows();
+        await fetchFreelancerEscrows(true, true);
       } else if (
         errorMessage.includes("User rejected") ||
         errorMessage.includes("user rejected") ||
@@ -1067,7 +1071,7 @@ export default function FreelancerPage() {
       setSelectedEscrowId(null);
 
       // Refresh escrows
-      await fetchFreelancerEscrows();
+      await fetchFreelancerEscrows(true, true);
 
       // Dispatch event to notify other components
       window.dispatchEvent(new CustomEvent("milestoneSubmitted", {
@@ -1265,7 +1269,7 @@ export default function FreelancerPage() {
       }
 
       // Refresh escrows
-      await fetchFreelancerEscrows();
+      await fetchFreelancerEscrows(true, true);
     } catch (error) {
       toast({
         title: "Failed to open dispute",
@@ -1326,7 +1330,7 @@ export default function FreelancerPage() {
         }
       } catch { /* non-critical */ }
 
-      await fetchFreelancerEscrows();
+      await fetchFreelancerEscrows(true, true);
     } catch (error: any) {
       toast({
         title: "Failed to raise dispute",
