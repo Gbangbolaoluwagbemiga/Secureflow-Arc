@@ -687,6 +687,21 @@ export class ContractService {
     });
   }
 
+  async getCollectedFees(token: string): Promise<bigint> {
+    try {
+      return await this.contract.read.totalFeesByToken([token as `0x${string}`]) as bigint;
+    } catch { return 0n; }
+  }
+
+  async withdrawFees(token: string, write: WagmiWrite): Promise<`0x${string}`> {
+    return write({
+      address: this.addr,
+      abi: SecureFlowABI.abi,
+      functionName: "withdrawFees",
+      args: [token as `0x${string}`],
+    });
+  }
+
   async deleteEscrow(escrowId: number, write: WagmiWrite): Promise<`0x${string}`> {
     return write({
       address: this.addr,

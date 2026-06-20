@@ -32,6 +32,10 @@ export default function AdminPage() {
   const [newFeePercent, setNewFeePercent] = useState("");
   const [isSettingFee, setIsSettingFee] = useState(false);
 
+  // Collected fees state
+  const [collectedFees, setCollectedFees] = useState<bigint | null>(null);
+  const [isWithdrawingFees, setIsWithdrawingFees] = useState(false);
+
   // Delete escrow state
   const [deleteInput, setDeleteInput] = useState(""); // accepts SF-XXXXX or raw number
   const [isDeletingEscrow, setIsDeletingEscrow] = useState(false);
@@ -43,7 +47,23 @@ export default function AdminPage() {
   useEffect(() => {
     if (!isOwner) return;
     contractService.getPlatformFeeBP().then(setCurrentFeeBP);
+    if (USDC_ADDRESS) contractService.getCollectedFees(USDC_ADDRESS).then(setCollectedFees);
   }, [isOwner]);
+
+  const handleWithdrawFees = async () => {
+    if (!USDC_ADDRESS) return;
+    setIsWithdrawingFees(true);
+    try {
+      await contractService.withdrawFees(USDC_ADDRESS, (args) => writeContractAsync(args));
+      toast({ title: "Fees withdrawn", description: "Platform fees sent to fee collector wallet." });
+      const updated = await contractService.getCollectedFees(USDC_ADDRESS);
+      setCollectedFees(updated);
+    } catch (error: any) {
+      toast({ title: "Withdrawal failed", description: error?.message || "Transaction failed.", variant: "destructive" });
+    } finally {
+      setIsWithdrawingFees(false);
+    }
+  };
 
   const handleSetPlatformFee = async () => {
     const pct = parseFloat(newFeePercent);
@@ -509,6 +529,42 @@ export default function AdminPage() {
               </div>
               <p className="text-xs text-muted-foreground">
                 Enter 0–15%. Value is stored as basis points (1% = 100 bp). Applies to all future escrow deposits.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Collected Platform Fees */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Coins className="h-5 w-5" />
+              Collected Fees
+            </CardTitle>
+            <CardDescription>Withdraw accumulated platform fees to the fee collector wallet</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border">
+                <div>
+                  <p className="text-xs text-muted-foreground">USDC available to withdraw</p>
+                  <p className="text-2xl font-bold">
+                    {collectedFees === null
+                      ? "—"
+                      : `${(Number(collectedFees) / 1e6).toFixed(2)} USDC`}
+                  </p>
+                </div>
+                <Button
+                  onClick={() => void handleWithdrawFees()}
+                  disabled={isWithdrawingFees || !collectedFees || collectedFees === 0n}
+                  variant="default"
+                >
+                  {isWithdrawingFees ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  {isWithdrawingFees ? "Withdrawing…" : "Withdraw"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Sends all accumulated USDC fees to the fee collector address set at deployment.
               </p>
             </div>
           </CardContent>
