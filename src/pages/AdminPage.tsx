@@ -34,6 +34,7 @@ export default function AdminPage() {
 
   // Collected fees state
   const [collectedFees, setCollectedFees] = useState<bigint | null>(null);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
   const [isWithdrawingFees, setIsWithdrawingFees] = useState(false);
 
   // Delete escrow state
@@ -50,16 +51,38 @@ export default function AdminPage() {
     if (USDC_ADDRESS) contractService.getCollectedFees(USDC_ADDRESS).then(setCollectedFees);
   }, [isOwner]);
 
+  const isUserRejection = (error: any) => {
+    const msg: string = error?.message || error?.details || "";
+    return (
+      error?.code === 4001 ||
+      msg.includes("User rejected") ||
+      msg.includes("user rejected") ||
+      msg.includes("rejected the request") ||
+      msg.includes("denied transaction")
+    );
+  };
+
   const handleWithdrawFees = async () => {
     if (!USDC_ADDRESS) return;
+    const available = Number(collectedFees ?? 0n) / 1e6;
+    const amount = parseFloat(withdrawAmount);
+    if (isNaN(amount) || amount <= 0 || amount > available) {
+      toast({ title: "Invalid amount", description: `Enter an amount between 0.01 and ${available.toFixed(2)} USDC.`, variant: "destructive" });
+      return;
+    }
     setIsWithdrawingFees(true);
     try {
       await contractService.withdrawFees(USDC_ADDRESS, (args) => writeContractAsync(args));
-      toast({ title: "Fees withdrawn", description: "Platform fees sent to fee collector wallet." });
+      toast({ title: "Fees withdrawn", description: `${amount.toFixed(2)} USDC sent to fee collector wallet.` });
       const updated = await contractService.getCollectedFees(USDC_ADDRESS);
       setCollectedFees(updated);
+      setWithdrawAmount("");
     } catch (error: any) {
-      toast({ title: "Withdrawal failed", description: error?.message || "Transaction failed.", variant: "destructive" });
+      if (isUserRejection(error)) {
+        toast({ title: "Cancelled", description: "You rejected the transaction in your wallet.", variant: "destructive" });
+      } else {
+        toast({ title: "Withdrawal failed", description: "Transaction failed. Please try again.", variant: "destructive" });
+      }
     } finally {
       setIsWithdrawingFees(false);
     }
@@ -79,7 +102,11 @@ export default function AdminPage() {
       setNewFeePercent("");
       toast({ title: "Platform fee updated", description: `Fee set to ${pct}% (${bp} basis points).` });
     } catch (error: any) {
-      toast({ title: "Failed to update fee", description: error?.message || "Transaction failed.", variant: "destructive" });
+      if (isUserRejection(error)) {
+        toast({ title: "Cancelled", description: "You rejected the transaction in your wallet.", variant: "destructive" });
+      } else {
+        toast({ title: "Failed to update fee", description: "Transaction failed. Please try again.", variant: "destructive" });
+      }
     } finally {
       setIsSettingFee(false);
     }
@@ -105,15 +132,19 @@ export default function AdminPage() {
       });
       setDeleteInput("");
     } catch (error: any) {
-      const msg: string = error?.message || "Transaction failed.";
-      const friendly = msg.includes("InvalidEscrowStatus")
-        ? "Escrow must be in a terminal state (released, refunded, expired, or cancelled) before deletion."
-        : msg.includes("InvalidAmount")
-        ? "Escrow still has funds. Ensure all funds are withdrawn or paid out first."
-        : msg.includes("EscrowNotFound")
-        ? "No escrow found with that ID."
-        : msg;
-      toast({ title: "Delete failed", description: friendly, variant: "destructive" });
+      if (isUserRejection(error)) {
+        toast({ title: "Cancelled", description: "You rejected the transaction in your wallet.", variant: "destructive" });
+      } else {
+        const msg: string = error?.message || "";
+        const friendly = msg.includes("InvalidEscrowStatus")
+          ? "Escrow must be in a terminal state (released, refunded, expired, or cancelled) before deletion."
+          : msg.includes("InvalidAmount")
+          ? "Escrow still has funds. Ensure all funds are withdrawn or paid out first."
+          : msg.includes("EscrowNotFound")
+          ? "No escrow found with that ID."
+          : "Transaction failed. Please try again.";
+        toast({ title: "Delete failed", description: friendly, variant: "destructive" });
+      }
     } finally {
       setIsDeletingEscrow(false);
     }
@@ -489,86 +520,99 @@ export default function AdminPage() {
           </CardContent>
         </Card>
 
-        {/* Platform Fee */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Percent className="h-5 w-5" />
-              Platform Fee
-            </CardTitle>
-            <CardDescription>
-              Current fee:{" "}
-              {currentFeeBP === null ? (
-                <Loader2 className="inline h-3 w-3 animate-spin" />
-              ) : (
-                <strong>{(currentFeeBP / 100).toFixed(2)}% ({currentFeeBP} bp)</strong>
-              )}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="newFee">New Fee (%)</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="newFee"
-                  type="number"
-                  min="0"
-                  max="15"
-                  step="0.01"
-                  placeholder="e.g. 2.5"
-                  value={newFeePercent}
-                  onChange={(e) => setNewFeePercent(e.target.value)}
-                />
-                <Button
-                  onClick={handleSetPlatformFee}
-                  disabled={isSettingFee || !newFeePercent}
-                  className="shrink-0"
-                >
-                  {isSettingFee ? <Loader2 className="h-4 w-4 animate-spin" /> : "Set Fee"}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Enter 0–15%. Value is stored as basis points (1% = 100 bp). Applies to all future escrow deposits.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Collected Platform Fees */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Coins className="h-5 w-5" />
-              Collected Fees
-            </CardTitle>
-            <CardDescription>Withdraw accumulated platform fees to the fee collector wallet</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border">
-                <div>
-                  <p className="text-xs text-muted-foreground">USDC available to withdraw</p>
-                  <p className="text-2xl font-bold">
-                    {collectedFees === null
-                      ? "—"
-                      : `${(Number(collectedFees) / 1e6).toFixed(2)} USDC`}
-                  </p>
+        {/* Platform Fee + Collected Fees — side by side */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Platform Fee */}
+          <Card className="flex flex-col">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Percent className="h-5 w-5" />
+                Platform Fee
+              </CardTitle>
+              <CardDescription>
+                Current:{" "}
+                {currentFeeBP === null ? (
+                  <Loader2 className="inline h-3 w-3 animate-spin" />
+                ) : (
+                  <strong>{(currentFeeBP / 100).toFixed(2)}% ({currentFeeBP} bp)</strong>
+                )}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex-1 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="newFee">New Fee (%)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="newFee"
+                    type="number"
+                    min="0"
+                    max="15"
+                    step="0.01"
+                    placeholder="e.g. 2.5"
+                    value={newFeePercent}
+                    onChange={(e) => setNewFeePercent(e.target.value)}
+                  />
+                  <Button
+                    onClick={() => void handleSetPlatformFee()}
+                    disabled={isSettingFee || !newFeePercent}
+                    className="shrink-0"
+                  >
+                    {isSettingFee ? <Loader2 className="h-4 w-4 animate-spin" /> : "Set Fee"}
+                  </Button>
                 </div>
-                <Button
-                  onClick={() => void handleWithdrawFees()}
-                  disabled={isWithdrawingFees || !collectedFees || collectedFees === 0n}
-                  variant="default"
-                >
-                  {isWithdrawingFees ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                  {isWithdrawingFees ? "Withdrawing…" : "Withdraw"}
-                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Enter 0–15%. Stored as basis points (1% = 100 bp).
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Sends all accumulated USDC fees to the fee collector address set at deployment.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          {/* Collected Fees */}
+          <Card className="flex flex-col">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Coins className="h-5 w-5" />
+                Collected Fees
+              </CardTitle>
+              <CardDescription>
+                Available:{" "}
+                {collectedFees === null ? (
+                  <Loader2 className="inline h-3 w-3 animate-spin" />
+                ) : (
+                  <strong>{(Number(collectedFees) / 1e6).toFixed(2)} USDC</strong>
+                )}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex-1 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="withdrawAmt">Amount to Withdraw (USDC)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="withdrawAmt"
+                    type="number"
+                    min="0.01"
+                    max={collectedFees ? (Number(collectedFees) / 1e6).toFixed(6) : undefined}
+                    step="0.01"
+                    placeholder="e.g. 5.00"
+                    value={withdrawAmount}
+                    onChange={(e) => setWithdrawAmount(e.target.value)}
+                    disabled={!collectedFees || collectedFees === 0n}
+                  />
+                  <Button
+                    onClick={() => void handleWithdrawFees()}
+                    disabled={isWithdrawingFees || !withdrawAmount || !collectedFees || collectedFees === 0n}
+                    className="shrink-0"
+                  >
+                    {isWithdrawingFees ? <Loader2 className="h-4 w-4 animate-spin" /> : "Withdraw"}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Sent to the fee collector wallet set at deployment.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Arbiter Management */}
         <ArbiterManagement onArbiterAdded={() => {
@@ -608,34 +652,6 @@ export default function AdminPage() {
           </CardContent>
         </Card>
 
-        {/* Information Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Contract Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-muted/50 p-3 rounded-lg">
-                <p className="text-xs text-muted-foreground mb-1">Contract Address</p>
-                <p className="text-xs font-mono break-all">
-                  {import.meta.env.VITE_SECUREFLOW_CONTRACT_ADDRESS}
-                </p>
-              </div>
-              <div className="bg-muted/50 p-3 rounded-lg">
-                <p className="text-xs text-muted-foreground mb-1">Your Address</p>
-                <p className="text-xs font-mono break-all">{wallet.address}</p>
-              </div>
-              <div className="bg-muted/50 p-3 rounded-lg">
-                <p className="text-xs text-muted-foreground mb-1">Network</p>
-                <p className="text-xs font-semibold">Arc Testnet (Chain ID: 5042002)</p>
-              </div>
-              <div className="bg-muted/50 p-3 rounded-lg">
-                <p className="text-xs text-muted-foreground mb-1">USDC Token</p>
-                <p className="text-xs font-mono break-all">{USDC_ADDRESS}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
