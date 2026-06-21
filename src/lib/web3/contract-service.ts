@@ -617,6 +617,29 @@ export class ContractService {
     });
   }
 
+  async simulateApplyToJob(
+    params: { escrow_id: number; cover_letter: string; proposed_timeline: number; freelancer: string }
+  ): Promise<{ ok: true } | { ok: false; reason: string }> {
+    try {
+      await this.client.simulateContract({
+        address: this.addr,
+        abi: SecureFlowABI.abi,
+        functionName: "applyToJob",
+        args: [BigInt(params.escrow_id), params.cover_letter, BigInt(params.proposed_timeline)],
+        account: params.freelancer as Address,
+      });
+      return { ok: true };
+    } catch (err: any) {
+      const msg: string = err?.message || err?.shortMessage || "";
+      if (msg.includes("NotAnOpenJob")) return { ok: false, reason: "This job is no longer accepting applications." };
+      if (msg.includes("AlreadyApplied")) return { ok: false, reason: "You have already applied to this job." };
+      if (msg.includes("EscrowNotFound")) return { ok: false, reason: "Job not found on-chain." };
+      if (msg.includes("Paused") || msg.includes("paused")) return { ok: false, reason: "The contract is currently paused." };
+      // Unknown revert — surface raw short message so we can diagnose
+      return { ok: false, reason: msg.split("\n")[0] || "Transaction would fail. Please try again." };
+    }
+  }
+
   async applyToJob(
     params: { escrow_id: number; cover_letter: string; proposed_timeline: number; freelancer: string },
     write: WagmiWrite
