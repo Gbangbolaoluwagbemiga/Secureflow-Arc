@@ -377,39 +377,6 @@ export default function AdminPage() {
 
         {/* Grid Layout for Admin Controls */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Quick Actions Card */}
-          <Card className="md:col-span-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Coins className="h-5 w-5" />
-                Quick Actions
-              </CardTitle>
-              <CardDescription>Common administrative tasks</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button
-                onClick={handleQuickWhitelistUSDC}
-                disabled={isWhitelisting || !USDC_ADDRESS}
-                className="w-full bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
-                size="lg"
-              >
-                {isWhitelisting ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Whitelisting USDC...
-                  </>
-                ) : (
-                  <>
-                    <Lock className="mr-2 h-4 w-4" />
-                    Whitelist USDC Token
-                  </>
-                )}
-              </Button>
-              <p className="text-xs text-muted-foreground mt-3 text-center">
-                Enable USDC ({USDC_ADDRESS.slice(0, 10)}...) for escrow payments
-              </p>
-            </CardContent>
-          </Card>
 
           {/* Token Management Card */}
           <Card>
