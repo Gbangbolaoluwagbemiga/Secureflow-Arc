@@ -341,31 +341,35 @@ export function EscrowCard({
                   </Button>
                 )}
 
-                {/* Archive / Unarchive — settled escrows */}
-                {isSettled && onUnarchive && (
+              </div>
+            )}
+
+            {/* Archive / Unarchive — settled escrows */}
+            {isSettled && (
+              <div className="flex justify-end">
+                {onUnarchive ? (
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="text-muted-foreground hover:text-foreground gap-1.5 shrink-0"
+                    className="text-muted-foreground hover:text-foreground gap-1.5"
                     onClick={() => onUnarchive(escrow.id)}
                     title="Restore to dashboard"
                   >
                     <Archive className="h-3.5 w-3.5" />
                     Unarchive
                   </Button>
-                )}
-                {isSettled && !onUnarchive && onArchive && (
+                ) : onArchive ? (
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="text-muted-foreground hover:text-foreground gap-1.5 shrink-0"
+                    className="text-muted-foreground hover:text-foreground gap-1.5"
                     onClick={() => onArchive(escrow.id)}
                     title="Hide this escrow from your dashboard"
                   >
                     <Archive className="h-3.5 w-3.5" />
                     Archive
                   </Button>
-                )}
+                ) : null}
               </div>
             )}
 
