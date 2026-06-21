@@ -464,27 +464,18 @@ export default function JobsPage() {
       } else {
       }
 
-      // Pre-simulate to catch reverts before MetaMask pops up
+      // Apply to the job via the gasless path — admin wallet pays the fee,
+      // Gasless: relayer pays gas via EIP-2771 forwarder.
       const { ContractService: GaslessCS } = await import(
         "@/lib/web3/contract-service"
       );
       const gaslessService = new GaslessCS(CONTRACTS.SECUREFLOW_ESCROW);
-
-      const applyParams = {
+      await gaslessService.applyToJob({
         escrow_id: Number.parseInt(job.id, 10),
         cover_letter: coverLetter,
         proposed_timeline: Number.parseInt(proposedTimeline, 10),
         freelancer: wallet.address || "",
-      };
-
-      const sim = await gaslessService.simulateApplyToJob(applyParams);
-      if (!sim.ok) {
-        toast({ title: "Cannot apply", description: sim.reason, variant: "destructive" });
-        setApplying(false);
-        return;
-      }
-
-      await gaslessService.applyToJob(applyParams, writeContractAsync);
+      }, writeContractAsync);
 
       // Update hasApplied state to prevent double application
       setHasApplied((prev) => ({
