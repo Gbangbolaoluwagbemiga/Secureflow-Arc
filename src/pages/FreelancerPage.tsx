@@ -205,7 +205,7 @@ export default function FreelancerPage() {
   const [expandedEscrow, setExpandedEscrow] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<
-    "all" | "pending" | "active" | "completed" | "disputed"
+    "all" | "pending" | "active" | "completed" | "disputed" | "archived"
   >("all");
   const [sortFilter, setSortFilter] = useState<"newest" | "oldest">("newest");
   const [averageRating, setAverageRating] = useState<number>(0);
@@ -710,7 +710,20 @@ export default function FreelancerPage() {
         JSON.stringify([...next]),
       );
     } catch { /* non-fatal */ }
-    toast({ title: "Archived", description: "Project hidden from your dashboard." });
+    toast({ title: "Archived", description: "Project hidden. View it under the Archived filter." });
+  };
+
+  const unarchiveEscrow = (escrowId: string) => {
+    const next = new Set(archivedIds);
+    next.delete(escrowId);
+    setArchivedIds(next);
+    try {
+      localStorage.setItem(
+        `freelancer_archived_${wallet.address ?? ""}`,
+        JSON.stringify([...next]),
+      );
+    } catch { /* non-fatal */ }
+    toast({ title: "Unarchived", description: "Project restored to your dashboard." });
   };
 
   const startWork = async (escrowId: string) => {
@@ -1555,6 +1568,7 @@ export default function FreelancerPage() {
                     <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="completed">Completed</SelectItem>
                     <SelectItem value="disputed">Disputed</SelectItem>
+                    <SelectItem value="archived">Archived</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1583,11 +1597,16 @@ export default function FreelancerPage() {
             <div className="grid gap-6">
               {escrows
                 .filter((escrow) => {
-                  // Status filter
+                  const isArchived = archivedIds.has(escrow.id);
+
+                  // Archived filter — show only archived
+                  if (statusFilter === "archived") return isArchived;
+
+                  // All other filters — hide archived
+                  if (isArchived) return false;
+
                   const matchesStatus =
                     statusFilter === "all" || escrow.status === statusFilter;
-
-                  // Search filter
                   const matchesSearch =
                     !searchQuery ||
                     (escrow.projectDescription ?? "")
@@ -1596,7 +1615,6 @@ export default function FreelancerPage() {
 
                   return matchesStatus && matchesSearch;
                 })
-                .filter((e) => !archivedIds.has(e.id))
                 .sort((a, b) => {
                   if (sortFilter === "newest") {
                     return b.createdAt - a.createdAt;
@@ -1788,22 +1806,35 @@ export default function FreelancerPage() {
                             )}
                         </div>
 
-                        {/* Archive button — settled/completed escrows only */}
+                        {/* Archive / Unarchive — settled escrows only */}
                         {(escrow.status === "completed" ||
                           escrow.status === "cancelled" ||
                           escrow.status === "refunded" ||
                           escrow.status === "expired") && (
                           <div className="flex justify-end mt-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-muted-foreground hover:text-foreground gap-1.5"
-                              onClick={() => archiveEscrow(escrow.id)}
-                              title="Hide this project from your dashboard"
-                            >
-                              <Archive className="h-3.5 w-3.5" />
-                              Archive
-                            </Button>
+                            {statusFilter === "archived" ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-muted-foreground hover:text-foreground gap-1.5"
+                                onClick={() => unarchiveEscrow(escrow.id)}
+                                title="Restore this project to your dashboard"
+                              >
+                                <Archive className="h-3.5 w-3.5" />
+                                Unarchive
+                              </Button>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-muted-foreground hover:text-foreground gap-1.5"
+                                onClick={() => archiveEscrow(escrow.id)}
+                                title="Hide this project from your dashboard"
+                              >
+                                <Archive className="h-3.5 w-3.5" />
+                                Archive
+                              </Button>
+                            )}
                           </div>
                         )}
 

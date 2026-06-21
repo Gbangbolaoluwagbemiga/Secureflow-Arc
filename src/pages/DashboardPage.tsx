@@ -67,7 +67,7 @@ export default function DashboardPage() {
   }, [escrows]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<
-    "all" | "pending" | "active" | "completed" | "disputed"
+    "all" | "pending" | "active" | "completed" | "disputed" | "archived"
   >("all");
   const [sortFilter, setSortFilter] = useState<"newest" | "oldest">("newest");
   const [expandedEscrow, setExpandedEscrow] = useState<string | null>(null);
@@ -944,7 +944,20 @@ export default function DashboardPage() {
         JSON.stringify([...next]),
       );
     } catch { /* non-fatal */ }
-    toast({ title: "Archived", description: "Escrow hidden from your dashboard. Refresh to see it again if needed." });
+    toast({ title: "Archived", description: "Project hidden. View it under the Archived filter." });
+  };
+
+  const unarchiveEscrow = (escrowId: string) => {
+    const next = new Set(archivedIds);
+    next.delete(escrowId);
+    setArchivedIds(next);
+    try {
+      localStorage.setItem(
+        `archived_escrows_${wallet.address ?? ""}`,
+        JSON.stringify([...next]),
+      );
+    } catch { /* non-fatal */ }
+    toast({ title: "Unarchived", description: "Project restored to your dashboard." });
   };
 
   const rejectMilestone = async (
@@ -1138,6 +1151,7 @@ export default function DashboardPage() {
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
                 <SelectItem value="disputed">Disputed</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1174,16 +1188,17 @@ export default function DashboardPage() {
           <div className="space-y-6">
             {escrows
               .filter((escrow) => {
-                // Don't show cancelled escrows
-                if (escrow.status === "cancelled") {
-                  return false;
-                }
+                const isArchived = archivedIds.has(escrow.id);
 
-                // Status filter
+                // Archived filter — show only archived
+                if (statusFilter === "archived") return isArchived;
+
+                // All other filters — hide archived and cancelled
+                if (isArchived) return false;
+                if (escrow.status === "cancelled") return false;
+
                 const matchesStatus =
                   statusFilter === "all" || escrow.status === statusFilter;
-
-                // Search filter
                 const matchesSearch =
                   !searchQuery ||
                   (escrow.projectDescription &&
@@ -1193,7 +1208,6 @@ export default function DashboardPage() {
 
                 return matchesStatus && matchesSearch;
               })
-              .filter((e) => !archivedIds.has(e.id))
               .sort((a, b) => {
                 if (sortFilter === "newest") {
                   return b.createdAt - a.createdAt;
@@ -1237,6 +1251,7 @@ export default function DashboardPage() {
                   onReclaimSurplus={reclaimSurplus}
                   reclaimingFunds={reclaimingEscrowId === escrow.id}
                   onArchive={archiveEscrow}
+                  onUnarchive={statusFilter === "archived" ? unarchiveEscrow : undefined}
                 />
               ))}
           </div>

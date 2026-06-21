@@ -46,6 +46,7 @@ interface EscrowCardProps {
   onReclaimSurplus?: (escrowId: string) => void;
   reclaimingFunds?: boolean;
   onArchive?: (escrowId: string) => void;
+  onUnarchive?: (escrowId: string) => void;
 }
 
 export function EscrowCard({
@@ -60,6 +61,7 @@ export function EscrowCard({
   onReclaimSurplus,
   reclaimingFunds = false,
   onArchive,
+  onUnarchive,
 }: EscrowCardProps) {
   const { toast } = useToast();
   const [showRatingDialog, setShowRatingDialog] = useState(false);
@@ -339,8 +341,20 @@ export function EscrowCard({
                   </Button>
                 )}
 
-                {/* Archive button — client only, settled escrows only */}
-                {escrow.isClient && isSettled && onArchive && (
+                {/* Archive / Unarchive — settled escrows */}
+                {isSettled && onUnarchive && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-muted-foreground hover:text-foreground gap-1.5 shrink-0"
+                    onClick={() => onUnarchive(escrow.id)}
+                    title="Restore to dashboard"
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                    Unarchive
+                  </Button>
+                )}
+                {isSettled && !onUnarchive && onArchive && (
                   <Button
                     size="sm"
                     variant="ghost"
