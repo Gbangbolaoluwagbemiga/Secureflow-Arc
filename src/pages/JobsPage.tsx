@@ -338,7 +338,6 @@ export default function JobsPage() {
               // deadline is a Unix timestamp (seconds) — directly from block.timestamp
               const deadlineSeconds = Number(escrowData.deadline ?? 0);
               const remainingSeconds = Math.max(0, deadlineSeconds - nowSeconds);
-              const approxCreatedAt = Date.now(); // creation time not stored on-chain
 
               const job: Escrow = {
                 id: i.toString(),
@@ -348,7 +347,7 @@ export default function JobsPage() {
                 totalAmount: escrowData.totalAmount?.toString() ?? "0",
                 releasedAmount: escrowData.paidAmount?.toString() ?? "0",
                 status: getStatusFromNumber(escrowData.status),
-                createdAt: approxCreatedAt,
+                createdAt: 0,
                 duration: remainingSeconds,
                 deadlineAt: deadlineSeconds * 1000,
                 milestones: [],
@@ -380,8 +379,24 @@ export default function JobsPage() {
         }
       }
 
-      // Set the actual jobs from the blockchain contract
-      // All data in openJobs is fetched directly from the blockchain
+      // Fetch accurate createdAt timestamps from subgraph for RPC-discovered jobs
+      if (isGraphConfigured() && openJobs.length > 0) {
+        try {
+          const idsStr = openJobs.map(j => `"${j.id}"`).join(",");
+          const result = await graphQuery<{ escrows: { escrowId: string; createdAt: string }[] }>(
+            `query { escrows(where: { escrowId_in: [${idsStr}] }) { escrowId createdAt } }`
+          );
+          const createdAtMap: Record<string, number> = Object.fromEntries(
+            (result.escrows ?? []).map(e => [e.escrowId, Number(e.createdAt) * 1000])
+          );
+          for (const job of openJobs) {
+            if (createdAtMap[job.id]) job.createdAt = createdAtMap[job.id];
+          }
+        } catch {
+          // Non-critical — jobs still show, date just won't be accurate
+        }
+      }
+
       setJobs(openJobs);
     } catch (error) {
       toast({

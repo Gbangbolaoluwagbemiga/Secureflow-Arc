@@ -29,6 +29,9 @@ backend/.env
 *.local.*
 *.local
 
+# local planning docs (never commit)
+.plans/
+
 # macOS
 .DS_Store
 .AppleDouble

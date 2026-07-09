@@ -79,7 +79,7 @@ export function JobCard({
             </p>
 
             <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
-              <span>Posted {new Date(job.createdAt).toLocaleDateString()}</span>
+              <span>Posted {job.createdAt ? new Date(job.createdAt).toLocaleDateString() : "—"}</span>
               <span>•</span>
               <span>
                 Budget: {formatTokenAmount(job.totalAmount, job.token)}
