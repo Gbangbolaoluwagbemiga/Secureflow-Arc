@@ -1742,6 +1742,7 @@ export default function FreelancerPage() {
                               </p>
                             </div>
                           </div>
+                          {(escrow.status === "pending" || escrow.status === "active") && (
                           <div
                             className={`flex items-center gap-2 p-3 rounded-lg ${(() => {
                               const daysLeft = calculateDaysLeft(
@@ -1778,6 +1779,7 @@ export default function FreelancerPage() {
                               </p>
                             </div>
                           </div>
+                          )}
                           {escrow.status === "completed" &&
                             escrowRatings[escrow.id] && (
                               <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">

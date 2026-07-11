@@ -6,9 +6,9 @@ dataSources:
     name: SecureFlow
     network: arc-testnet
     source:
-      address: "0xA17d98FFc3949e9E0046d3C8342bB82F8B05567e"
+      address: "0x6142bf4855D4F9dbC1cD8109377d4F4E2AF1ab59"
       abi: SecureFlow
-      startBlock: 45461830
+      startBlock: 47239341
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7

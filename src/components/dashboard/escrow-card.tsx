@@ -292,22 +292,24 @@ export function EscrowCard({
                   {formatTokenAmount(escrow.releasedAmount, escrow.token)}
                 </div>
               </div>
-              <div>
-                <span className="text-gray-600">Days Left:</span>
-                <div className="font-semibold flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
-                  {(() => {
-                    const daysLeft = calculateDaysLeft(
-                      escrow.createdAt,
-                      escrow.duration
-                    );
-                    const message = getDaysLeftMessage(daysLeft);
-                    return (
-                      <span className={message.color}>{message.text}</span>
-                    );
-                  })()}
+              {(escrow.status === "pending" || escrow.status === "active") && (
+                <div>
+                  <span className="text-gray-600">Days Left:</span>
+                  <div className="font-semibold flex items-center gap-1">
+                    <Clock className="h-4 w-4" />
+                    {(() => {
+                      const daysLeft = calculateDaysLeft(
+                        escrow.createdAt,
+                        escrow.duration
+                      );
+                      const message = getDaysLeftMessage(daysLeft);
+                      return (
+                        <span className={message.color}>{message.text}</span>
+                      );
+                    })()}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* ── Surplus funds warning banner (client only) ──────────────────── */}
