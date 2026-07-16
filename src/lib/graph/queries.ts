@@ -52,11 +52,12 @@ export const GET_USER_ESCROWS = `
   }
 `;
 
-/** All open jobs (isOpenJob = true, status = 0 Pending) */
+/** All escrows — isOpenJob flag is unreliable in the subgraph for some jobs
+ *  (beneficiary may be zero without isOpenJob=true). We fetch all and filter
+ *  in JS after RPC enrichment, which is the authoritative source. */
 export const GET_OPEN_JOBS = `
   query GetOpenJobs {
     escrows(
-      where: { isOpenJob: true }
       orderBy: createdAt
       orderDirection: desc
       first: 100

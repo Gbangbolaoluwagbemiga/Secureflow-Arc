@@ -231,20 +231,28 @@ export default function JobsPage() {
 
           if (allIds.length > 0) {
             try {
+              const zeroAddr = "0x0000000000000000000000000000000000000000";
               const rpcBatch = await contractService.getEscrowsBatch(allIds);
-              normalized = normalized.map((e) => {
-                const rpc = rpcBatch[parseInt(e.id, 10)];
-                if (!rpc) return e;
-                return {
-                  ...e,
-                  projectTitle: rpc.projectTitle || e.projectTitle || "",
-                  projectDescription: rpc.projectDescription || e.projectDescription || "",
-                  totalAmount: rpc.totalAmount != null ? rpc.totalAmount.toString() : e.totalAmount,
-                  releasedAmount: rpc.paidAmount != null ? rpc.paidAmount.toString() : e.releasedAmount,
-                };
-              });
+              normalized = normalized
+                .map((e) => {
+                  const rpc = rpcBatch[parseInt(e.id, 10)];
+                  if (!rpc) return e;
+                  // RPC is authoritative for isOpenJob — subgraph may index it wrong
+                  const rpcIsOpen = rpc.isOpenJob || !rpc.beneficiary || rpc.beneficiary === zeroAddr;
+                  return {
+                    ...e,
+                    projectTitle: rpc.projectTitle || e.projectTitle || "",
+                    projectDescription: rpc.projectDescription || e.projectDescription || "",
+                    totalAmount: rpc.totalAmount != null ? rpc.totalAmount.toString() : e.totalAmount,
+                    releasedAmount: rpc.paidAmount != null ? rpc.paidAmount.toString() : e.releasedAmount,
+                    isOpenJob: rpcIsOpen,
+                    beneficiary: rpc.beneficiary || e.beneficiary,
+                  };
+                })
+                // Keep only actual open jobs (discard private escrows returned by the broader query)
+                .filter((e) => e.isOpenJob);
             } catch {
-              // Enrichment failed — data falls back to subgraph values
+              // Enrichment failed — fall through, subgraph values kept as-is
             }
           }
 
