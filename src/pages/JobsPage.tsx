@@ -478,6 +478,16 @@ export default function JobsPage() {
       return;
     }
 
+    // Block applications to jobs whose deadline has passed
+    if (job.duration === 0 && (job.deadlineAt ?? 0) > 0) {
+      toast({
+        title: "Job Expired",
+        description: "The deadline for this job has passed.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Check if freelancer has reached the maximum number of ongoing projects (3)
     if (ongoingProjectsCount >= 3) {
       toast({
@@ -607,8 +617,11 @@ export default function JobsPage() {
     // Don't show cancelled jobs
     const isNotCancelled = jobStatus !== "cancelled";
 
+    // Don't show expired pending jobs — deadline has passed, contract will reject applications
+    const isNotExpired = !(jobStatus === "pending" && job.duration === 0 && (job.deadlineAt ?? 0) > 0);
+
     // Show all jobs including user's own jobs (apply button will be disabled for own jobs)
-    return matchesSearch && matchesStatus && isNotCancelled;
+    return matchesSearch && matchesStatus && isNotCancelled && isNotExpired;
   });
 
   if (!wallet.isConnected || loading) {
