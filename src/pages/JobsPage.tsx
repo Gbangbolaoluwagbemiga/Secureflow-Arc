@@ -273,6 +273,55 @@ export default function JobsPage() {
               }
             }
 
+            // Subgraph lags 10-30 s behind the chain — catch any jobs created
+            // after the subgraph's latest indexed block by scanning the delta via RPC.
+            try {
+              const latestId = await contractService.getNextEscrowId();
+              const maxIndexedId = allIds.length > 0 ? Math.max(...allIds) : 0;
+              if (latestId - 1 > maxIndexedId) {
+                const nowSec = Math.floor(Date.now() / 1000);
+                const zeroAddress = "0x0000000000000000000000000000000000000000";
+                const newIds = Array.from(
+                  { length: Math.min(latestId - 1 - maxIndexedId, 20) },
+                  (_, k) => maxIndexedId + k + 1,
+                );
+                const newBatch = await contractService.getEscrowsBatch(newIds);
+                const extra: Escrow[] = [];
+                for (const id of newIds) {
+                  const d = newBatch[id];
+                  if (!d) continue;
+                  if (d.isOpenJob || !d.beneficiary || d.beneficiary === zeroAddress) {
+                    const deadlineSec = Number(d.deadline ?? 0);
+                    extra.push({
+                      id: id.toString(),
+                      payer: d.depositor,
+                      beneficiary: d.beneficiary || zeroAddress,
+                      token: d.token || "",
+                      totalAmount: d.totalAmount?.toString() ?? "0",
+                      releasedAmount: d.paidAmount?.toString() ?? "0",
+                      status: getStatusFromNumber(d.status),
+                      createdAt: 0,
+                      duration: Math.max(0, deadlineSec - nowSec),
+                      deadlineAt: deadlineSec * 1000,
+                      milestones: [],
+                      projectTitle: d.projectTitle || "",
+                      projectDescription: d.projectDescription || "",
+                      isOpenJob: true,
+                      applications: [],
+                      applicationCount: 0,
+                      isJobCreator: !!(wallet.address && d.depositor && d.depositor.toLowerCase() === wallet.address.toLowerCase()),
+                    });
+                  }
+                }
+                if (extra.length > 0) {
+                  setJobs((prev) => [...extra, ...prev]);
+                  setTotalEscrowsCount((prev) => prev + extra.length);
+                }
+              }
+            } catch {
+              // Non-critical — subgraph results already displayed above
+            }
+
             return;
           }
           // Subgraph returned 0 jobs — fall through to RPC scan
