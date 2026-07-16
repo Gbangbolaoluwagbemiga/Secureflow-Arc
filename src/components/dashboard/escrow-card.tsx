@@ -557,7 +557,9 @@ export function EscrowCard({
                     </p>
                     <p className="text-orange-600/80 dark:text-orange-400/70 text-xs mt-0.5">
                       {escrow.isClient
-                        ? "You may extend the deadline to give the freelancer more time, or raise a dispute for arbiter review."
+                        ? escrow.status === "pending"
+                          ? "No freelancer has been assigned yet. Cancel this job below to get your full funds back instantly, or extend the deadline to keep the listing open."
+                          : "You may extend the deadline to give the freelancer more time, or raise a dispute for arbiter review."
                         : "If the client is unresponsive, you can raise a dispute so an arbiter reviews the situation fairly."}
                     </p>
                   </div>
@@ -599,8 +601,8 @@ export function EscrowCard({
                   </div>
                 )}
 
-                {/* Both: request arbitration */}
-                {onRaiseOverdueDispute && (
+                {/* Both: request arbitration — not applicable for pending jobs (no freelancer assigned) */}
+                {onRaiseOverdueDispute && escrow.status !== "pending" && (
                   <div>
                     {!showDisputeForm ? (
                       <Button
