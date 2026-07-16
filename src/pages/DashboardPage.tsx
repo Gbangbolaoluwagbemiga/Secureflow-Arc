@@ -608,7 +608,7 @@ export default function DashboardPage() {
       // Wait a moment for blockchain state to update
       await new Promise((resolve) => setTimeout(resolve, 2000));
       try {
-        await fetchUserEscrows(true);
+        await fetchUserEscrows(true, true); // forceRPC: bypass subgraph lag after mutation
       } catch (refreshError: any) {
         toast({
           title: "Milestone Disputed",
@@ -716,7 +716,7 @@ export default function DashboardPage() {
       // Wait a moment for blockchain state to update
       await new Promise((resolve) => setTimeout(resolve, 2000));
       try {
-        await fetchUserEscrows(true);
+        await fetchUserEscrows(true, true); // forceRPC: bypass subgraph lag after mutation
       } catch (refreshError: any) {
         toast({
           title: "Dispute Opened",
@@ -797,7 +797,7 @@ export default function DashboardPage() {
       // Refresh the escrow data without reloading the page
       // Use manual refresh flag to prevent showing loading screen
       try {
-        await fetchUserEscrows(true);
+        await fetchUserEscrows(true, true); // forceRPC: bypass subgraph lag after mutation
       } catch (refreshError: any) {
         toast({
           title: "Milestone Approved",
@@ -863,7 +863,7 @@ export default function DashboardPage() {
         /* arbiter fetch failed — non-critical */
       }
 
-      await fetchUserEscrows(true);
+      await fetchUserEscrows(true, true); // forceRPC: bypass subgraph lag after mutation
     } catch (error: any) {
       toast({
         title: "Failed to raise dispute",
@@ -890,7 +890,7 @@ export default function DashboardPage() {
         title: "Deadline extended",
         description: `Added ${extraDays} day${extraDays > 1 ? "s" : ""} to the project deadline`,
       });
-      await fetchUserEscrows(true);
+      await fetchUserEscrows(true, true); // forceRPC: subgraph lags behind the new deadline
     } catch (error: any) {
       toast({
         title: "Failed to extend deadline",
@@ -919,7 +919,7 @@ export default function DashboardPage() {
         title: "Surplus reclaimed",
         description: "Unallocated funds have been returned to your wallet.",
       });
-      await fetchUserEscrows(true);
+      await fetchUserEscrows(true, true); // forceRPC: bypass subgraph lag after mutation
     } catch (error: any) {
       let msg = error.message || "Transaction failed";
       if (msg.includes("EmergencyPeriodNotReached"))
@@ -1017,7 +1017,7 @@ export default function DashboardPage() {
       // Refresh the escrow data without reloading the page
       // Use manual refresh flag to prevent showing loading screen
       try {
-        await fetchUserEscrows(true);
+        await fetchUserEscrows(true, true); // forceRPC: bypass subgraph lag after mutation
       } catch (refreshError: any) {
         toast({
           title: "Milestone Rejected",
