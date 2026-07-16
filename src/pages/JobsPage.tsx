@@ -233,12 +233,15 @@ export default function JobsPage() {
             try {
               const zeroAddr = "0x0000000000000000000000000000000000000000";
               const rpcBatch = await contractService.getEscrowsBatch(allIds);
+              const nowSec = Math.floor(Date.now() / 1000);
               normalized = normalized
                 .map((e) => {
                   const rpc = rpcBatch[parseInt(e.id, 10)];
                   if (!rpc) return e;
                   // RPC is authoritative for isOpenJob — subgraph may index it wrong
                   const rpcIsOpen = rpc.isOpenJob || !rpc.beneficiary || rpc.beneficiary === zeroAddr;
+                  // RPC deadline is authoritative — catches extendDeadline txns the subgraph hasn't indexed
+                  const rpcDeadlineSec = rpc.deadline != null ? Number(rpc.deadline) : null;
                   return {
                     ...e,
                     projectTitle: rpc.projectTitle || e.projectTitle || "",
@@ -247,6 +250,10 @@ export default function JobsPage() {
                     releasedAmount: rpc.paidAmount != null ? rpc.paidAmount.toString() : e.releasedAmount,
                     isOpenJob: rpcIsOpen,
                     beneficiary: rpc.beneficiary || e.beneficiary,
+                    ...(rpcDeadlineSec != null && {
+                      duration: Math.max(0, rpcDeadlineSec - nowSec),
+                      deadlineAt: rpcDeadlineSec * 1000,
+                    }),
                   };
                 })
                 // Keep only actual open jobs (discard private escrows returned by the broader query)
