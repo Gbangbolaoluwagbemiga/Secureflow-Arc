@@ -224,17 +224,39 @@ export function ProjectDetailsStep({
           </div>
 
           <div>
+            <Label className="mb-2 block">Job Type *</Label>
+            <div className="flex items-center gap-3 rounded-md border border-input px-3 py-2.5">
+              <input
+                type="checkbox"
+                id="isOpenJob"
+                checked={formData.isOpenJob}
+                onChange={(e) => onUpdate({ isOpenJob: e.target.checked })}
+                className="rounded w-4 h-4 shrink-0"
+              />
+              <Label htmlFor="isOpenJob" className="cursor-pointer">
+                Open Job (Allow Applications)
+              </Label>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {formData.isOpenJob
+                ? "Listed publicly on Browse Jobs — any freelancer can apply."
+                : "Not listed publicly. You'll assign it directly to one freelancer's wallet below — for a private job or assessment."}
+            </p>
+          </div>
+        </div>
+
+        {!formData.isOpenJob && (
+          <div>
             <Label htmlFor="beneficiary" className="mb-2 block">
-              Beneficiary Address {!formData.isOpenJob && "*"}
+              Freelancer Wallet Address *
             </Label>
             <Input
               id="beneficiary"
               value={formData.beneficiary}
               onChange={(e) => onUpdate({ beneficiary: e.target.value })}
-              placeholder="G..."
-              disabled={formData.isOpenJob}
-              required={!formData.isOpenJob}
-              pattern="^G[A-Z0-9]{55}$"
+              placeholder="0x..."
+              required
+              pattern="^0x[a-fA-F0-9]{40}$"
               className={
                 errors?.beneficiary ? "border-red-500 focus:border-red-500" : ""
               }
@@ -243,13 +265,12 @@ export function ProjectDetailsStep({
               <p className="text-red-500 text-sm mt-1">{errors.beneficiary}</p>
             ) : (
               <p className="text-xs text-muted-foreground mt-1">
-                {formData.isOpenJob
-                  ? "Leave empty for open job applications"
-                  : "Valid Arc EVM address (0x…) required for direct escrow"}
+                Sends this job directly to one freelancer instead of listing it
+                publicly. Valid Arc EVM address (0x…) required.
               </p>
             )}
           </div>
-        </div>
+        )}
 
         <div className="space-y-8 mt-4">
           <div className="flex items-center space-x-3">
@@ -298,19 +319,6 @@ export function ProjectDetailsStep({
               )}
             </div>
           )}
-
-          <div className="flex items-center space-x-3">
-            <input
-              type="checkbox"
-              id="isOpenJob"
-              checked={formData.isOpenJob}
-              onChange={(e) => onUpdate({ isOpenJob: e.target.checked })}
-              className="rounded w-4 h-4"
-            />
-            <Label htmlFor="isOpenJob" className="cursor-pointer ml-1">
-              Open Job (Allow Applications)
-            </Label>
-          </div>
         </div>
       </CardContent>
     </Card>
