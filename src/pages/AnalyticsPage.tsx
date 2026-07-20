@@ -130,9 +130,18 @@ export default function AnalyticsPage() {
       };
 
       // Iterate through all escrows to calculate stats
-      for (let i = 1; i < nextEscrowId; i++) {
+      // Batched via multicall3 (single round trip) instead of one RPC call
+      // per escrow — sequential per-ID reads were silently dropping escrows
+      // from every breakdown metric whenever an individual call failed or
+      // got rate-limited, while totalEscrows (from the raw ID counter)
+      // stayed correct — causing the two numbers on this page to diverge.
+      const ids = Array.from({ length: Math.max(0, nextEscrowId - 1) }, (_, k) => k + 1);
+      const escrowBatch = await cs.getEscrowsBatch(ids);
+      const milestonesBatch = await cs.getMilestonesBatch(ids);
+
+      for (const i of ids) {
         try {
-          const escrow = await cs.getEscrow(i);
+          const escrow = escrowBatch[i];
           if (!escrow) continue;
 
           const status = escrow.status || 0;
@@ -154,18 +163,14 @@ export default function AnalyticsPage() {
 
           // Check if any milestone is disputed or resolved
           let hasDisputedMilestone = false;
-          try {
-            const milestones = await cs.getMilestones(i);
-            for (const m of milestones) {
-              const milestoneStatus = Number(m.status || 0);
-              // Status 4 = Disputed, or resolvedAt > 0 means it was disputed and resolved by admin
-              if (milestoneStatus === 4 || (m.resolvedAt && BigInt(m.resolvedAt) > 0n)) {
-                hasDisputedMilestone = true;
-                break;
-              }
+          const milestones = milestonesBatch[i] ?? [];
+          for (const m of milestones) {
+            const milestoneStatus = Number(m.status || 0);
+            // Status 4 = Disputed, or resolvedAt > 0 means it was disputed and resolved by admin
+            if (milestoneStatus === 4 || (m.resolvedAt && BigInt(m.resolvedAt) > 0n)) {
+              hasDisputedMilestone = true;
+              break;
             }
-          } catch (error) {
-            // Skip milestone check if it fails
           }
 
           // Count by status - if has disputed milestone, count as disputed regardless of escrow status
