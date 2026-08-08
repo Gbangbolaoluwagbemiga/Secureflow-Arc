@@ -27,7 +27,7 @@ SecureFlow is a decentralized freelancer marketplace built on Arc EVM. Clients d
 | Resource | Link |
 |---|---|
 | Frontend | [secureflow-arc.vercel.app](https://secureflow-arc.vercel.app) |
-| Contract | [`0xA17d98FFc3949e9E0046d3C8342bB82F8B05567e`](https://testnet.arcscan.app/address/0xA17d98FFc3949e9E0046d3C8342bB82F8B05567e) |
+| Contract | [`0x6142bf4855D4F9dbC1cD8109377d4F4E2AF1ab59`](https://testnet.arcscan.app/address/0x6142bf4855D4F9dbC1cD8109377d4F4E2AF1ab59) |
 | Subgraph | [Goldsky — secureflow/v1](https://api.goldsky.com/api/public/project_cmpyopkeb3cxh01v51s4wg5nc/subgraphs/secureflow/v2/gn) |
 | Explorer | [testnet.arcscan.app](https://testnet.arcscan.app) |
 | Chain | Arc EVM Testnet · ID `5042002` |
@@ -122,6 +122,7 @@ SecureFlow is a decentralized freelancer marketplace built on Arc EVM. Clients d
 | Database | Supabase (Postgres + Realtime) |
 | Storage | Supabase Storage + Pinata/IPFS |
 | Gasless | EIP-2771 MinimalForwarder relayer |
+| Testing | Vitest, React Testing Library, supertest |
 | CI/CD | GitHub Actions + Vercel |
 
 ---
@@ -223,7 +224,7 @@ npm run dev
 **Frontend (`.env`)**
 
 ```env
-VITE_SECUREFLOW_CONTRACT_ADDRESS=0xA17d98FFc3949e9E0046d3C8342bB82F8B05567e
+VITE_SECUREFLOW_CONTRACT_ADDRESS=0x6142bf4855D4F9dbC1cD8109377d4F4E2AF1ab59
 VITE_USDC_TOKEN_CONTRACT=0x3600000000000000000000000000000000000000
 VITE_ARC_RPC_URL=https://rpc.drpc.testnet.arc.network
 VITE_ARC_CHAIN_ID=5042002
@@ -245,7 +246,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_PROJECT_ID=
 RELAYER_PRIVATE_KEY=             # EIP-2771 relayer wallet
-CONTRACT_ADDRESS=0xA17d98FFc3949e9E0046d3C8342bB82F8B05567e
+CONTRACT_ADDRESS=0x6142bf4855D4F9dbC1cD8109377d4F4E2AF1ab59
 FRONTEND_URL=https://secureflow-arc.vercel.app
 ```
 
@@ -258,6 +259,23 @@ FRONTEND_URL=https://secureflow-arc.vercel.app
 | Chain ID | `5042002` |
 | Currency Symbol | `ETH` |
 | Block Explorer | `https://testnet.arcscan.app` |
+
+---
+
+## Testing
+
+Both the frontend and backend have a Vitest suite that runs fully mocked/isolated — no live RPC calls, no real Supabase project, no testnet gas spent.
+
+```bash
+# Frontend — component tests (Vitest + React Testing Library + jsdom)
+npm test
+
+# Backend — route tests (Vitest + supertest), real wallet signatures via viem
+cd backend
+npm test
+```
+
+Backend tests cover the `/v1/upload` signature + on-chain ownership auth, `/v1/notifications`, and `/v1/applications` routes. Frontend tests cover notification UX, the escrow-card Message-button gating, cancel-job applicant notifications, and evidence-submission notifications — plus a cross-package test asserting the upload auth message format stays byte-identical between frontend and backend.
 
 ---
 
@@ -334,6 +352,7 @@ SecureFlow-Arc/
 - **Reentrancy guards** on all state-changing functions that transfer value
 - **Emergency pause** — owner can halt all new escrow creation and transitions
 - **No upgradeability** — contract is immutable after deployment; no proxy risk
+- **Signed file uploads** — milestone/application attachments require the uploader to sign a per-request message with their wallet; the backend verifies the signature and, once a job has an assigned freelancer, checks on-chain that the signer is actually the depositor or beneficiary of that escrow
 
 To report a security issue, email [gbangbolaphilip@gmail.com](mailto:gbangbolaphilip@gmail.com).
 

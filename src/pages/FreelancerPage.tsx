@@ -1,6 +1,6 @@
 import { encodeJobId } from "@/lib/id-codec";
 import { useState, useEffect } from "react";
-import { useWriteContract, usePublicClient } from "wagmi";
+import { useWriteContract, usePublicClient, useSignMessage } from "wagmi";
 import {
   uploadMilestoneFile,
   isApiConfigured,
@@ -58,6 +58,7 @@ import { Badge } from "@/components/ui/badge";
 // import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Unused
 import { EvidenceSubmissionButton } from "@/components/evidence-submission-button";
 import { ViewEvidenceButton } from "@/components/view-evidence-button";
+import { ChatDialog } from "@/components/chat/chat-dialog";
 import { MilestoneNegotiation } from "@/components/milestone-negotiation";
 import {
   FileText,
@@ -188,6 +189,7 @@ function OverdueFreelancerBanner({
 
 export default function FreelancerPage() {
   const { wallet, getContract } = useWeb3();
+  const { signMessageAsync } = useSignMessage();
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
   const { addNotification } = useNotifications();
@@ -203,6 +205,7 @@ export default function FreelancerPage() {
     } catch { return new Set(); }
   });
   const [expandedEscrow, setExpandedEscrow] = useState<string | null>(null);
+  const [chatOpenEscrowId, setChatOpenEscrowId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<
     "all" | "pending" | "active" | "completed" | "disputed" | "archived"
@@ -356,8 +359,14 @@ export default function FreelancerPage() {
                       };
                     })
                   : e.milestones;
+                // The subgraph's `status` can lag behind the chain — most visibly
+                // right after a dispute resolves, since that's someone else's
+                // transaction and this wallet has no live signal for it. `rpc` is
+                // already fetched above for this same escrow, so just use it.
+                const freshStatus = rpc?.status != null ? getStatusFromNumber(Number(rpc.status)) : e.status;
                 return {
                   ...e,
+                  status: freshStatus,
                   projectTitle: rpc?.projectTitle || e.projectTitle || "",
                   projectDescription: rpc?.projectDescription || e.projectDescription || "",
                   totalAmount: rpc?.totalAmount != null ? rpc.totalAmount.toString() : e.totalAmount,
@@ -839,7 +848,7 @@ export default function FreelancerPage() {
     // for the React state update cycle.
     let localAttachment = milestoneAttachments[milestoneKey] ?? null;
     const pendingFile = milestoneFiles[milestoneKey];
-    if (pendingFile && isApiConfigured() && !localAttachment) {
+    if (pendingFile && isApiConfigured() && !localAttachment && wallet.address) {
       try {
         setMilestoneUploading((prev) => ({ ...prev, [milestoneKey]: true }));
         toast({ title: "Uploading attachment…", description: pendingFile.name });
@@ -847,6 +856,8 @@ export default function FreelancerPage() {
           pendingFile,
           escrowId,
           milestoneIndex,
+          wallet.address,
+          signMessageAsync,
         );
         localAttachment = { url: uploaded.url, filename: uploaded.filename };
         setMilestoneAttachments((prev) => ({
@@ -1125,7 +1136,7 @@ export default function FreelancerPage() {
       // Optionally upload an attachment first, then append the link to the
       // description so the client sees it in the on-chain description blob.
       let finalDescription = description.trim();
-      if (resubmitFile && isApiConfigured()) {
+      if (resubmitFile && isApiConfigured() && wallet.address) {
         try {
           setResubmitUploading(true);
           toast({
@@ -1136,6 +1147,8 @@ export default function FreelancerPage() {
             resubmitFile,
             escrowId,
             milestoneIndex,
+            wallet.address,
+            signMessageAsync,
           );
           finalDescription = `${finalDescription}\n\n[Attachment: ${uploaded.filename}](${uploaded.url})`;
         } catch (uploadErr: any) {
@@ -1673,6 +1686,18 @@ export default function FreelancerPage() {
                                 ? "terminated"
                                 : escrow.status}
                             </Badge>
+                            {escrow.payer && wallet.address && isApiConfigured() && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="gap-1.5 text-xs"
+                                onClick={() => setChatOpenEscrowId(escrow.id)}
+                                title="Message client"
+                              >
+                                <MessageCircleFreelancer className="h-3.5 w-3.5" />
+                                Message
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
@@ -2191,6 +2216,8 @@ export default function FreelancerPage() {
                                                 description: "Your evidence has been recorded",
                                               });
                                             }}
+                                            otherPartyAddress={escrow.payer}
+                                            projectTitle={escrow.projectTitle}
                                             variant="default"
                                             size="sm"
                                             className="flex-1"
@@ -2575,6 +2602,20 @@ export default function FreelancerPage() {
             </div>
           </div>
         )}
+
+        {/* Chat Dialog — message the client for the selected job */}
+        {chatOpenEscrowId && wallet.address && (() => {
+          const chatEscrow = escrows.find((e) => e.id === chatOpenEscrowId);
+          if (!chatEscrow?.payer) return null;
+          return (
+            <ChatDialog
+              open={!!chatOpenEscrowId}
+              onOpenChange={(open) => setChatOpenEscrowId(open ? chatOpenEscrowId : null)}
+              myAddress={wallet.address}
+              otherAddress={chatEscrow.payer}
+            />
+          );
+        })()}
 
         {/* Dispute Dialog */}
         {showDisputeDialog && (

@@ -80,9 +80,12 @@ export function OverdueDisputeResolution({ onResolved }: Props) {
       const nextId = await svc.getNextEscrowId();
       const found: OverdueCase[] = [];
 
-      for (let i = 1; i < nextId; i++) {
+      const ids = Array.from({ length: Math.max(0, nextId - 1) }, (_, k) => k + 1);
+      const escrowBatch = await svc.getEscrowsBatch(ids);
+
+      for (const i of ids) {
         try {
-          const escrow = await svc.getEscrow(i);
+          const escrow = escrowBatch[i];
           // Only show Disputed (4) escrows where deadline has passed
           if (!escrow || escrow.status !== 4) continue;
           const nowSecs = Math.floor(Date.now() / 1000);

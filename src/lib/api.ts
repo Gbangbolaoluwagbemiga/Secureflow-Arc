@@ -259,18 +259,47 @@ export type UploadedFile = {
   mimeType: string;
 };
 
+/**
+ * Must produce byte-identical output to `buildUploadAuthMessage` in
+ * backend/src/routes/upload.ts — the backend verifies this exact string
+ * against the wallet signature to authorize the upload.
+ */
+export function buildUploadAuthMessage(
+  escrowId: string | number,
+  milestoneIndex: number,
+  walletAddress: string,
+  timestamp: number,
+): string {
+  return [
+    "SecureFlow file upload authorization",
+    `Escrow: ${escrowId}`,
+    `Milestone: ${milestoneIndex}`,
+    `Wallet: ${walletAddress.toLowerCase()}`,
+    `Timestamp: ${timestamp}`,
+  ].join("\n");
+}
+
 export async function uploadMilestoneFile(
   file: File,
   escrowId: string | number,
   milestoneIndex: number,
+  walletAddress: string,
+  signMessageAsync: (args: { message: string }) => Promise<string>,
 ): Promise<UploadedFile> {
   const base = getApiBase();
   if (!base) throw new Error("VITE_API_URL is not set");
+
+  const timestamp = Date.now();
+  const message = buildUploadAuthMessage(escrowId, milestoneIndex, walletAddress, timestamp);
+  const signature = await signMessageAsync({ message });
 
   const form = new FormData();
   form.append("file", file);
   form.append("escrow_id", String(escrowId));
   form.append("milestone_index", String(milestoneIndex));
+  form.append("wallet_address", walletAddress);
+  form.append("signature", signature);
+  form.append("timestamp", String(timestamp));
 
   const secret = apiSecret();
   const headers: Record<string, string> = {};

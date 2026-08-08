@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useWeb3 } from "@/contexts/web3-context";
+import { useNotifications } from "@/contexts/notification-context";
 import { CONTRACTS } from "@/lib/web3/config";
 import { PlusCircle, MinusCircle, XCircle, AlertTriangle, Info } from "lucide-react";
 import {
@@ -44,6 +45,7 @@ interface JobManagementProps {
   token: string;
   milestones?: MilestoneSummary[];
   beneficiary?: string;
+  projectTitle?: string;
   onUpdate?: () => void;
 }
 
@@ -65,12 +67,14 @@ export function JobManagement({
   token,
   milestones = [],
   beneficiary,
+  projectTitle,
   onUpdate,
 }: JobManagementProps) {
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient();
   const { toast } = useToast();
   const { wallet } = useWeb3();
+  const { addCrossWalletNotification } = useNotifications();
 
   // ── Add Funds ────────────────────────────────────────────────────────────
   const [addOpen, setAddOpen] = useState(false);
@@ -223,9 +227,34 @@ export function JobManagement({
     try {
       const { ContractService } = await import("@/lib/web3/contract-service");
       const cs = new ContractService(CONTRACTS.SECUREFLOW_ESCROW);
+
+      // Snapshot applicants BEFORE cancelling — once the job is cancelled the
+      // escrow is gone, so this is the last chance to know who to notify.
+      const applicants = await cs.getApplicationDetails(Number(escrowId)).catch(() => []);
+
       toast({ title: "Cancelling job…", description: "Confirm in your wallet." });
       await cs.cancelJob({ escrow_id: Number(escrowId), depositor: wallet.address || "" }, writeContractAsync);
       toast({ title: "Job cancelled", description: "Your funds have been refunded." });
+
+      const title = projectTitle || `Job #${escrowId}`;
+      for (const applicant of applicants) {
+        addCrossWalletNotification(
+          {
+            type: "application",
+            title: "Job Cancelled",
+            message: `The client cancelled "${title}" before selecting a freelancer. No further action is needed.`,
+            actionUrl: `/browse-jobs`,
+            data: {
+              jobId: Number(escrowId),
+              freelancerAddress: applicant.freelancer,
+              action: "job_cancelled",
+            },
+          },
+          undefined, // clientAddress (not needed here)
+          applicant.freelancer, // freelancerAddress
+        );
+      }
+
       onUpdate?.();
     } catch (error: any) {
       toast({ title: "Failed to cancel", description: error.message || "Transaction failed", variant: "destructive" });

@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useSignMessage } from "wagmi";
+import { useWeb3 } from "@/contexts/web3-context";
 import { encodeJobId } from "@/lib/id-codec";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -50,6 +52,8 @@ export function ApplicationDialog({
   applying,
 }: ApplicationDialogProps) {
   const { toast } = useToast();
+  const { wallet } = useWeb3();
+  const { signMessageAsync } = useSignMessage();
   const [coverLetter, setCoverLetter] = useState("");
   const [proposedTimeline, setProposedTimeline] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
@@ -150,11 +154,17 @@ export function ApplicationDialog({
     let fileUrl: string | undefined = uploadedFile?.url;
 
     // Upload file if one was selected but not yet uploaded (optional — failure doesn't block submit)
-    if (selectedFile && !uploadedFile && isApiConfigured()) {
+    if (selectedFile && !uploadedFile && isApiConfigured() && wallet.address) {
       setUploading(true);
       try {
         toast({ title: "Uploading attachment…", description: selectedFile.name });
-        const result = await uploadMilestoneFile(selectedFile, job.id, 0);
+        const result = await uploadMilestoneFile(
+          selectedFile,
+          job.id,
+          0,
+          wallet.address,
+          signMessageAsync,
+        );
         setUploadedFile(result);
         fileUrl = result.url;
       } catch (e) {

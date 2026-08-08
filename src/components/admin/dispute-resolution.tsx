@@ -87,12 +87,18 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
       const nextId = await svc.getNextEscrowId();
       const found: Dispute[] = [];
 
-      for (let id = 1; id < nextId; id++) {
+      const ids = Array.from({ length: Math.max(0, nextId - 1) }, (_, k) => k + 1);
+      const [escrowBatch, milestonesBatch] = await Promise.all([
+        svc.getEscrowsBatch(ids),
+        svc.getMilestonesBatch(ids),
+      ]);
+
+      for (const id of ids) {
         try {
-          const escrow = await svc.getEscrow(id);
+          const escrow = escrowBatch[id];
           if (!escrow || escrow.status !== 4 /* Disputed */) continue;
-          
-          const milestones: any[] = await svc.getMilestones(id) as any[];
+
+          const milestones: any[] = milestonesBatch[id] ?? [];
           milestones.forEach((m, idx) => {
             if (Number(m.status) === 4 /* MilestoneStatus.Disputed */) {
               // Calculate remaining amount at stake (total - already paid)
@@ -123,7 +129,10 @@ export function DisputeResolution({ onDisputeResolved }: DisputeResolutionProps)
                 clientAddress: escrow.depositor,
                 freelancerAddress: escrow.beneficiary,
                 projectTitle: escrow.projectTitle || `Project #${id}`,
-                milestoneDescription: m.description ?? "",
+                // `requirements` is the original client brief, set once at creation and
+                // never overwritten. `description` gets overwritten by the freelancer's
+                // submission text, so it must never be shown to the arbiter as "the milestone".
+                milestoneDescription: m.requirements || m.description || "",
               });
             }
           });

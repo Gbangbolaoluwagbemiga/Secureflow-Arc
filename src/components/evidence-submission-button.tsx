@@ -14,6 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useWeb3 } from "@/contexts/web3-context";
+import { useNotifications } from "@/contexts/notification-context";
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
 import { FileText, Upload, Loader2 } from "lucide-react";
@@ -25,6 +26,9 @@ interface EvidenceSubmissionButtonProps {
   variant?: "default" | "outline" | "ghost";
   size?: "default" | "sm" | "lg";
   className?: string;
+  /** Wallet of the other party in this escrow — notified when evidence is submitted. */
+  otherPartyAddress?: string;
+  projectTitle?: string;
 }
 
 export function EvidenceSubmissionButton({
@@ -34,8 +38,11 @@ export function EvidenceSubmissionButton({
   variant = "outline",
   size = "sm",
   className = "",
+  otherPartyAddress,
+  projectTitle,
 }: EvidenceSubmissionButtonProps) {
   const { wallet } = useWeb3();
+  const { addCrossWalletNotification } = useNotifications();
   const { toast } = useToast();
   const { writeContractAsync } = useWriteContract();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -77,6 +84,25 @@ export function EvidenceSubmissionButton({
         title: "Evidence submitted!",
         description: "Your evidence has been recorded on-chain",
       });
+
+      if (otherPartyAddress) {
+        const title = projectTitle || `Escrow #${escrowId}`;
+        addCrossWalletNotification(
+          {
+            type: "dispute",
+            title: "New Evidence Submitted",
+            message: `New evidence was submitted for milestone ${milestoneIndex + 1} of "${title}". Review it before the arbiter decides.`,
+            actionUrl: `/dashboard?job=${escrowId}`,
+            data: {
+              escrowId: Number(escrowId),
+              milestoneIndex,
+              action: "evidence_submitted",
+            },
+          },
+          undefined,
+          otherPartyAddress,
+        );
+      }
 
       setEvidenceCid("");
       setEvidenceDescription("");

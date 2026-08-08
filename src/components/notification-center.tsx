@@ -24,12 +24,21 @@ export function NotificationCenter() {
   } = useNotifications();
 
   const [isOpen, setIsOpen] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const handleNotificationClick = (notification: any) => {
     markAsRead(notification.id);
     if (notification.actionUrl) {
       window.location.href = notification.actionUrl;
     }
+  };
+
+  const handleMessageClick = (e: React.MouseEvent, notificationId: string) => {
+    // Expanding the message is a separate action from navigating via the row —
+    // without this, a click meant to read the full text (e.g. a long arbiter
+    // message) instead fires handleNotificationClick and navigates away.
+    e.stopPropagation();
+    setExpandedId((prev) => (prev === notificationId ? null : notificationId));
   };
 
   const getNotificationIcon = (type: string) => {
@@ -154,9 +163,23 @@ export function NotificationCenter() {
                         <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
                       )}
                     </div>
-                    <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                    <p
+                      className={`text-sm text-gray-600 mt-1 ${
+                        expandedId === notification.id ? "" : "line-clamp-2"
+                      }`}
+                      onClick={(e) => handleMessageClick(e, notification.id)}
+                    >
                       {notification.message}
                     </p>
+                    {notification.message && notification.message.length > 80 && (
+                      <button
+                        type="button"
+                        className="text-xs text-primary hover:underline mt-0.5"
+                        onClick={(e) => handleMessageClick(e, notification.id)}
+                      >
+                        {expandedId === notification.id ? "Show less" : "Read full message"}
+                      </button>
+                    )}
                     <div className="flex items-center justify-between mt-2">
                       <span className="text-xs text-gray-400">
                         {formatDistanceToNow(new Date(notification.timestamp), {

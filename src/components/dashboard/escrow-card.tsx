@@ -103,6 +103,13 @@ export function EscrowCard({
     : null;
   const isOverdue = deadlineAt > 0 && now > deadlineAt;
   const isActive = escrow.status === "active" || escrow.status === "pending";
+  // Pending, open jobs with no freelancer yet can Cancel Job for an instant
+  // full refund — no need to wait on the 30-day emergency-refund window.
+  const isCancelableJob =
+    escrow.isClient &&
+    escrow.status === "pending" &&
+    (!escrow.beneficiary ||
+      escrow.beneficiary === "0x0000000000000000000000000000000000000000");
   const isSettled =
     escrow.status === "completed" ||
     escrow.status === "refunded" ||
@@ -238,8 +245,15 @@ export function EscrowCard({
               >
                 {displayStatus}
               </Badge>
-              {/* Message Freelancer — visible to client when a freelancer is assigned */}
-              {escrow.isClient && escrow.beneficiary && wallet.address && isApiConfigured() && (
+              {/* Message Freelancer — visible to client only once a real freelancer
+                  is assigned. `escrow.beneficiary` is truthy even for the zero
+                  address on genuinely unassigned open jobs, so that alone isn't
+                  enough — it made the button appear and "message" 0x0. */}
+              {escrow.isClient &&
+                escrow.beneficiary &&
+                escrow.beneficiary !== "0x0000000000000000000000000000000000000000" &&
+                wallet.address &&
+                isApiConfigured() && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -319,15 +333,17 @@ export function EscrowCard({
                   <CircleDollarSign className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
                   <div>
                     <p className="font-semibold text-amber-800 dark:text-amber-300">
-                      {formatTokenAmount(surplusAmount.toFixed(0), escrow.token)} surplus funds stuck
+                      {formatTokenAmount(surplusAmount.toFixed(0), escrow.token)}{" "}
+                      {isCancelableJob ? "surplus funds" : "surplus funds stuck"}
                     </p>
                     <p className="text-amber-700 dark:text-amber-400 text-xs mt-0.5">
-                      Extra funds were added above milestone amounts. They cannot be released until the
-                      emergency refund window opens ({canEmergencyRefund ? "now available" : `available ${emergencyAvailableDate}`}).
+                      {isCancelableJob
+                        ? "No freelancer is assigned yet — cancel this job below to get all of it back instantly, instead of waiting on the emergency refund window."
+                        : `Extra funds were added above milestone amounts. They cannot be released until the emergency refund window opens (${canEmergencyRefund ? "now available" : `available ${emergencyAvailableDate}`}).`}
                     </p>
                   </div>
                 </div>
-                {canEmergencyRefund && onReclaimSurplus && (
+                {canEmergencyRefund && onReclaimSurplus && !isCancelableJob && (
                   <Button
                     size="sm"
                     variant="outline"
@@ -503,6 +519,8 @@ export function EscrowCard({
                                   description: "Your evidence has been recorded on-chain",
                                 });
                               }}
+                              otherPartyAddress={escrow.beneficiary}
+                              projectTitle={escrow.projectTitle}
                               variant="default"
                               size="sm"
                               className="w-full"
@@ -534,9 +552,13 @@ export function EscrowCard({
                   isClient={escrow.isClient || false}
                   totalAmount={escrow.totalAmount}
                   token={escrow.token}
+                  projectTitle={escrow.projectTitle}
                   milestones={escrow.milestones.map((m, idx) => ({
                     index: idx,
-                    description: m.originalDescription ?? m.description ?? "",
+                    description:
+                      m.requirements ||
+                      m.originalDescription ||
+                      parseAttachment(m.description ?? "").body,
                     amount: m.amount,
                   }))}
                   onUpdate={() => {

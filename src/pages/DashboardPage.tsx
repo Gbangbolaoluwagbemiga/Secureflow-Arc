@@ -239,8 +239,15 @@ export default function DashboardPage() {
                       };
                     })
                   : e.milestones;
+                // The subgraph's `status` can lag behind the chain — most visibly
+                // right after a dispute resolves, since that's someone else's
+                // transaction and this wallet has no live signal for it. `rpc` is
+                // already fetched above for this same escrow, so just use it.
+                const freshStatus: Escrow["status"] =
+                  rpc?.status != null ? (getStatusFromNumber(Number(rpc.status)) as Escrow["status"]) : e.status;
                 return {
                   ...e,
+                  status: freshStatus,
                   projectTitle: rpc?.projectTitle || e.projectTitle || "",
                   projectDescription: rpc?.projectDescription || e.projectDescription || "",
                   totalAmount: rpc?.totalAmount != null ? rpc.totalAmount.toString() : e.totalAmount,
