@@ -19,6 +19,10 @@ export default tseslint.config(
     "contracts/**",
     "subgraph/**",
     "scripts/**",
+    // Vitest suite — not part of tsconfig.app.json's build, has its own
+    // vitest.config.ts instead.
+    "test/**",
+    "vitest.config.ts",
   ]),
   {
     extends: [
