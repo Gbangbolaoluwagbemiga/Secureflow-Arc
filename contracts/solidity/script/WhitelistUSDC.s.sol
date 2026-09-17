@@ -7,14 +7,18 @@ import "../src/SecureFlow.sol";
 contract WhitelistUSDCScript is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        // Hardcode the deployed contract address
-        address payable secureFlowAddress = payable(0x6142bf4855D4F9dbC1cD8109377d4F4E2AF1ab59);
+        // Read from the environment. This was hardcoded to the Arc TESTNET
+        // deployment, which on any other network points at an address with no
+        // contract — the call would revert for a reason that looks nothing like
+        // the actual mistake.
+        address payable secureFlowAddress = payable(vm.envAddress("SECUREFLOW_ADDRESS"));
         
         vm.startBroadcast(deployerPrivateKey);
 
         SecureFlow secureFlow = SecureFlow(secureFlowAddress);
         
-        // Arc Testnet USDC address (address(0) represents native USDC)
+        // Arc's USDC ERC-20 interface. Same address on mainnet and testnet,
+        // per Arc's contract-addresses reference. 6 decimals.
         address usdcAddress = 0x3600000000000000000000000000000000000000;
         
         // Whitelist USDC
