@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
+import { getCurrentNetwork } from "@/lib/web3/arc-config";
 import { useAccount, useDisconnect, useBalance } from "wagmi";
 import { getContract as getViemContract } from "viem";
 import { useWalletClient, usePublicClient } from "wagmi";
@@ -65,7 +66,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         connectWallet,
         disconnectWallet,
         getContract,
-        network: { rpcUrl: "https://rpc.drpc.testnet.arc.network" },
+        network: { rpcUrl: getCurrentNetwork().rpcUrl },
         refreshBalance,
         isOwner,
       }}

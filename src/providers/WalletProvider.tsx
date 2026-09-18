@@ -5,19 +5,25 @@ import { createAppKit } from "@reown/appkit/react";
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
 import { defineChain } from "viem";
 import type { AppKitNetwork } from "@reown/appkit/networks";
+import { getCurrentNetwork, ARC_MAINNET_CHAIN_ID } from "../lib/web3/arc-config";
 
-// ─── Arc Testnet — defined as a viem Chain ────────────────────────────────────
+// ─── The active Arc network, as a viem Chain ──────────────────────────────────
+// Built from getCurrentNetwork() rather than literals, so the wallet is asked
+// to switch to the same chain the rest of the app reads from. Still exported as
+// `arcTestnet` because call sites import that name.
+const active = getCurrentNetwork();
+
 export const arcTestnet = defineChain({
-  id: 5042002,
-  name: "Arc Testnet",
-  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
+  id: active.chainId,
+  name: active.name,
+  nativeCurrency: active.nativeCurrency,
   rpcUrls: {
-    default: { http: ["https://rpc.drpc.testnet.arc.network"] },
+    default: { http: [active.rpcUrl] },
   },
   blockExplorers: {
-    default: { name: "ArcScan", url: "https://testnet.arcscan.app" },
+    default: { name: "Arc Explorer", url: active.blockExplorer },
   },
-  testnet: true,
+  testnet: active.chainId !== ARC_MAINNET_CHAIN_ID,
 });
 
 // Cast to Reown's AppKitNetwork so it works with createAppKit and WagmiAdapter
