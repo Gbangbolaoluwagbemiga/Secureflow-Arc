@@ -1,51 +1,65 @@
-<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="primaryGradient" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#3B82F6"/>
-      <stop offset="100%" stop-color="#1D4ED8"/>
+    <linearGradient id="c-bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#102231"/>
+      <stop offset="55%" stop-color="#0A1724"/>
+      <stop offset="100%" stop-color="#050E16"/>
     </linearGradient>
-    <linearGradient id="accentGradient" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#10B981"/>
-      <stop offset="100%" stop-color="#059669"/>
+
+    <linearGradient id="c-blade" x1="210" y1="70" x2="410" y2="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#B9FFF2"/>
+      <stop offset="38%"  stop-color="#5EEAD4"/>
+      <stop offset="78%"  stop-color="#21BFAD"/>
+      <stop offset="100%" stop-color="#0B7A72"/>
     </linearGradient>
-    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-opacity="0.15"/>
+
+    <radialGradient id="c-core" cx="0.5" cy="0.42" r="0.6">
+      <stop offset="0%"   stop-color="#FFFFFF"/>
+      <stop offset="22%"  stop-color="#CFFFF6"/>
+      <stop offset="62%"  stop-color="#4FE3CE"/>
+      <stop offset="100%" stop-color="#0E9C8E"/>
+    </radialGradient>
+
+    <radialGradient id="c-halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%"   stop-color="#2DD4BF" stop-opacity="0.55"/>
+      <stop offset="55%"  stop-color="#2DD4BF" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#2DD4BF" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="c-soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="9"/>
     </filter>
+
+    <path id="c-bladeShape"
+      d="M225.8 84.6
+         A174 174 0 0 1 429.3 240.8
+         C 422 256, 414.5 265, 405.4 269.1
+         C 397 262, 388.5 254, 381.5 245
+         A126 126 0 0 0 234.1 131.9
+         C 227 117, 223.8 100, 225.8 84.6 Z"/>
   </defs>
 
-  <!-- Background circle -->
-  <circle cx="128" cy="128" r="128" fill="url(#primaryGradient)" opacity="0.1"/>
+  <rect width="512" height="512" rx="116" fill="url(#c-bg)"/>
 
-  <!-- Main Shield -->
-  <g filter="url(#shadow)">
-    <!-- Shield body -->
-    <path d="M128 32L192 64V128C192 176 160 208 128 224C96 208 64 176 64 128V64L128 32Z" 
-          fill="url(#primaryGradient)" stroke="white" stroke-width="2"/>
-    
-    <!-- Inner shield highlight -->
-    <path d="M128 48L176 72V128C176 168 152 192 128 208C104 192 80 168 80 128V72L128 48Z" 
-          fill="white" opacity="0.1"/>
+  <!-- ambient light behind the mechanism -->
+  <circle cx="256" cy="256" r="210" fill="url(#c-halo)"/>
+
+  <!-- three metered blades, each a stage further along -->
+  <g>
+    <g opacity="0.30" transform="rotate(240 256 256)">
+      <use href="#c-bladeShape" fill="url(#c-blade)"/>
+    </g>
+    <g opacity="0.62" transform="rotate(120 256 256)">
+      <use href="#c-bladeShape" fill="url(#c-blade)"/>
+    </g>
+    <g opacity="1">
+      <use href="#c-bladeShape" fill="url(#c-blade)" filter="url(#c-soft)" opacity="0.5"/>
+      <use href="#c-bladeShape" fill="url(#c-blade)"/>
+    </g>
   </g>
 
-  <!-- Flowing lines (representing secure transactions) -->
-  <g stroke="url(#accentGradient)" stroke-width="3" stroke-linecap="round" fill="none">
-    <!-- Left flow -->
-    <path d="M100 120C95 125 92 135 95 145" opacity="0.8"/>
-    <!-- Center flow -->
-    <path d="M128 110C128 120 128 135 128 145" opacity="1"/>
-    <!-- Right flow -->
-    <path d="M156 120C161 125 164 135 161 145" opacity="0.8"/>
-  </g>
-
-  <!-- Checkmark (verification/completion) -->
-  <g stroke="url(#accentGradient)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">
-    <path d="M110 155L125 170L155 135"/>
-  </g>
-
-  <!-- Lock icon (security) - subtle -->
-  <g opacity="0.6">
-    <rect x="112" y="100" width="32" height="28" rx="4" fill="none" stroke="white" stroke-width="2"/>
-    <path d="M120 100V88C120 80 124 76 128 76C132 76 136 80 136 88V100" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/>
-    <circle cx="128" cy="118" r="2" fill="white"/>
-  </g>
+  <!-- the value held at the centre -->
+  <circle cx="256" cy="256" r="52" fill="url(#c-core)" filter="url(#c-soft)" opacity="0.7"/>
+  <circle cx="256" cy="256" r="40" fill="url(#c-core)"/>
+  <circle cx="256" cy="256" r="40" fill="none" stroke="#EAFFFB" stroke-width="3" opacity="0.55"/>
 </svg>
