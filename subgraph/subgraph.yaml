@@ -3,12 +3,14 @@ schema:
   file: ./schema.graphql
 dataSources:
   - kind: ethereum
-    name: SecureFlow
+    name: Atelier
     network: arc-testnet
     source:
-      address: "0x6142bf4855D4F9dbC1cD8109377d4F4E2AF1ab59"
-      abi: SecureFlow
-      startBlock: 47239341
+      address: "0xA93F832ccaAb62123f82D4c92ec897A6Bdb252BE"
+      abi: Atelier
+      # The block the ERC1967 proxy was deployed in. Too low and indexing
+      # crawls millions of empty blocks; too high and escrows go missing.
+      startBlock: 60797735
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -19,9 +21,10 @@ dataSources:
         - Evidence
         - Application
         - Rating
+        - ManagerEvent
       abis:
-        - name: SecureFlow
-          file: ../contracts/solidity/out/SecureFlow.sol/SecureFlow.json
+        - name: Atelier
+          file: ../app/contracts/solidity/out/Atelier.sol/Atelier.json
       eventHandlers:
         # EscrowCreated now includes platformFee as 7th param
         - event: EscrowCreated(indexed uint256,indexed address,indexed address,address[],uint256,uint256,uint256,address,uint256,bool)
@@ -50,4 +53,9 @@ dataSources:
           handler: handleFreelancerAccepted
         - event: RatingSubmitted(indexed uint256,indexed address,indexed address,uint8)
           handler: handleRatingSubmitted
+        # Autopilot delegation — see schema.graphql for why this is indexed.
+        - event: JobManagerSet(indexed uint256,indexed address)
+          handler: handleJobManagerSet
+        - event: JobManagerRevoked(indexed uint256,indexed address)
+          handler: handleJobManagerRevoked
       file: ./src/mapping.ts

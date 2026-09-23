@@ -1,11 +1,12 @@
 {
-  "name": "secureflow-subgraph",
+  "name": "atelier-subgraph",
   "version": "1.0.0",
   "private": true,
   "scripts": {
     "codegen": "graph codegen",
     "build": "graph build",
-    "deploy:goldsky": "goldsky subgraph deploy secureflow/v1 --path ."
+    "auth": "graph auth",
+    "deploy:studio": "graph deploy --studio atelier"
   },
   "dependencies": {
     "@graphprotocol/graph-cli": "^0.81.0",
