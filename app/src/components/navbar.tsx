@@ -148,10 +148,10 @@ export function Navbar() {
             />
             <span className="flex flex-col leading-none">
               <span className="font-display font-bold text-xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                Atelier
+                SecureFlow
               </span>
               <span className="hidden sm:block text-[10px] uppercase tracking-wider text-muted-foreground">
-                agents hire people
+                milestone escrow on arc
               </span>
             </span>
           </Link>

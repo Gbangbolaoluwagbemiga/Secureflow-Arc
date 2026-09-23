@@ -7,6 +7,7 @@ import { useWeb3 } from "@/contexts/web3-context";
 import { CONTRACTS } from "@/lib/web3/config";
 
 import { motion } from "framer-motion";
+import { getCurrentNetwork } from "@/lib/web3/arc-config";
 
 export default function HomePage() {
   const { wallet } = useWeb3();
@@ -117,7 +118,7 @@ export default function HomePage() {
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass border border-primary/20 mb-6">
               <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
               <span className="text-sm font-medium">
-                Powered by Arc Testnet
+                Powered by {getCurrentNetwork().name}
               </span>
             </div>
 
