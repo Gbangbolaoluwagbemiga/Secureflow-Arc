@@ -3,7 +3,7 @@
  *
  * WHY IT EXISTS
  *
- * Atelier's central claim is that neither side has to trust the other, and that
+ * SecureFlow's central claim is that neither side has to trust the other, and that
  * claim rests entirely on a mechanism: money leaves the client's wallet up
  * front, cannot be spent on anything else, and cannot be pulled back once
  * somebody starts. Nobody believes that from a tagline. They believe it when
@@ -172,7 +172,7 @@ export function AskAtelier({ viewer }: { viewer?: AskViewer }) {
         setError(
           e instanceof AssistantBusy
             ? e.message
-            : "I could not reach the assistant just now. Everything else on Atelier works normally.",
+            : "I could not reach the assistant just now. Everything else on SecureFlow works normally.",
         );
       } finally {
         setThinking(false);
@@ -214,7 +214,7 @@ export function AskAtelier({ viewer }: { viewer?: AskViewer }) {
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
             role="dialog"
             aria-modal="true"
-            aria-label="Ask Atelier"
+            aria-label="Ask SecureFlow"
             /* Opaque, because a floating surface over arbitrary content has to
                be readable over all of it — that is what --popover is for. */
             className="fixed z-50 bg-popover text-popover-foreground rounded-2xl flex flex-col
@@ -229,7 +229,7 @@ export function AskAtelier({ viewer }: { viewer?: AskViewer }) {
                   <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
                 </span>
                 <div className="min-w-0">
-                  <div className="font-display font-semibold leading-none">Ask Atelier</div>
+                  <div className="font-display font-semibold leading-none">Ask SecureFlow</div>
                   <div className="text-xs text-muted-foreground mt-1">
                     How it works, and what protects you
                   </div>
@@ -244,7 +244,7 @@ export function AskAtelier({ viewer }: { viewer?: AskViewer }) {
               {turns.length === 0 && (
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    Ask me anything about how Atelier works — escrow, Autopilot,
+                    Ask me anything about how SecureFlow works — escrow, Autopilot,
                     getting paid. I can explain and point you at the right page,
                     but I can't move money or act on a job.
                   </p>
@@ -333,7 +333,7 @@ export function AskAtelier({ viewer }: { viewer?: AskViewer }) {
       <motion.button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        aria-label={open ? "Close Atelier assistant" : "Ask Atelier a question"}
+        aria-label={open ? "Close SecureFlow assistant" : "Ask SecureFlow a question"}
         aria-expanded={open}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}

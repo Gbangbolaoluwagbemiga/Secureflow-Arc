@@ -313,7 +313,7 @@ export default function AdminPage() {
                 <Shield className="h-6 w-6" />
                 Admin Panel
               </CardTitle>
-              <CardDescription>Manage Atelier contract settings</CardDescription>
+              <CardDescription>Manage SecureFlow contract settings</CardDescription>
             </CardHeader>
             <CardContent>
               <Alert>
@@ -348,7 +348,7 @@ export default function AdminPage() {
                 <Shield className="h-6 w-6" />
                 Admin Panel
               </CardTitle>
-              <CardDescription>Manage Atelier contract settings</CardDescription>
+              <CardDescription>Manage SecureFlow contract settings</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <Alert variant="destructive">
@@ -402,7 +402,7 @@ export default function AdminPage() {
         <div>
           <h1 className="text-4xl font-bold mb-2">Admin Panel</h1>
           <p className="text-muted-foreground">
-            Manage Atelier contract settings and configurations
+            Manage SecureFlow contract settings and configurations
           </p>
         </div>
 

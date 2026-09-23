@@ -173,7 +173,7 @@ export function WorkerBoard({
        * reviewer would rightly reject it for exactly that. Better to fail
        * before anything reaches the chain than to deliver half of it.
        *
-       * The attachment is appended in the form the rest of Atelier already
+       * The attachment is appended in the form the rest of SecureFlow already
        * reads, so the client's card renders it and the agent's vision reviewer
        * can open it.
        */
