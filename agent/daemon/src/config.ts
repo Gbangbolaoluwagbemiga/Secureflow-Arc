@@ -29,24 +29,115 @@ import { defineChain } from "viem";
  * and only walks forward — which is exactly the access pattern the busy
  * endpoint can still serve.
  */
-export const rpcUrl = process.env.ARC_RPC_URL?.trim() || "https://rpc.drpc.testnet.arc.network";
+const ARC_NETWORKS = {
+  testnet: {
+    chainId: 5042002,
+    name: "Arc Testnet",
+    /* drpc for reads, rpc.testnet for logs — the split described above. */
+    rpcUrl: "https://rpc.drpc.testnet.arc.network",
+    logRpcUrl: "https://rpc.testnet.arc.network",
+    explorer: "https://testnet.arcscan.app",
+    escrow: "0x6142bf4855D4F9dbC1cD8109377d4F4E2AF1ab59",
+    deployBlock: "60797735",
+    circleBlockchain: "ARC-TESTNET",
+    gatewayUrl: "https://gateway-api-testnet.circle.com",
+    isTestnet: true,
+  },
+  mainnet: {
+    chainId: 5042,
+    name: "Arc",
+    /* One endpoint serves both here. If wide getLogs starts being refused,
+       split this the way testnet is split rather than slowing every read. */
+    rpcUrl: "https://rpc.mainnet.arc.io",
+    logRpcUrl: "https://rpc.mainnet.arc.io",
+    explorer: "https://explorer.arc.io",
+    /* The live proxy, read off the chain rather than out of a broadcast file:
+       ERC1967, implementation 0xFCDF43ECC661c48B5ef55B67363d96021c9803df, and
+       it holds the marketplace's escrows. The 0x6142bf… address that sat here
+       as the mainnet default has no code on 5042 at all — it is the testnet
+       proxy, and every read against it returned an empty marketplace. */
+    escrow: "0xbdeb44945979a01584fd7d796a71C707D2F83372",
+    /* Found by bisecting eth_getCode. The mainnet broadcast artifact records a
+       different contract entirely, so it is not a source for this. */
+    deployBlock: "22260326",
+    /* Circle's own identifiers for Arc mainnet, NOT yet confirmed against
+       Circle's API. Set CIRCLE_BLOCKCHAIN and GATEWAY_FACILITATOR_URL
+       explicitly before trusting a managed-wallet or x402 path here. */
+    circleBlockchain: "ARC",
+    gatewayUrl: "https://gateway-api.circle.com",
+    isTestnet: false,
+  },
+} as const;
+
+/**
+ * WHICH CHAIN, DECIDED ONCE.
+ *
+ * Chain id, both RPCs, the escrow address, the block to scan logs from and
+ * Circle's network name used to be six independent variables that each
+ * defaulted to testnet on their own. The escrow default had already been
+ * changed to a mainnet-looking address while the chain id beside it still read
+ * 5042002, which is the worst way for this to be wrong: every call goes to
+ * testnet, finds no contract at that address, and the bot reports an empty
+ * marketplace instead of an error. Nothing in the logs says the two disagree.
+ *
+ * One variable picks the network now and the rest follow. Individual overrides
+ * still work, but the default set is coherent.
+ *
+ * Testnet unless something explicitly says otherwise — a missing variable must
+ * not be able to point the agent's wallet at real money.
+ */
+const network =
+  Number(process.env.ARC_CHAIN_ID ?? 0) === ARC_NETWORKS.mainnet.chainId ||
+  process.env.ARC_NETWORK?.trim().toLowerCase() === "mainnet"
+    ? ARC_NETWORKS.mainnet
+    : ARC_NETWORKS.testnet;
+
+export const arcNetwork = network;
+
+/**
+ * An override has to be for the network we are actually on.
+ *
+ * A stale ARC_RPC_URL left over from testnet silently moved the whole app to
+ * the wrong chain once already: balances came back from testnet while the UI
+ * said mainnet. An override that disagrees with the selected network is far
+ * more likely to be forgotten than intended, so it is refused out loud.
+ */
+function pickRpc(override: string | undefined, fallback: string, name: string): string {
+  const url = override?.trim();
+  if (!url) return fallback;
+  if (/testnet/i.test(url) !== network.isTestnet) {
+    console.warn(
+      `[config] Ignoring ${name}=${url} — it is not an endpoint for ${network.name}. Using ${fallback}.`,
+    );
+    return fallback;
+  }
+  return url;
+}
+
+export const rpcUrl = pickRpc(process.env.ARC_RPC_URL, network.rpcUrl, "ARC_RPC_URL");
 
 /** Where `eth_getLogs` goes. Falls back to the read URL when unset. */
-export const logRpcUrl =
-  process.env.ARC_LOG_RPC_URL?.trim() || "https://rpc.testnet.arc.network";
+export const logRpcUrl = pickRpc(
+  process.env.ARC_LOG_RPC_URL,
+  network.logRpcUrl,
+  "ARC_LOG_RPC_URL",
+);
 
-export const arcTestnet = defineChain({
-  id: Number(process.env.ARC_CHAIN_ID ?? 5042002),
-  name: "Arc Testnet",
+export const arcChain = defineChain({
+  id: network.chainId,
+  name: network.name,
   nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
   rpcUrls: { default: { http: [rpcUrl] } },
-  blockExplorers: { default: { name: "Arcscan", url: "https://testnet.arcscan.app" } },
+  blockExplorers: { default: { name: "Explorer", url: network.explorer } },
   /* Declared so viem will actually use it — see the note in the app's copy of
      this chain. Without this line every batched read falls back to a loop, and
      the loop is what gets rate-limited. */
   contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" } },
-  testnet: true,
+  testnet: network.isTestnet,
 });
+
+/** The name two dozen modules already import. */
+export const arcTestnet = arcChain;
 
 export const config = {
   anthropicApiKey: process.env.ANTHROPIC_API_KEY?.trim() || "",
@@ -75,7 +166,7 @@ export const config = {
 
   // Atelier — Atelier calls this contract, does NOT deploy its own
   atelierAddress: (process.env.ATELIER_CONTRACT_ADDRESS?.trim() ||
-    "0x6142bf4855D4F9dbC1cD8109377d4F4E2AF1ab59") as `0x${string}`,
+    network.escrow) as `0x${string}`,
   usdcAddress: (process.env.USDC_ADDRESS?.trim() ||
     "0x3600000000000000000000000000000000000000") as `0x${string}`,
 
@@ -85,7 +176,7 @@ export const config = {
    * Arc's free tier), so scanning from genesis is not an option -- and would be
    * 60 million blocks of nothing in any case.
    */
-  atelierDeployBlock: BigInt(process.env.ATELIER_DEPLOY_BLOCK?.trim() || "60797735"),
+  atelierDeployBlock: BigInt(process.env.ATELIER_DEPLOY_BLOCK?.trim() || network.deployBlock),
   /** Largest block span this RPC will answer a getLogs call for. */
   logRangeLimit: BigInt(process.env.LOG_RANGE_LIMIT?.trim() || "9000"),
   graphUrl: process.env.GRAPH_URL?.trim() || "",
@@ -106,11 +197,11 @@ export const config = {
   circleEntitySecret: process.env.CIRCLE_ENTITY_SECRET?.trim() || "",
   circleWalletId: process.env.CIRCLE_WALLET_ID?.trim() || "",
   circleWalletAddress: (process.env.CIRCLE_WALLET_ADDRESS?.trim() || "") as `0x${string}` | "",
-  circleBlockchain: process.env.CIRCLE_BLOCKCHAIN?.trim() || "ARC-TESTNET",
+  circleBlockchain: process.env.CIRCLE_BLOCKCHAIN?.trim() || network.circleBlockchain,
 
   // Circle Gateway (x402 nanopayments)
   gatewayFacilitatorUrl:
-    process.env.GATEWAY_FACILITATOR_URL?.trim() || "https://gateway-api-testnet.circle.com",
+    process.env.GATEWAY_FACILITATOR_URL?.trim() || network.gatewayUrl,
   x402OrderFee: process.env.X402_ORDER_FEE?.trim() || "0.05",
 
   // x402 BUY side — Atelier paying a marketplace service (services/portfolio-check)
