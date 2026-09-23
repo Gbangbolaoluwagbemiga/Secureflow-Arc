@@ -13,7 +13,7 @@
 import http from "node:http";
 import { randomUUID } from "node:crypto";
 import { createPublicClient, http as viemHttp, formatEther, verifyMessage } from "viem";
-import { config, arcTestnet, rpcUrl } from "./config.js";
+import { config, arcTestnet, arcChain, arcNetwork, rpcUrl, logRpcUrl } from "./config.js";
 import { AgentClient, type AgentEvent } from "./agent/AgentClient.js";
 import { notifyWeb } from "./notify/web.js";
 import { createAtelierGateway } from "./circle/gateway.js";
@@ -1816,6 +1816,25 @@ server.listen(PORT, () => {
   console.log(`     POST /api/hire       (x402-gated — AI agents)`);
   console.log(`     POST /api/instruct   (human front door)`);
   console.log(`     GET  /events         (SSE — command center)\n`);
+
+  /*
+   * WHICH CHAIN, SAID OUT LOUD, ONCE.
+   *
+   * The escrow address and the chain it is read on came from separate
+   * environment variables, and when they disagreed nothing anywhere said so.
+   * A deploy ran with the mainnet contract address and testnet RPCs: every
+   * call was answered, the marketplace came back empty, and the only visible
+   * symptom was a bot politely reporting no open commissions.
+   *
+   * Four values on one line. Anyone looking at the logs after a deploy can see
+   * in a second whether they belong together.
+   */
+  console.log(
+    `     chain  → ${arcNetwork.name} (${arcChain.id})${arcChain.testnet ? "" : "  ⚠ REAL MONEY"}\n` +
+      `     escrow → ${config.atelierAddress}\n` +
+      `     rpc    → ${rpcUrl}\n` +
+      `     logs   → ${logRpcUrl} from block ${config.atelierDeployBlock}\n`,
+  );
 
   /*
    * A DEPENDENCY THAT IS MISSING RATHER THAN BROKEN SAYS NOTHING.
