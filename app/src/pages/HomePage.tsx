@@ -218,7 +218,7 @@ export default function HomePage() {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-bold mb-4 text-balance">
-              How Atelier Works
+              How SecureFlow Works
             </h2>
             <p className="text-xl text-muted-foreground text-pretty max-w-2xl mx-auto">
               Simple, secure, and transparent escrow for the Web3 era
@@ -381,7 +381,7 @@ export default function HomePage() {
               Ready to secure your next project?
             </h2>
             <p className="text-xl text-muted-foreground mb-8 text-pretty max-w-2xl mx-auto">
-              Join hundreds of freelancers and clients using Atelier for
+              Join hundreds of freelancers and clients using SecureFlow for
               trustless payments
             </p>
             <Link to="/create">

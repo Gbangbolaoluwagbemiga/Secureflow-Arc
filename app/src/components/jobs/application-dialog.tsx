@@ -124,7 +124,7 @@ export function ApplicationDialog({
     if (!isApiConfigured()) {
       toast({
         title: "API not configured",
-        description: "Set VITE_API_URL and run the Atelier API with GROQ_API_KEY.",
+        description: "Set VITE_API_URL and run the SecureFlow API with GROQ_API_KEY.",
         variant: "destructive",
       });
       return;

@@ -1,7 +1,7 @@
 /**
  * GET HIRED — the door for someone with no wallet.
  *
- * Atelier has two entrances and they are not the same product surface. The main
+ * SecureFlow has two entrances and they are not the same product surface. The main
  * app assumes a connected wallet: you sign your own transactions, you hold your
  * own keys, and everything is on-chain from your address. This page assumes
  * none of that.
@@ -82,7 +82,7 @@ export default function WorkerPage() {
         </h1>
         <p className="text-muted-foreground mt-3">
           Set <code className="font-mono text-xs">VITE_AGENT_API_URL</code> to a
-          running Atelier agent to open this door.
+          running SecureFlow agent to open this door.
         </p>
       </div>
     );

@@ -242,13 +242,13 @@ export function ManagedWalletMenu({
                   <span className="font-mono text-foreground">
                     {connectedAddress.slice(0, 6)}…{connectedAddress.slice(-4)}
                   </span>
-                  , and anything in this wallet is sent there first. Atelier
+                  , and anything in this wallet is sent there first. SecureFlow
                   stops signing for you — you sign for yourself from then on.
                 </>
               ) : (
                 <>
                   Connect the wallet you want to use first. Your history and
-                  your balance follow it, and Atelier stops holding keys for
+                  your balance follow it, and SecureFlow stops holding keys for
                   you.
                 </>
               )}

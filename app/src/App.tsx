@@ -50,7 +50,7 @@ const AppLayout = () => {
 };
 
 /**
- * Atelier's routes.
+ * SecureFlow's routes.
  *
  * The IA is in `lib/atelier/nav.ts`; this table implements it. Two things worth
  * knowing before editing:

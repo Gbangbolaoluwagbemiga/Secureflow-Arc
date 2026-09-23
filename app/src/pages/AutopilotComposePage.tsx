@@ -339,7 +339,7 @@ export default function AutopilotComposePage() {
           <Link to="/get-hired" className="text-foreground underline underline-offset-4">
             Get an account
           </Link>{" "}
-          — Atelier holds one for you, and you can post from it too.
+          — SecureFlow holds one for you, and you can post from it too.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center mt-8">
           <Button asChild variant="outline">

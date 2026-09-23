@@ -1,7 +1,7 @@
 /**
  * MY JOBS — one place, whichever side of the table you are on.
  *
- * Atelier previously had "My Work" and "My Jobs" as separate destinations, which
+ * SecureFlow previously had "My Work" and "My Jobs" as separate destinations, which
  * made sense to whoever built it and to nobody using it. Most people on a
  * marketplace like this do both: you hire someone for a logo and take a writing
  * job the same week. Two nav entries meant two dashboards, two mental models,
@@ -102,7 +102,7 @@ export default function MyJobsPage() {
    * no key and never connects one, so every link that lands here dead-ended
    * them on "Connect a wallet to see your jobs". Including the notification
    * telling them a dispute over their own work had been decided: they tapped
-   * it, and Atelier told them they were nobody.
+   * it, and SecureFlow told them they were nobody.
    *
    * Their jobs live on their own board. Send them there rather than explaining
    * why this page cannot help.
