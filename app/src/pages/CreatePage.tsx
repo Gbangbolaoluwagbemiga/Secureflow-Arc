@@ -459,7 +459,7 @@ export default function CreateEscrowPage() {
                 <div>
                   <h3 className="font-semibold text-destructive">Wrong Network</h3>
                   <p className="text-sm text-muted-foreground">
-                    Please switch your wallet to Arc Testnet (chain ID {ARC_CHAIN_ID})
+                    Please switch your wallet to {ARC_TESTNET.chainName} (chain ID {ARC_CHAIN_ID})
                   </p>
                 </div>
               </div>
