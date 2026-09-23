@@ -14,6 +14,23 @@ import { applicationsRouter } from "./routes/applications.js";
 import { disputesRouter } from "./routes/disputes.js";
 
 const app = express();
+
+/*
+ * ONE PROXY HOP, NOT ALL OF THEM.
+ *
+ * Railway terminates TLS and forwards with X-Forwarded-For. express-rate-limit
+ * v7 refuses to run when that header is present but Express is not configured
+ * to trust it, because every request would otherwise key on the proxy's own
+ * address and one visitor could exhaust the limit for everyone. It throws
+ * ERR_ERL_UNEXPECTED_X_FORWARDED_FOR, which is what took the container down.
+ *
+ * `1` rather than `true`: trusting the whole chain lets a caller prepend any
+ * address they like to X-Forwarded-For and appear as a fresh IP on every
+ * request, which turns the rate limiter into decoration. One hop is exactly
+ * the number of proxies in front of this process.
+ */
+app.set("trust proxy", 1);
+
 const port = Number(process.env.PORT) || 8787;
 const apiSecret = process.env.API_SECRET;
 
