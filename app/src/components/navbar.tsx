@@ -141,7 +141,7 @@ export function Navbar() {
               before they had understood one. */}
           <Link to="/" className="flex items-center gap-2.5 shrink-0">
             <img
-              src="/atelier-mark.svg"
+              src="/secureflow-mark.svg"
               alt=""
               aria-hidden="true"
               className="h-7 w-7 shrink-0"
