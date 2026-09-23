@@ -17,7 +17,7 @@ vi.mock("../src/groq/chat.js", () => ({
   AssistantUnavailable: class extends Error {},
 }));
 
-const { askAtelier, QuestionRejected } = await import("../src/assistant/ask.js");
+const { askSecureFlow, QuestionRejected } = await import("../src/assistant/ask.js");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -25,7 +25,7 @@ beforeEach(() => {
 });
 
 const ask = (content: string, viewer?: unknown) =>
-  askAtelier([{ role: "user", content }], viewer as never);
+  askSecureFlow([{ role: "user", content }], viewer as never);
 
 describe("what the model is told", () => {
   it("frames everything the user typed as a question, not an instruction", async () => {
@@ -70,7 +70,7 @@ describe("what it is never told", () => {
     });
 
     const { system } = groqChat.mock.calls[0][0];
-    expect(system).toMatch(/take work on Atelier/i);
+    expect(system).toMatch(/take work on SecureFlow/i);
     expect(system).toMatch(/2 job\(s\)/);
     expect(system).not.toMatch(/0x8289/);
     expect(system).not.toMatch(/someone@example.com/);
@@ -96,7 +96,7 @@ describe("what it refuses before reaching the model", () => {
 
   it("will not answer when the last word was its own", async () => {
     await expect(
-      askAtelier([{ role: "assistant", content: "An answer." }]),
+      askSecureFlow([{ role: "assistant", content: "An answer." }]),
     ).rejects.toBeInstanceOf(QuestionRejected);
   });
 
@@ -106,7 +106,7 @@ describe("what it refuses before reaching the model", () => {
       content: `turn ${i}`,
     }));
     // Ends on a user turn so it is answerable.
-    await askAtelier([...many, { role: "user", content: "and finally?" }]);
+    await askSecureFlow([...many, { role: "user", content: "and finally?" }]);
 
     expect(groqChat.mock.calls[0][0].messages.length).toBeLessThanOrEqual(12);
   });

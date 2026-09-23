@@ -1,5 +1,5 @@
 /**
- * Plain conversation, for the assistant that answers questions about Atelier.
+ * Plain conversation, for the assistant that answers questions about SecureFlow.
  *
  * SEPARATE FROM groqStructured ON PURPOSE
  *
