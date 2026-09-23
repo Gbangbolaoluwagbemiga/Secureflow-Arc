@@ -5,17 +5,29 @@ import { createAppKit } from "@reown/appkit/react";
 import { WagmiAdapter } from "@reown/appkit-adapter-wagmi";
 import { defineChain } from "viem";
 import type { AppKitNetwork } from "@reown/appkit/networks";
+import { getCurrentNetwork } from "@/lib/web3/arc-config";
 
-// ─── Arc Testnet — defined as a viem Chain ────────────────────────────────────
-export const arcTestnet = defineChain({
-  id: 5042002,
-  name: "Arc Testnet",
-  nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
+// ─── The Arc network this build talks to, defined as a viem Chain ────────────
+/*
+ * Built from arc-config rather than pinned to testnet.
+ *
+ * This file used to hardcode chain 5042002 outright, so a deployment could set
+ * VITE_ARC_CHAIN_ID=5042, point every read at mainnet, and still hand the user
+ * a wallet prompt for testnet. The app and the wallet disagreed about which
+ * chain they were on, which is the kind of split that ends with someone
+ * signing against the wrong contract.
+ */
+const NETWORK = getCurrentNetwork();
+
+export const arcChain = defineChain({
+  id: NETWORK.chainId,
+  name: NETWORK.name,
+  nativeCurrency: NETWORK.nativeCurrency,
   rpcUrls: {
-    default: { http: ["https://rpc.drpc.testnet.arc.network"] },
+    default: { http: [NETWORK.rpcUrl] },
   },
   blockExplorers: {
-    default: { name: "ArcScan", url: "https://testnet.arcscan.app" },
+    default: { name: "Explorer", url: NETWORK.blockExplorer },
   },
   /*
    * MULTICALL3, WHICH WAS ALWAYS THERE.
@@ -33,23 +45,30 @@ export const arcTestnet = defineChain({
    * answers `rate limit exceeded` under exactly that kind of load — and a
    * rate-limited read is where this app's worst bugs start.
    *
-   * Verified deployed on Arc testnet (7618 bytes of code) before declaring it.
+   * Verified deployed on both Arc testnet (7,618 bytes) and Arc mainnet
+   * (3,808 bytes) before declaring it.
    */
   contracts: {
     multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" },
   },
-  testnet: true,
+  testnet: NETWORK.chainId !== 5042,
 });
 
+/**
+ * @deprecated Kept so existing imports keep resolving. The chain is no longer
+ * necessarily testnet — it is whichever network arc-config selected.
+ */
+export const arcTestnet = arcChain;
+
 // Cast to Reown's AppKitNetwork so it works with createAppKit and WagmiAdapter
-const arcTestnetReown = arcTestnet as unknown as AppKitNetwork;
+const arcReown = arcChain as unknown as AppKitNetwork;
 
 const projectId = (import.meta.env.VITE_REOWN_PROJECT_ID as string | undefined) ?? "";
 
 // ─── Wagmi adapter (Reown manages connectors: MetaMask, WC QR, Coinbase, etc.)
 export const wagmiAdapter = new WagmiAdapter({
   projectId,
-  networks: [arcTestnetReown],
+  networks: [arcReown],
 });
 
 export const wagmiConfig = wagmiAdapter.wagmiConfig;
@@ -58,12 +77,12 @@ export const wagmiConfig = wagmiAdapter.wagmiConfig;
 createAppKit({
   adapters: [wagmiAdapter],
   projectId,
-  networks: [arcTestnetReown],
-  defaultNetwork: arcTestnetReown,
+  networks: [arcReown],
+  defaultNetwork: arcReown,
   metadata: {
-    name: "Atelier",
-    description: "Milestone-based freelancer escrow on Arc EVM",
-    url: typeof window !== "undefined" ? window.location.origin : "https://atelier.app",
+    name: "SecureFlow",
+    description: "Milestone-based freelancer escrow on Arc",
+    url: typeof window !== "undefined" ? window.location.origin : "https://secureflow.app",
     icons: ["/favicon.ico"],
   },
   features: {

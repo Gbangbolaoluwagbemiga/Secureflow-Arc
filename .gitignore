@@ -29,3 +29,13 @@ agent/daemon/data/
 
 # Submission screenshots — regenerate with playwright.shots.config.ts
 submission-shots/
+
+# Superseded by app/contracts/solidity — the pre-merge contract tree, kept on
+# disk for reference but not part of the repo. The deployed contract lives in
+# app/contracts/solidity/src/SecureFlow.sol.
+/contracts/
+
+# Local tooling and planning notes
+.claude/
+.plans/
+.vscode/
