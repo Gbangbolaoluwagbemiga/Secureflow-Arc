@@ -399,6 +399,13 @@ export default function CreateEscrowPage() {
           : "Your job has been created successfully and is now live."
       });
 
+      /* The nav decides whether to show My Jobs by asking the contract which
+         escrows this wallet is on. That answer just changed, and the wallet
+         did not, so nothing would re-ask until a reload — hiding My Jobs at
+         exactly the moment somebody wants to look at the job they just paid
+         for. */
+      window.dispatchEvent(new Event("secureflow:escrows-changed"));
+
       setTimeout(() => {
         navigate(formData.isOpenJob ? "/jobs" : "/dashboard");
       }, 2000);
