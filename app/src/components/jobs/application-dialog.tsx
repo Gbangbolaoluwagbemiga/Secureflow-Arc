@@ -66,6 +66,18 @@ export function ApplicationDialog({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
   const [uploading, setUploading] = useState(false);
+  /*
+   * An attachment that could not be uploaded is a DECISION, not a warning.
+   *
+   * This used to toast "submitting without attachment" and carry straight on
+   * to the chain. The applicant had deliberately attached a CV; what reached
+   * the client was a cover letter promising a portfolio with no portfolio
+   * attached, and by then the application was on-chain and could not be
+   * amended. The toast was true and nobody could act on it.
+   *
+   * Holding the reason here stops the submit and hands the choice back.
+   */
+  const [uploadFailed, setUploadFailed] = useState<string | null>(null);
   const [milestones, setMilestones] = useState<MilestonePreview[] | null>(null);
   const [milestonesLoading, setMilestonesLoading] = useState(false);
 
@@ -76,6 +88,7 @@ export function ApplicationDialog({
       setProposedTimeline("");
       setSelectedFile(null);
       setUploadedFile(null);
+      setUploadFailed(null);
       setMilestones(null);
     }
   }, [open]);
@@ -154,15 +167,16 @@ export function ApplicationDialog({
     }
   };
 
-  const handleSubmit = async () => {
+  /** `anyway` is the applicant choosing to go ahead without the attachment. */
+  const handleSubmit = async (anyway = false) => {
     if (!job || !coverLetter.trim() || !proposedTimeline.trim()) return;
 
     let fileUrl: string | undefined = uploadedFile?.url;
 
-    // Upload file if one was selected but not yet uploaded (optional — failure doesn't block submit)
-    if (selectedFile && !uploadedFile && isApiConfigured() && wallet.address) {
+    if (selectedFile && !uploadedFile && !anyway && isApiConfigured() && wallet.address) {
       setUploading(true);
       try {
+        setUploadFailed(null);
         toast({ title: "Uploading attachment…", description: selectedFile.name });
         const result = await uploadMilestoneFile(
           selectedFile,
@@ -174,11 +188,12 @@ export function ApplicationDialog({
         setUploadedFile(result);
         fileUrl = result.url;
       } catch (e) {
-        toast({
-          title: "Upload failed — submitting without attachment",
-          description: e instanceof Error ? e.message : "Could not upload file",
-          variant: "destructive",
-        });
+        /* Stop here. An application is a transaction — once it is on chain the
+           attachment cannot be added to it, so the applicant gets to decide
+           whether to send it as it stands or come back when uploads work. */
+        setUploadFailed(e instanceof Error ? e.message : "Could not upload the file");
+        setUploading(false);
+        return;
       } finally {
         setUploading(false);
       }
@@ -360,10 +375,36 @@ export function ApplicationDialog({
           )}
         </div>
 
+        {uploadFailed && (
+          <div
+            role="alert"
+            className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm space-y-1"
+          >
+            <p className="font-medium">
+              {selectedFile?.name ?? "Your attachment"} could not be uploaded
+            </p>
+            <p className="text-muted-foreground">{uploadFailed}</p>
+            <p className="text-muted-foreground">
+              Your application has not been sent. You can apply without the
+              attachment, or cancel and try again once uploads are working — an
+              application cannot be amended after it reaches the chain.
+            </p>
+          </div>
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
+          {uploadFailed && (
+            <Button
+              variant="outline"
+              onClick={() => void handleSubmit(true)}
+              disabled={applying || uploading}
+            >
+              {applying ? "Applying..." : "Apply without the attachment"}
+            </Button>
+          )}
           <Button
             onClick={() => void handleSubmit()}
             disabled={
@@ -377,6 +418,8 @@ export function ApplicationDialog({
               ? "Uploading…"
               : applying
               ? "Applying..."
+              : uploadFailed
+              ? "Try the upload again"
               : "Submit Application"}
           </Button>
         </DialogFooter>
