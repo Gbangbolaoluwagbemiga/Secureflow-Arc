@@ -45,6 +45,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
+import { archiveKey } from "@/lib/atelier/archive-key";
 
 /**
  * `embedded` hides this page's own title so it can sit under My Jobs' tabs
@@ -61,7 +62,7 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
   const escrowsRef = useRef<Escrow[]>([]);
   const [archivedIds, setArchivedIds] = useState<Set<string>>(() => {
     try {
-      const raw = localStorage.getItem(`archived_escrows_${wallet.address ?? ""}`);
+      const raw = localStorage.getItem(archiveKey("archived_escrows", wallet.address));
       return new Set(raw ? JSON.parse(raw) : []);
     } catch { return new Set(); }
   });
@@ -990,7 +991,7 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
     setArchivedIds(next);
     try {
       localStorage.setItem(
-        `archived_escrows_${wallet.address ?? ""}`,
+        archiveKey("archived_escrows", wallet.address),
         JSON.stringify([...next]),
       );
     } catch { /* non-fatal */ }
@@ -1003,7 +1004,7 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
     setArchivedIds(next);
     try {
       localStorage.setItem(
-        `archived_escrows_${wallet.address ?? ""}`,
+        archiveKey("archived_escrows", wallet.address),
         JSON.stringify([...next]),
       );
     } catch { /* non-fatal */ }
