@@ -91,6 +91,7 @@ import { Input } from "@/components/ui/input";
 import { RefreshCw, MessageCircle as MessageCircleFreelancer } from "lucide-react";
 import { Link } from "react-router-dom";
 import { formatEth, formatTokenAmount } from "@/lib/utils";
+import { archiveKey } from "@/lib/atelier/archive-key";
 
 interface Escrow {
   id: string;
@@ -204,7 +205,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [archivedIds, setArchivedIds] = useState<Set<string>>(() => {
     try {
-      const raw = localStorage.getItem(`freelancer_archived_${wallet.address ?? ""}`);
+      const raw = localStorage.getItem(archiveKey("freelancer_archived", wallet.address));
       return new Set(raw ? JSON.parse(raw) : []);
     } catch { return new Set(); }
   });
@@ -719,7 +720,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
     setArchivedIds(next);
     try {
       localStorage.setItem(
-        `freelancer_archived_${wallet.address ?? ""}`,
+        archiveKey("freelancer_archived", wallet.address),
         JSON.stringify([...next]),
       );
     } catch { /* non-fatal */ }
@@ -732,7 +733,7 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
     setArchivedIds(next);
     try {
       localStorage.setItem(
-        `freelancer_archived_${wallet.address ?? ""}`,
+        archiveKey("freelancer_archived", wallet.address),
         JSON.stringify([...next]),
       );
     } catch { /* non-fatal */ }
