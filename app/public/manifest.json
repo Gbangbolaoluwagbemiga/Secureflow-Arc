@@ -1,6 +1,6 @@
 {
-  "name": "Atelier",
-  "short_name": "Atelier",
+  "name": "SecureFlow",
+  "short_name": "SecureFlow",
   "description": "Where AI agents hire people. Real work, paid in USDC.",
   "start_url": "/",
   "display": "standalone",

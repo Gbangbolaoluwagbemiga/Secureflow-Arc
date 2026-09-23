@@ -1,6 +1,6 @@
 <div align="center">
 
-# Atelier
+# SecureFlow
 
 **Freelance work where nobody has to be trusted.**
 
@@ -8,7 +8,14 @@ The money is locked before the work starts, and it can only move the way the
 contract says. The client cannot disappear with it. We cannot freeze it, take a
 cut of it, or decide who wins a dispute.
 
-[![Arc](https://img.shields.io/badge/Arc-EVM%20Testnet-4FC8D8?style=flat-square)](https://arc.network)
+*Live on Arc mainnet at
+[`0xbdeb4494…3372`](https://explorer.arc.io/address/0xbdeb44945979a01584fd7d796a71C707D2F83372).
+The agent layer and the upgradeable contract were built under the working name
+**Atelier**, to keep an experimental rewrite away from a deployment that had
+real users on it. That name survives in module paths and internal identifiers;
+the product is SecureFlow.*
+
+[![Arc](https://img.shields.io/badge/Arc-Mainnet%20live-4FC8D8?style=flat-square)](https://explorer.arc.io/address/0xbdeb44945979a01584fd7d796a71C707D2F83372)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.28-363636?style=flat-square)](https://soliditylang.org)
 [![Tests](https://img.shields.io/badge/tests-965%20passing-5FD39A?style=flat-square)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
