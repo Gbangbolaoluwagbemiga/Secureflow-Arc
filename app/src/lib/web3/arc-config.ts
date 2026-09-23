@@ -34,8 +34,33 @@ export function getCurrentNetwork() {
   const base =
     configured === ARC_MAINNET_CHAIN_ID ? ARC_NETWORKS.mainnet : ARC_NETWORKS.testnet;
 
+  /*
+   * AN OVERRIDE MAY NOT MOVE YOU TO ANOTHER NETWORK.
+   *
+   * VITE_ARC_RPC_URL exists so a deployment can use its own provider instead
+   * of the public endpoint. It is not a way to change chain, and when the two
+   * disagreed the result was silent and confusing: chain id said 5042 while a
+   * stale testnet URL served every read, so balances came back from testnet
+   * and a mainnet contract address returned "0x" as though it had no code.
+   *
+   * So an override that names the wrong network is ignored rather than
+   * honoured. Losing a custom RPC is a performance problem; reading the wrong
+   * chain while believing otherwise is a correctness one.
+   */
   const rpcOverride = (import.meta.env.VITE_ARC_RPC_URL ?? "").trim();
-  return rpcOverride ? { ...base, rpcUrl: rpcOverride } : base;
+  if (!rpcOverride) return base;
+
+  const overrideLooksTestnet = /testnet/i.test(rpcOverride);
+  const wantTestnet = base.chainId !== ARC_MAINNET_CHAIN_ID;
+  if (overrideLooksTestnet !== wantTestnet) {
+    console.warn(
+      `[arc-config] Ignoring VITE_ARC_RPC_URL (${rpcOverride}): it does not ` +
+        `match chain ${base.chainId}. Using ${base.rpcUrl} instead.`,
+    );
+    return base;
+  }
+
+  return { ...base, rpcUrl: rpcOverride };
 }
 
 export const CONTRACTS = {
