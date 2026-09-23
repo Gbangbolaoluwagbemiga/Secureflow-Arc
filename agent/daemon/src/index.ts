@@ -20,7 +20,7 @@ import { createAtelierGateway } from "./circle/gateway.js";
 import { listWhitelistedTokens } from "./web3/tokens.js";
 import { adoptDelegatedJobs } from "./agent/adoptDelegated.js";
 import { onWorkerEvent } from "./events.js";
-import { askAtelier, QuestionRejected } from "./assistant/ask.js";
+import { askSecureFlow, QuestionRejected } from "./assistant/ask.js";
 import { AssistantUnavailable } from "./groq/chat.js";
 import * as handover from "./agent/handover.js";
 import { createAtelierPaywall, ORDER_FEE_USDC } from "./circle/x402-seller.js";
@@ -879,7 +879,7 @@ const server = http.createServer(async (req, res) => {
         ? body.messages.map((m) => ({ role: m.role === "assistant" ? "assistant" as const : "user" as const, content: String(m.content ?? "") }))
         : [];
 
-      const answer = await askAtelier(turns, body.viewer);
+      const answer = await askSecureFlow(turns, body.viewer);
       return json(res, 200, { answer });
     } catch (err) {
       if (err instanceof QuestionRejected) return json(res, 400, { error: err.message });
