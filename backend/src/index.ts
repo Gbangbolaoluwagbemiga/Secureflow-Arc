@@ -11,6 +11,7 @@ import { gaslessRouter } from "./routes/gasless.js";
 import { evidenceRouter } from "./routes/evidence.js";
 import { analyticsRouter } from "./routes/analytics.js";
 import { applicationsRouter } from "./routes/applications.js";
+import { disputesRouter } from "./routes/disputes.js";
 
 const app = express();
 const port = Number(process.env.PORT) || 8787;
@@ -18,9 +19,9 @@ const apiSecret = process.env.API_SECRET;
 
 // Build a CORS origin matcher that supports:
 //  - FRONTEND_URL: comma-separated list of exact origins, e.g.
-//      https://secureflow-arc.vercel.app,https://my-preview.vercel.app
+//      https://atelier-arc.vercel.app,https://my-preview.vercel.app
 //  - FRONTEND_URL_PATTERN: a regex string to allow preview deployments, e.g.
-//      https://secureflow.*\.vercel\.app
+//      https://atelier.*\.vercel\.app
 //  - If neither is set, allow all origins (open for local dev).
 const rawOrigins = (process.env.FRONTEND_URL ?? "")
   .split(",")
@@ -42,7 +43,18 @@ function buildOriginMatcher(): cors.CorsOptions["origin"] {
     if (!origin) return callback(null, true);
     if (exactSet.has(origin)) return callback(null, true);
     if (pattern && pattern.test(origin)) return callback(null, true);
-    callback(new Error(`CORS: origin '${origin}' not allowed`));
+    /*
+     * Refuse by saying no, not by throwing.
+     *
+     * Handing cors an Error makes Express answer the preflight with a 500,
+     * which reads as "the API is broken" — and that is how a missing
+     * FRONTEND_URL entry presented in production: the deployed web app could
+     * not reach the API at all, and the only clue was a 500 on an OPTIONS
+     * request. A rejected origin is a configuration answer, not a server
+     * fault, and the difference decides whether the next person looks at the
+     * env vars or at the server logs.
+     */
+    callback(null, false);
   };
 }
 
@@ -52,6 +64,24 @@ app.use(
     credentials: true,
   }),
 );
+
+/*
+ * Say WHICH origin was refused, and where to fix it.
+ *
+ * Without this a blocked browser sees only the absence of a header, which is
+ * indistinguishable from the API being down. cors() has already decided by the
+ * time this runs; all this does is make the refusal legible to whoever is
+ * looking at the network tab.
+ */
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (!origin || res.getHeader("Access-Control-Allow-Origin")) return next();
+  res.status(403).json({
+    error: "Origin not allowed",
+    origin,
+    hint: "Add this origin to FRONTEND_URL (comma-separated) or match it with FRONTEND_URL_PATTERN.",
+  });
+});
 app.use(express.json({ limit: "10mb" }));
 
 // General rate limiter — 60 requests per minute per IP
@@ -74,11 +104,57 @@ const aiLimiter = rateLimit({
 
 app.use(generalLimiter);
 
-app.get("/health", (_req, res) => {
+/*
+ * Something at the root.
+ *
+ * This is a JSON API with no page, so `/` was a 404 — and the README links it,
+ * which means anyone following that link met an error and had to guess whether
+ * the service was down. It is not documentation; it is a signpost saying what
+ * this is and where the useful endpoints are.
+ */
+app.get("/", (_req, res) => {
+  res.json({
+    service: "Atelier API",
+    what: "Notifications, messaging, cover letters and file uploads for atelier-job.vercel.app. The escrow itself lives on Arc, not here.",
+    endpoints: {
+      health: "/health",
+      notifications: "/v1/notifications?wallet=0x… (Bearer API_SECRET)",
+      messages: "/v1/messages/inbox?wallet=0x…",
+      applications: "/v1/applications/:escrowId",
+      analytics: "/v1/analytics/platform",
+    },
+    source: "https://github.com/Gbangbolaoluwagbemiga/Atelier",
+  });
+});
+
+app.get("/health", async (_req, res) => {
+  /*
+   * Reachability, not configuration.
+   *
+   * This used to report supabase:true whenever the two env vars were set,
+   * which it kept doing after the project itself stopped resolving — a health
+   * check that answers "is it configured" while every route that touches it
+   * returns 500. A health endpoint that is green during an outage is worse
+   * than no health endpoint, because it is where you look first.
+   */
+  let supabase = false;
+  const url = process.env.SUPABASE_URL?.trim();
+  if (url && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    try {
+      const probe = await fetch(`${url}/rest/v1/`, {
+        headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY },
+        signal: AbortSignal.timeout(3000),
+      });
+      supabase = probe.status < 500;
+    } catch {
+      supabase = false;
+    }
+  }
+
   res.json({
     ok: true,
     groq: !!process.env.GROQ_API_KEY,
-    supabase: !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
+    supabase,
   });
 });
 
@@ -93,15 +169,29 @@ app.use("/v1/gasless", auth, gaslessRouter);
 app.use("/v1/evidence", auth, evidenceRouter);
 app.use("/v1/analytics", auth, analyticsRouter);
 app.use("/v1/applications", auth, applicationsRouter);
+app.use("/v1/disputes", auth, disputesRouter);
 
-app.listen(port, () => {
-  console.log(`secureflow-api listening on :${port}`);
-  if (!apiSecret) {
-    console.warn(
-      "[secureflow-api] API_SECRET is unset; /v1 routes are open (set API_SECRET for production)",
-    );
-  }
-});
+/*
+ * Bind a port only when we own the process.
+ *
+ * On a serverless host the platform owns the listener and imports the app as a
+ * handler; calling listen() there either throws or quietly holds a port nothing
+ * routes to, which looks exactly like a deployed service that answers nothing.
+ * Locally there is no platform, so we still bind.
+ */
+if (!process.env.VERCEL) {
+  app.listen(port, () => {
+    console.log(`atelier-api listening on :${port}`);
+    if (!apiSecret) {
+      console.warn(
+        "[atelier-api] API_SECRET is unset; /v1 routes are open (set API_SECRET for production)",
+      );
+    }
+  });
+}
+
+/** The handler a serverless host mounts. Harmless when running standalone. */
+export default app;
 
 
 

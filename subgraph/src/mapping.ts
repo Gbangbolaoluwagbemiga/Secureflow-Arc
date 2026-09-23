@@ -13,8 +13,32 @@ import {
   ApplicationSubmitted,
   FreelancerAccepted,
   RatingSubmitted,
-} from "../generated/SecureFlow/SecureFlow"
-import { Escrow, Milestone, Evidence, Application, Rating } from "../generated/schema"
+  JobManagerSet,
+  JobManagerRevoked,
+  Atelier,
+} from "../generated/Atelier/Atelier"
+import { Escrow, Milestone, Evidence, Application, Rating, ManagerEvent } from "../generated/schema"
+
+/**
+ * Pull "[category:design]" out of a job's description.
+ *
+ * The category is written as a marker rather than a contract field: it changes
+ * nothing about how money moves, and the escrow had no room for a storage slot
+ * spent on a browsing aid. Lifting it here is what makes it queryable.
+ *
+ * Returns null when there is no marker. Every escrow created before categories
+ * existed is uncategorised, and guessing one from the prose would be worse than
+ * leaving it blank — a freelancer filtering for design work should not be shown
+ * a job that merely mentions a logo.
+ */
+function extractCategory(description: string): string | null {
+  let open = description.indexOf("[category:")
+  if (open == -1) return null
+  let close = description.indexOf("]", open)
+  if (close == -1) return null
+  let id = description.slice(open + 10, close)
+  return id.length > 0 ? id : null
+}
 
 export function handleEscrowCreated(event: EscrowCreated): void {
   let entity = new Escrow(event.params.escrowId.toString())
@@ -29,8 +53,26 @@ export function handleEscrowCreated(event: EscrowCreated): void {
   entity.status = 0 // Pending
   entity.workStarted = false
   entity.isOpenJob = event.params.isOpenJob
-  entity.projectTitle = ""
-  entity.projectDescription = ""
+  /*
+   * Read the title and description from the contract, not the event.
+   *
+   * EscrowCreated carries no strings, so these were hardcoded empty and every
+   * indexed job came back untitled — a board rendered from this subgraph would
+   * have shown a list of blanks. try_ rather than a direct call: a revert here
+   * would kill indexing for every escrow, and a missing title is worth far less
+   * than a working index.
+   */
+  let contract = Atelier.bind(event.address)
+  let onChain = contract.try_getEscrow(event.params.escrowId)
+  if (!onChain.reverted) {
+    entity.projectTitle = onChain.value.projectTitle
+    entity.projectDescription = onChain.value.projectDescription
+    entity.category = extractCategory(onChain.value.projectDescription)
+  } else {
+    entity.projectTitle = ""
+    entity.projectDescription = ""
+    entity.category = null
+  }
   // Convert Address[] → Bytes[] element by element (AS doesn't allow direct cast)
   let rawArbiters = event.params.arbiters
   let arbiterBytes = new Array<Bytes>(rawArbiters.length)
@@ -198,4 +240,78 @@ export function handleRatingSubmitted(event: RatingSubmitted): void {
   entity.score = event.params.score
   entity.timestamp = event.block.timestamp
   entity.save()
+}
+
+
+/* ═══════════════════ AUTOPILOT DELEGATION ═══════════════════ */
+
+/**
+ * Record an appointment or a revocation, and move the escrow's pointer.
+ *
+ * Both handlers write a ManagerEvent as well as updating Escrow.jobManager,
+ * because the pointer alone loses the history. An arbiter resolving a dispute
+ * needs to know who was managing the job when the contested milestone was
+ * approved — and by then the client may well have revoked, leaving a pointer
+ * that says "nobody" over a decision an agent actually made.
+ */
+function recordManagerEvent(
+  escrowId: BigInt,
+  manager: Bytes,
+  action: string,
+  txHash: Bytes,
+  logIndex: BigInt,
+  timestamp: BigInt,
+  blockNumber: BigInt,
+): void {
+  let id = txHash.toHexString() + "-" + logIndex.toString()
+  let e = new ManagerEvent(id)
+  e.escrow = escrowId.toString()
+  e.escrowId = escrowId
+  e.manager = manager
+  e.action = action
+  e.timestamp = timestamp
+  e.blockNumber = blockNumber
+  e.txHash = txHash
+  e.save()
+}
+
+export function handleJobManagerSet(event: JobManagerSet): void {
+  let escrow = Escrow.load(event.params.escrowId.toString())
+  if (escrow != null) {
+    escrow.jobManager = event.params.manager
+    escrow.updatedAt = event.block.timestamp
+    escrow.save()
+  }
+
+  recordManagerEvent(
+    event.params.escrowId,
+    event.params.manager,
+    "set",
+    event.transaction.hash,
+    event.logIndex,
+    event.block.timestamp,
+    event.block.number,
+  )
+}
+
+export function handleJobManagerRevoked(event: JobManagerRevoked): void {
+  let escrow = Escrow.load(event.params.escrowId.toString())
+  if (escrow != null) {
+    // Cleared, not left pointing at the old agent. A stale pointer here would
+    // make a revoked manager look authorised to anything reading the subgraph,
+    // which includes the daemon deciding whether to keep working the job.
+    escrow.jobManager = null
+    escrow.updatedAt = event.block.timestamp
+    escrow.save()
+  }
+
+  recordManagerEvent(
+    event.params.escrowId,
+    event.params.manager,
+    "revoked",
+    event.transaction.hash,
+    event.logIndex,
+    event.block.timestamp,
+    event.block.number,
+  )
 }
