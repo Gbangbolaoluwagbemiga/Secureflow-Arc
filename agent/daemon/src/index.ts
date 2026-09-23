@@ -970,6 +970,24 @@ const server = http.createServer(async (req, res) => {
       // 1-in-9 during the llama-3.3 decommission.
       model: config.groqModel,
       fallbackModel: config.groqFallbackModel,
+      /*
+       * Same argument as the model above, for the chain.
+       *
+       * A daemon on the right code, reading the right contract address over
+       * the wrong network, is indistinguishable from outside: every call is
+       * answered, nothing is deployed at that address there, and the board
+       * comes back empty rather than failing. Diagnosing it from out here
+       * meant guessing at environment variables. Now it answers.
+       */
+      chain: {
+        network: arcNetwork.name,
+        chainId: arcChain.id,
+        escrow: config.atelierAddress,
+        rpc: rpcUrl,
+        logRpc: logRpcUrl,
+        fromBlock: config.atelierDeployBlock.toString(),
+        logRangeLimit: config.logRangeLimit.toString(),
+      },
       hireScoreThreshold: config.hireScoreThreshold,
       disputeBackfill: backfillState,
     });
