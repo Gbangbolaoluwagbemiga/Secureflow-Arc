@@ -19,7 +19,7 @@ and then show the whole thing running on mainnet.
 
 ## 0:30 — USDC
 
-**On screen: `agent/daemon/src/config.ts`, lines 188 to 192**
+**On screen: `agent/daemon/src/config.ts`, lines 188 and 189**
 
 USDC on Arc is the native gas token, exposed as an ERC-20 at the predeploy
 address `0x3600000000000000000000000000000000000000`. That is this line.
@@ -74,7 +74,7 @@ any freelancer applies, and the milestones are fixed at the same moment.
 freelancer. There is no administrative withdrawal, no pause that moves funds,
 and no owner sweep, because every rescue function is also a rug.
 
-The contract is a UUPS proxy on Arc mainnet, covered by 193 contract tests
+The contract is a UUPS proxy on Arc mainnet, covered by 204 contract tests
 including invariant suites and a Uniswap v4 fork suite. Three internal review
 passes produced eight findings, each fixed with a regression test that fails
 against the vulnerable code.
@@ -90,11 +90,18 @@ browse open jobs, apply, and submit work, without installing anything.
 
 The client approves the milestone.
 
-**On screen: the transaction on explorer.arc.io**
+**On screen: My Jobs, both jobs completed**
 
-0.502747 USDC, released to that freelancer on milestone approval, on Arc
-mainnet, on 24 September 2026. Every escrow, application, approval and payout
-on this platform is public at that address.
+Two jobs are finished. 15.51 USDC has been released to two different
+freelancers on Arc mainnet, and each of them has been rated five out of five
+with a written review. The second one came through a revision cycle first: the
+client sent the work back, the freelancer was shown the reason, answered it and
+resubmitted.
+
+**On screen: explorer.arc.io**
+
+Every escrow, application, approval and payout on this platform is public at
+that address.
 
 ---
 
@@ -102,6 +109,11 @@ on this platform is public at that address.
 
 | Circle product | Where in the codebase |
 |---|---|
-| USDC | `agent/daemon/src/config.ts:190` (native token address), `agent/daemon/src/workers/wallets.ts:156` (`dripGas`) |
+| USDC | `agent/daemon/src/config.ts:188` (native token address), `agent/daemon/src/workers/wallets.ts:156` (`dripGas`) |
 | Circle Wallets | `agent/daemon/src/circle/circleSigner.ts:131` (`createCircleSigner`), `agent/daemon/src/workers/wallets.ts:105` (`provisionWorkerWallet`) |
 | Contracts | `app/contracts/solidity/src/SecureFlow.sol:443` (`createEscrow`), `:606` (`approveMilestone`), deployed at `0xbdeb44945979a01584fd7d796a71C707D2F83372` |
+
+Every line reference above was re-verified against `main` on 25 September 2026.
+
+**Not claimed:** Circle Gateway appears in `agent/daemon/src/circle/gateway.ts`
+but nothing calls it, so it is not listed as a product in use.
