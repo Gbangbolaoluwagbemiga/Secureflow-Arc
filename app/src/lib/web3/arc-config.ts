@@ -1,3 +1,19 @@
+/*
+ * USDC IS THE NATIVE TOKEN HERE, AND IT IS 18 DECIMALS — NOT 6.
+ *
+ * Both of these said 6, because USDC is a 6-decimal token everywhere else and
+ * that is what everyone assumes. On Arc it is also the gas token, and the
+ * native balance is scaled like any other EVM native unit: 18.
+ *
+ * Measured, not assumed — a 1 USDC transfer to the agent wallet arrived as
+ * exactly 1e18, and three separate addresses only read sanely at 1e18 against
+ * what MetaMask and the app itself display. Testnet is the same.
+ *
+ * Both scales are live in this app and both are correct in their place: the
+ * escrow contract moves USDC through the predeploy at 6 decimals (a 0.5 USDC
+ * job is 500000 on chain), while the balance that pays for gas is 18. The
+ * declaration below is only ever about the second one.
+ */
 const ARC_TESTNET_CHAIN_ID = 5042002;
 const ARC_MAINNET_CHAIN_ID = 5042;
 
@@ -7,14 +23,14 @@ export const ARC_NETWORKS = {
     name: "Arc Testnet",
     rpcUrl: "https://rpc.drpc.testnet.arc.network",
     blockExplorer: "https://testnet.arcscan.app",
-    nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
+    nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
   },
   mainnet: {
     chainId: ARC_MAINNET_CHAIN_ID,
     name: "Arc",
     rpcUrl: "https://rpc.mainnet.arc.io",
     blockExplorer: "https://explorer.arc.io",
-    nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 6 },
+    nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
   },
 } as const;
 
