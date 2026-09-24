@@ -23,10 +23,20 @@ vi.mock("@/contexts/notification-context", () => ({
 }));
 
 const getApplicationDetailsMock = vi.fn();
+/* The card reads the applicant COUNT through this one, separately from the
+   cover letters. Stubbed explicitly: without it the call merely threw and the
+   row stayed hidden for the wrong reason, which is not the same as passing. */
+const getApplicationsMock = vi.fn().mockResolvedValue([]);
+/* The card runs two effects on mount, each doing its own chain read. Neither
+   was stubbed, so both threw, and which one threw first decided how long the
+   render took — enough to make this file fail about one run in four. */
+const supportsMilestoneEditingMock = vi.fn().mockResolvedValue(true);
 const cancelJobMock = vi.fn().mockResolvedValue("0xtxhash");
 vi.mock("@/lib/web3/contract-service", () => ({
   ContractService: vi.fn().mockImplementation(function MockContractService(this: any) {
     this.getApplicationDetails = getApplicationDetailsMock;
+    this.getApplications = getApplicationsMock;
+    this.supportsMilestoneEditing = supportsMilestoneEditingMock;
     this.cancelJob = cancelJobMock;
   }),
 }));
@@ -40,6 +50,8 @@ beforeEach(() => {
   addCrossWalletNotificationMock.mockClear();
   cancelJobMock.mockClear();
   getApplicationDetailsMock.mockReset();
+  getApplicationsMock.mockReset();
+  getApplicationsMock.mockResolvedValue([]);
   getApplicationDetailsMock.mockResolvedValue([
     { freelancer: APPLICANT_A, coverLetter: "", proposedTimeline: 0 },
     { freelancer: APPLICANT_B, coverLetter: "", proposedTimeline: 0 },
