@@ -15,6 +15,7 @@ import { Star } from "lucide-react";
 import { contractService } from "@/lib/web3/contract-service";
 import { useToast } from "@/hooks/use-toast";
 import { useWeb3 } from "@/contexts/web3-context";
+import { toastError } from "@/lib/atelier/errors";
 import {
   createRatingNotification,
   useNotifications,
@@ -103,12 +104,7 @@ export function RatingDialog({
       onOpenChange(false);
       onRatingSubmitted?.();
     } catch (error: any) {
-      toast({
-        title: "Rating Failed",
-        description:
-          error?.message || "Could not submit rating. Please try again.",
-        variant: "destructive",
-      });
+      toast(toastError("Could not submit your rating", error));
     } finally {
       setSubmitting(false);
     }

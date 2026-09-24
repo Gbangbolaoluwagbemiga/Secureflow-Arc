@@ -10,6 +10,7 @@ import {
 import { useWeb3 } from "./web3-context";
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
+import { toastError } from "@/lib/atelier/errors";
 
 
 interface Delegation {
@@ -144,11 +145,7 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
       // Delegation created successfully
       return delegation.id;
     } catch (error: any) {
-      toast({
-        title: "Delegation Failed",
-        description: error.message || "Failed to create delegation",
-        variant: "destructive",
-      });
+      toast(toastError("Could not hand this over", error));
       throw error;
     }
   };
@@ -168,11 +165,7 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
         description: "Delegation has been successfully revoked",
       });
     } catch (error: any) {
-      toast({
-        title: "Revocation Failed",
-        description: error.message || "Failed to revoke delegation",
-        variant: "destructive",
-      });
+      toast(toastError("Could not take this back", error));
       throw error;
     }
   };
@@ -223,11 +216,7 @@ export function DelegationProvider({ children }: { children: ReactNode }) {
       // Transaction successful
       return txHash;
     } catch (error: any) {
-      toast({
-        title: "Execution Failed",
-        description: error.message || "Failed to execute delegated function",
-        variant: "destructive",
-      });
+      toast(toastError("Could not run that action", error));
       throw error;
     }
   };

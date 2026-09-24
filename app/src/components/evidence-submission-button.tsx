@@ -18,6 +18,7 @@ import { useNotifications } from "@/contexts/notification-context";
 import { useToast } from "@/hooks/use-toast";
 import { CONTRACTS } from "@/lib/web3/config";
 import { FileText, Upload, Loader2 } from "lucide-react";
+import { toastError } from "@/lib/atelier/errors";
 
 interface EvidenceSubmissionButtonProps {
   escrowId: string;
@@ -109,11 +110,7 @@ export function EvidenceSubmissionButton({
       setDialogOpen(false);
       onEvidenceSubmitted?.();
     } catch (error: any) {
-      toast({
-        title: "Failed to submit evidence",
-        description: error?.message || "Something went wrong",
-        variant: "destructive",
-      });
+      toast(toastError("Could not submit your evidence", error));
     } finally {
       setSubmitting(false);
     }

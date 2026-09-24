@@ -16,6 +16,7 @@ import { useWeb3 } from "@/contexts/web3-context";
 import { ContractService } from "@/lib/web3/contract-service";
 import { CONTRACTS } from "@/lib/web3/config";
 import { sendMessage, isApiConfigured } from "@/lib/api";
+import { humanizeError } from "@/lib/atelier/errors";
 
 /**
  * SAYING NO TO A JOB SOMEBODY PUT YOUR NAME ON.
@@ -94,7 +95,7 @@ export function DeclineAssignment({
     } catch (err: unknown) {
       toast({
         title: "Could not decline",
-        description: err instanceof Error ? err.message : String(err),
+        description: humanizeError(err),
         variant: "destructive",
       });
     } finally {

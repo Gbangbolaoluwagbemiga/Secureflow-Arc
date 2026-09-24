@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useWeb3 } from "@/contexts/web3-context";
 import { CONTRACTS } from "@/lib/web3/config";
 import { Check, X, Edit, MessageSquare } from "lucide-react";
+import { humanizeError } from "@/lib/atelier/errors";
 import {
   Dialog,
   DialogContent,
@@ -152,7 +153,7 @@ export function MilestoneNegotiation({
       } else {
         toast({
           title: "Proposal Failed",
-          description: errorMsg,
+          description: humanizeError(error),
           variant: "destructive",
         });
       }
@@ -239,7 +240,7 @@ export function MilestoneNegotiation({
       } else {
         toast({
           title: "Approval Failed",
-          description: errorMsg,
+          description: humanizeError(error),
           variant: "destructive",
         });
       }
@@ -313,7 +314,7 @@ export function MilestoneNegotiation({
       } else {
         toast({
           title: "Rejection Failed",
-          description: errorMsg,
+          description: humanizeError(error),
           variant: "destructive",
         });
       }

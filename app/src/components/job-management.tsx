@@ -31,6 +31,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { formatTokenAmount } from "@/lib/utils";
+import { toastError } from "@/lib/atelier/errors";
 
 interface MilestoneSummary {
   index: number;
@@ -179,7 +180,7 @@ export function JobManagement({
       setSelectedAddMilestone(milestones.length === 1 ? 0 : null);
       onUpdate?.();
     } catch (error: any) {
-      toast({ title: "Failed to add funds", description: error.message || "Transaction failed", variant: "destructive" });
+      toast(toastError("Could not add funds", error));
     } finally {
       setIsSubmitting(false);
     }
@@ -245,7 +246,7 @@ export function JobManagement({
       setSelectedWithdrawMilestone(milestones.length === 1 ? 0 : null);
       onUpdate?.();
     } catch (error: any) {
-      toast({ title: "Failed to withdraw", description: error.message || "Transaction failed", variant: "destructive" });
+      toast(toastError("Could not withdraw", error));
     } finally {
       setIsSubmitting(false);
     }
@@ -287,7 +288,7 @@ export function JobManagement({
 
       onUpdate?.();
     } catch (error: any) {
-      toast({ title: "Failed to cancel", description: error.message || "Transaction failed", variant: "destructive" });
+      toast(toastError("Could not cancel this job", error));
     } finally {
       setIsSubmitting(false);
     }
@@ -395,11 +396,7 @@ export function JobManagement({
       setEditOpen(false);
       onUpdate?.();
     } catch (error: any) {
-      toast({
-        title: "Could not update the stages",
-        description: error?.shortMessage || error?.message || "Transaction failed",
-        variant: "destructive",
-      });
+      toast(toastError("Could not update the stages", error));
     } finally {
       setIsSubmitting(false);
     }

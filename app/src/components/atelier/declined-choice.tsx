@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { ContractService } from "@/lib/web3/contract-service";
 import { CONTRACTS } from "@/lib/web3/config";
+import { humanizeError } from "@/lib/atelier/errors";
 
 /**
  * WHAT HAPPENS TO A JOB THE FREELANCER HANDED BACK.
@@ -58,7 +59,7 @@ export function DeclinedChoice({
     } catch (err: unknown) {
       toast({
         title: "That didn't go through",
-        description: err instanceof Error ? err.message : String(err),
+        description: humanizeError(err),
         variant: "destructive",
       });
     } finally {

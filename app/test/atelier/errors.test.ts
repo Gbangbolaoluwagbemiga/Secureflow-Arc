@@ -11,7 +11,7 @@ const VIEM_REJECTION = `User rejected the request. Request Arguments: chain: Arc
 describe("wallet failures", () => {
   it("says you cancelled it, and nothing else", () => {
     const out = humanizeError(new Error(VIEM_REJECTION));
-    expect(out).toBe("You cancelled the transaction in your wallet.");
+    expect(out).toBe("You cancelled this in your wallet. No money moved.");
     expect(out).not.toMatch(/0x|viem|Request Arguments/);
   });
 
@@ -21,7 +21,7 @@ describe("wallet failures", () => {
       "ACTION_REJECTED",
       "MetaMask Tx Signature: User rejected the request.",
     ]) {
-      expect(humanizeError(new Error(m))).toMatch(/cancelled the transaction/i);
+      expect(humanizeError(new Error(m))).toMatch(/cancelled this in your wallet/i);
     }
   });
 
@@ -99,6 +99,6 @@ describe("anything else", () => {
     const inner = new Error("User rejected the request.");
     const outer = new Error("Transaction failed");
     (outer as Error & { cause?: unknown }).cause = inner;
-    expect(humanizeError(outer)).toMatch(/cancelled the transaction/i);
+    expect(humanizeError(outer)).toMatch(/cancelled this in your wallet/i);
   });
 });
