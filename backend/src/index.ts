@@ -168,10 +168,50 @@ app.get("/health", async (_req, res) => {
     }
   }
 
+  /*
+   * WHICH CHAIN THIS API IS READING, SAID OUT LOUD.
+   *
+   * The upload route verifies that whoever is uploading is a party to the
+   * escrow, by reading the escrow from chain. Contract address and RPC are
+   * separate variables with testnet defaults spelled three different ways
+   * across three files — so a backend on the right code, pointed at the right
+   * contract over the wrong network, answers every call, finds nothing at that
+   * address, and rejects the upload with "Could not verify escrow — check
+   * escrow_id". The escrow id is fine. Nothing says the two disagree.
+   *
+   * The daemon's /healthz reports the same thing for the same reason.
+   */
+  /** The two live deployments. Neither has any code on the other's chain. */
+  const MAINNET_ESCROW = "0xbdeb44945979a01584fd7d796a71c707d2f83372";
+  const TESTNET_ESCROW = "0x6142bf4855d4f9dbc1cd8109377d4f4e2af1ab59";
+
+  const rpc = process.env.ARC_RPC_URL?.trim() || "";
+  const contract = process.env.CONTRACT_ADDRESS?.trim() || "";
+
+  const byContract =
+    contract.toLowerCase() === MAINNET_ESCROW
+      ? "mainnet"
+      : contract.toLowerCase() === TESTNET_ESCROW
+        ? "testnet"
+        : contract
+          ? "unrecognised"
+          : "unset";
+  /* Unset means the defaults apply, and every one of those is testnet. */
+  const byRpc = !rpc || /testnet/i.test(rpc) ? "testnet" : "mainnet";
+
   res.json({
     ok: true,
     groq: !!process.env.GROQ_API_KEY,
     supabase,
+    chain: {
+      rpc: rpc || "(unset — defaults to testnet)",
+      contract: contract || "(unset)",
+      contractSaysNetwork: byContract,
+      rpcSaysNetwork: byRpc,
+      /* null when the address is not one of the two known deployments, because
+         then there is nothing honest to compare it against. */
+      agrees: byContract === "unset" || byContract === "unrecognised" ? null : byContract === byRpc,
+    },
   });
 });
 
