@@ -418,151 +418,122 @@ export class ContractService {
     } catch { return []; }
   }
 
+  /**
+   * Who applied, and what they actually wrote.
+   *
+   * THE COVER LETTER USED TO EVAPORATE AFTER ABOUT AN HOUR.
+   *
+   * The applicant list is a contract getter and always correct. The cover
+   * letter and proposed timeline are not stored — they live only in the
+   * ApplicationSubmitted event — and this read them with a single getLogs
+   * over the last 9,000 blocks. Arc produces roughly 2.4 blocks a second, so
+   * that window is about an hour wide. Past it the logs came back empty, the
+   * code filled every applicant in with `coverLetter: ''`, and the client was
+   * shown "No cover letter provided" and "Timeline not specified" for somebody
+   * who had written both. No error, no gap, just a confident blank — the same
+   * failure the dispute_resolutions migration was written to fix elsewhere.
+   *
+   * So it walks backwards in windows the RPC will actually answer, and stops
+   * the moment every applicant is accounted for. escrowId is an indexed topic,
+   * so each call is filtered by the node rather than here: a job applied to
+   * this morning costs one request, and the loop only grinds for one that has
+   * been open a long time.
+   *
+   * MAX_WINDOWS bounds that grinding. Past it the remaining applicants come
+   * back with empty text, as before — the durable fix is the `applications`
+   * table behind /v1/applications/:escrowId, which has no window at all.
+   */
   async getApplicationDetails(escrowId: number): Promise<Array<{
     freelancer: string;
     coverLetter: string;
     proposedTimeline: number;
+    appliedAt?: number;
   }>> {
+    let addresses: string[] = [];
     try {
-      // Get the list of freelancers who applied from storage
-      const addresses = await this.contract.read.getEscrowApplications([BigInt(escrowId)]) as string[];
-      
-      if (addresses.length === 0) {
-        return [];
-      }
-
-      const applications: Array<{
-        freelancer: string;
-        coverLetter: string;
-        proposedTimeline: number;
-      }> = [];
-
-      // Get current block number
-      const currentBlock = await this.client.getBlockNumber();
-      
-      // Arc Testnet RPC limit: max 10000 blocks per query
-      // Search last 9000 blocks to stay under limit
-      const fromBlock = currentBlock > 9000n ? currentBlock - 9000n : 0n;
-
-      // Get ApplicationSubmitted events for this escrow
-      const { parseEventLogs } = await import('viem');
-      
-      try {
-        const logs = await this.client.getLogs({
-          address: this.contract.address as Address,
-          fromBlock,
-          toBlock: 'latest'
-        });
-
-        // Parse the events
-        const parsedLogs = parseEventLogs({
-          abi: AtelierABI.abi,
-          logs: logs as any[]
-        });
-
-        for (const log of parsedLogs) {
-          if ((log as any).eventName === 'ApplicationSubmitted') {
-            const args = (log as any).args as {
-              escrowId: bigint;
-              freelancer: string;
-              coverLetter: string;
-              proposedTimeline: bigint;
-            };
-
-            // Only include applications for this escrow
-            if (Number(args.escrowId) !== escrowId) {
-              continue;
-            }
-
-            applications.push({
-              freelancer: args.freelancer.toLowerCase(),
-              coverLetter: args.coverLetter || '',
-              proposedTimeline: Number(args.proposedTimeline) || 0
-            });
-          }
-        }
-
-        // If we found events but some addresses are missing, add them with empty data
-        for (const addr of addresses) {
-          const found = applications.find(app => app.freelancer.toLowerCase() === addr.toLowerCase());
-          if (!found) {
-            applications.push({
-              freelancer: addr,
-              coverLetter: '',
-              proposedTimeline: 0
-            });
-          }
-        }
-
-      } catch (eventError) {
-        // Fallback: decode transactions
-        const allLogs = await this.client.getLogs({
-          address: this.contract.address as Address,
-          fromBlock,
-          toBlock: 'latest'
-        });
-
-        for (const freelancerAddress of addresses) {
-          let found = false;
-          
-          for (const log of allLogs) {
-            try {
-              const tx = await this.client.getTransaction({
-                hash: log.transactionHash as `0x${string}`
-              });
-
-              if (tx.from.toLowerCase() !== freelancerAddress.toLowerCase()) {
-                continue;
-              }
-
-              const { decodeFunctionData } = await import('viem');
-              const decoded = decodeFunctionData({
-                abi: AtelierABI.abi,
-                data: tx.input
-              });
-
-              if (decoded.functionName === 'applyToJob') {
-                const [txEscrowId, coverLetter, proposedTimeline] = decoded.args as [bigint, string, bigint];
-                
-                if (Number(txEscrowId) === escrowId) {
-                  applications.push({
-                    freelancer: freelancerAddress,
-                    coverLetter: coverLetter || '',
-                    proposedTimeline: Number(proposedTimeline) || 0
-                  });
-                  found = true;
-                  break;
-                }
-              }
-            } catch (txError) {
-              continue;
-            }
-          }
-
-          if (!found) {
-            applications.push({
-              freelancer: freelancerAddress,
-              coverLetter: '',
-              proposedTimeline: 0
-            });
-          }
-        }
-      }
-
-      return applications;
-    } catch (error) {
-      // Final fallback: return addresses with empty data
-      try {
-        const addresses = await this.contract.read.getEscrowApplications([BigInt(escrowId)]) as string[];
-        return addresses.map((addr: string) => ({
-          freelancer: addr,
-          coverLetter: '',
-          proposedTimeline: 0
-        }));
-      } catch (fallbackError) {
-        return [];
-      }
+      addresses = await this.contract.read.getEscrowApplications([BigInt(escrowId)]) as string[];
+    } catch {
+      return [];
     }
+    if (!addresses || addresses.length === 0) return [];
+
+    const found = new Map<string, { coverLetter: string; proposedTimeline: number; appliedAt?: number }>();
+    const wanted = new Set(addresses.map((a) => a.toLowerCase()));
+
+    try {
+      const { parseAbiItem } = await import('viem');
+      const event = parseAbiItem(
+        'event ApplicationSubmitted(uint256 indexed escrowId, address indexed freelancer, string coverLetter, uint256 proposedTimeline)',
+      );
+
+      /** What this RPC will answer in one getLogs call. */
+      const WINDOW = 9000n;
+      /** ~540k blocks back, about two and a half days on Arc. */
+      const MAX_WINDOWS = 60;
+
+      let toBlock = await this.client.getBlockNumber();
+
+      for (let i = 0; i < MAX_WINDOWS && found.size < wanted.size && toBlock > 0n; i++) {
+        const fromBlock = toBlock > WINDOW ? toBlock - WINDOW : 0n;
+
+        let logs: Awaited<ReturnType<typeof this.client.getLogs>> = [];
+        try {
+          logs = await this.client.getLogs({
+            address: this.contract.address as Address,
+            event,
+            args: { escrowId: BigInt(escrowId) },
+            fromBlock,
+            toBlock,
+          });
+        } catch {
+          /* One unanswered window is not the end of the search — the next is a
+             different range and the node may well answer it. */
+        }
+
+        for (const log of logs) {
+          const args = (log as unknown as {
+            args?: { freelancer?: string; coverLetter?: string; proposedTimeline?: bigint };
+            blockNumber?: bigint;
+          }).args;
+          const who = args?.freelancer?.toLowerCase();
+          if (!who || !wanted.has(who) || found.has(who)) continue;
+
+          let appliedAt: number | undefined;
+          try {
+            const block = await this.client.getBlock({
+              blockNumber: (log as unknown as { blockNumber: bigint }).blockNumber,
+            });
+            appliedAt = Number(block.timestamp) * 1000;
+          } catch {
+            /* The text is the point; a missing timestamp only costs the date. */
+          }
+
+          found.set(who, {
+            coverLetter: args?.coverLetter ?? '',
+            proposedTimeline: Number(args?.proposedTimeline ?? 0),
+            appliedAt,
+          });
+        }
+
+        if (fromBlock === 0n) break;
+        toBlock = fromBlock - 1n;
+      }
+    } catch {
+      /* Fall through: the addresses are still worth returning. */
+    }
+
+    /* Every applicant appears, in the order the contract lists them, whether or
+       not their text was recovered. An applicant missing from this list would
+       be a person the client never sees. */
+    return addresses.map((addr) => {
+      const hit = found.get(addr.toLowerCase());
+      return {
+        freelancer: addr.toLowerCase(),
+        coverLetter: hit?.coverLetter ?? '',
+        proposedTimeline: hit?.proposedTimeline ?? 0,
+        appliedAt: hit?.appliedAt,
+      };
+    });
   }
 
   async hasUserApplied(escrowId: number, addr: string): Promise<boolean> {
