@@ -72,6 +72,8 @@ export interface EscrowSummary {
   depositor: string;
   projectTitle: string;
   projectDescription: string;
+  /** Net of the platform fee, in USDC base units — 6 decimals, not 18. */
+  totalAmount: bigint;
 }
 
 export async function readEscrow(escrowId: string): Promise<EscrowSummary> {
@@ -138,7 +140,34 @@ export async function previewCriteria(escrowId: string): Promise<{
       /* fall through and regenerate */
     }
   }
-  const source = `${esc.projectTitle}\n\n${esc.projectDescription}`;
+  /*
+   * THE BUDGET IS ALREADY DECIDED. DO NOT LET THE MODEL GUESS IT.
+   *
+   * This passed the title and description alone, so generateBrief asked the
+   * model to propose a budget too — and validateBrief then measured that
+   * invented figure against MAX_JOB_BUDGET_USDC. A 0.51 USDC job whose
+   * description mentioned a "billion-dollar enterprise" came back as $500 and
+   * threw, so the whole preview 500'd and the hand-over dialog told the client
+   * Autopilot could not be reached. Autopilot was fine; it had been asked the
+   * wrong question.
+   *
+   * That cap is there to stop the agent OPENING an escrow bigger than the
+   * operator intends. This escrow already exists and its money is already
+   * locked, so there is nothing left to cap — the only thing wanted here is
+   * the criteria.
+   *
+   * Stating the real figure is better than skipping the check: extractStatedBudget
+   * finds it, the client's own number wins over the model's, and the milestones
+   * come back scaled to the money that is actually there.
+   */
+  const budgetUsdc = Number(esc.totalAmount) / 1e6;
+  const source = [
+    esc.projectTitle,
+    "",
+    esc.projectDescription,
+    "",
+    `Budget: ${budgetUsdc} USDC`,
+  ].join("\n");
   const { brief } = await generateBrief(source);
 
   const out = {
