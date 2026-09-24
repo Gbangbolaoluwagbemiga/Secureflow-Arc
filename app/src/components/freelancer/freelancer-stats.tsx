@@ -40,13 +40,22 @@ export function FreelancerStats({
     0
   );
 
-  // Helper function to check if an escrow has/had issues (disputed, rejected, or resolved-via-dispute)
+  /*
+   * A JOB WITH WORK SENT BACK IS STILL A LIVE JOB.
+   *
+   * This counted a `rejected` milestone as terminated, so a freelancer who was
+   * asked to revise saw their project in the Disputed tile — alongside jobs
+   * genuinely in arbitration — while the escrow was still InProgress on chain
+   * and the money still theirs to earn. A rejection is the ordinary middle of
+   * a job, not the end of one.
+   *
+   * `resolved` stays: a milestone that went through arbitration did have a
+   * dispute, whichever way it landed.
+   */
   const isEscrowTerminated = (escrow: any) => {
     return escrow.milestones.some(
       (milestone: any) =>
-        milestone.status === "disputed" ||
-        milestone.status === "rejected" ||
-        milestone.status === "resolved"
+        milestone.status === "disputed" || milestone.status === "resolved"
     );
   };
 

@@ -1431,6 +1431,9 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
         return "bg-purple-100 text-purple-800";
       case "disputed":
         return "bg-red-100 text-red-800";
+      case "rejected":
+        /* Amber: needs you, but nothing is lost. Not the red of a dispute. */
+        return "bg-amber-100 text-amber-900";
       case "terminated":
         return "bg-muted text-muted-foreground";
       default:
@@ -1675,25 +1678,35 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                             </CardDescription>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Badge
-                              className={getStatusColor(
-                                escrow.milestones.some(
-                                  (m) =>
-                                    m.status === "disputed" ||
-                                    m.status === "rejected"
-                                )
-                                  ? "terminated"
-                                  : escrow.status
-                              )}
-                            >
-                              {escrow.milestones.some(
-                                (m) =>
-                                  m.status === "disputed" ||
-                                  m.status === "rejected"
-                              )
-                                ? "terminated"
-                                : escrow.status}
-                            </Badge>
+                            {/*
+                              A REJECTED MILESTONE IS NOT A DEAD JOB.
+                              Rejection means revise and resubmit — the escrow
+                              stays InProgress on chain and the money stays
+                              locked. This showed "terminated" for it, which is
+                              the most discouraging thing it could possibly say
+                              to the one person who can still fix it: their work
+                              was sent back, and the app told them it was over.
+                              Only a live dispute is genuinely out of their
+                              hands, and even that resolves.
+                            */}
+                            {(() => {
+                              const disputed = escrow.milestones.some(
+                                (m) => m.status === "disputed",
+                              );
+                              const needsRevision =
+                                !disputed &&
+                                escrow.milestones.some((m) => m.status === "rejected");
+                              const label = disputed
+                                ? "disputed"
+                                : needsRevision
+                                  ? "revision requested"
+                                  : escrow.status;
+                              return (
+                                <Badge className={getStatusColor(disputed ? "disputed" : needsRevision ? "rejected" : escrow.status)}>
+                                  {label}
+                                </Badge>
+                              );
+                            })()}
                             {escrow.payer && wallet.address && isApiConfigured() && (
                               <Button
                                 variant="outline"
