@@ -161,6 +161,24 @@ export function YieldOptIn({
   }
 
   if (!state?.optedIn) return null;
+  /*
+   * OPTED IN IS NOT THE SAME AS EARNING.
+   *
+   * `available` is already computed correctly: it is false when the controller
+   * has no adapter for this token, because then there is nowhere for the money
+   * to go. It gated the opt-in OFFER but not this badge, so an escrow that had
+   * opted in kept advertising "Escrow yield" after the venue went away, or
+   * before one ever existed.
+   *
+   * That was the state on mainnet: yieldAdapter(USDC) is the zero address,
+   * deployedAssets is 0, escrowYield is 0, and the card said the money was
+   * earning. A client reads that and believes something about their money that
+   * the contract cannot do.
+   *
+   * The opt-in is still recorded on chain and still honoured the moment an
+   * adapter is wired. This only stops claiming it is happening already.
+   */
+  if (!state.available) return null;
   if (settled) return null;
 
   const share = state.freelancerShareBP
