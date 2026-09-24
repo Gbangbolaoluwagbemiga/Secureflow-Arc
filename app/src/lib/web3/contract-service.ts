@@ -70,8 +70,38 @@ export class ContractService {
 
   /* ─── READ METHODS ─── */
 
+  /**
+   * How many escrows exist, plus one.
+   *
+   * RETRIED, BECAUSE 1 IS ALSO A REAL ANSWER.
+   *
+   * This returned 1 when the read failed, and 1 means "no escrows have ever
+   * been created". Browse Freelancers loops `for (i = 1; i < nextId; i++)`, so
+   * a single rate-limited call turned the whole platform into "No freelancers
+   * found yet" — on a day with a completed job and a five-star rating on it.
+   * No error, no retry, nothing to indicate the page had simply failed to ask.
+   *
+   * Same shape as the bug in getUserEscrows: a read that could not reach its
+   * source is not the same answer as an empty one. The public RPC rate-limits
+   * (HTTP 429), and the moment it is most likely to is right after a
+   * transaction, when every surface refetches at once.
+   *
+   * Three attempts with a widening gap. If they all fail it still returns 1,
+   * because callers have no other shape to accept, but the log says so.
+   */
   async getNextEscrowId(): Promise<number> {
-    try { return Number(await this.contract.read.nextEscrowId()); } catch { return 1; }
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return Number(await this.contract.read.nextEscrowId());
+      } catch (err) {
+        if (attempt === 2) {
+          console.warn("[contract] getNextEscrowId failed after 3 attempts:", err);
+          return 1;
+        }
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      }
+    }
+    return 1;
   }
 
   async getEscrow(id: number) {
