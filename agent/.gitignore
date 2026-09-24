@@ -12,3 +12,8 @@ dist/
 
 # Runtime data
 daemon/data/*.db
+
+# Circle's entity-secret recovery file. The only way back into the account if
+# the secret is lost, and it is written into this directory by circle:entity.
+recovery_file.dat
+*.dat
