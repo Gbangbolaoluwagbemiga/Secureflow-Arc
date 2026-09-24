@@ -138,8 +138,6 @@ export const arcChain = defineChain({
   testnet: network.isTestnet,
 });
 
-/** The name two dozen modules already import. */
-export const arcTestnet = arcChain;
 
 /*
  * EXPLORER LINKS FOLLOW THE NETWORK TOO.

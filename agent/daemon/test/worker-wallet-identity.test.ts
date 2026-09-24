@@ -26,7 +26,7 @@ vi.mock("@circle-fin/developer-controlled-wallets", () => ({
 vi.mock("../src/circle/circleSigner.js", () => ({ createCircleSigner: vi.fn() }));
 vi.mock("../src/config.js", () => ({
   arcNetwork: { isTestnet: false },
-  arcTestnet: { id: 5042 },
+  arcChain: { id: 5042 },
   rpcUrl: "https://rpc.mainnet.arc.io",
   config: {
     circleApiKey: "k",
