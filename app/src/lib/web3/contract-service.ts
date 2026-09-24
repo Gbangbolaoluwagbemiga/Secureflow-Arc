@@ -368,11 +368,40 @@ export class ContractService {
     return out;
   }
 
+  /**
+   * Every escrow id this wallet is on, as either party.
+   *
+   * RETRIED, BECAUSE "THE RPC SAID NO" USED TO MEAN "YOU HAVE NO JOBS".
+   *
+   * This is the first read behind My Jobs, the freelancer board, the nav tabs
+   * and the client dashboard — and it answered a failure with an empty array,
+   * which is a real and completely different answer. The public endpoint
+   * rate-limits (HTTP 429, "rate limit exceeded"), and the moment it is most
+   * likely to is straight after a transaction, when every surface refetches at
+   * once. So a freelancer pressed Start Work and their own job vanished:
+   * "No assigned projects", no error, nothing to retry. A hard refresh a
+   * minute later brought it back, which makes it look haunted rather than
+   * rate-limited.
+   *
+   * Three attempts with a widening gap costs nothing when the endpoint is
+   * healthy and covers the burst when it is not. If it still fails the answer
+   * is the old one — an empty list is the only shape callers accept — but it
+   * is now a genuinely exhausted read rather than the first 429 of a storm.
+   */
   async getUserEscrows(addr: string): Promise<number[]> {
-    try {
-      const ids = await this.contract.read.getUserEscrows([addr as Address]);
-      return (ids as bigint[]).map(Number);
-    } catch { return []; }
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const ids = await this.contract.read.getUserEscrows([addr as Address]);
+        return (ids as bigint[]).map(Number);
+      } catch (err) {
+        if (attempt === 2) {
+          console.warn("[contract] getUserEscrows failed after 3 attempts:", err);
+          return [];
+        }
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      }
+    }
+    return [];
   }
 
   async isPaused(): Promise<boolean> {
