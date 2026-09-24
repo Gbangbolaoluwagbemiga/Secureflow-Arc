@@ -92,6 +92,7 @@ import { RefreshCw, MessageCircle as MessageCircleFreelancer } from "lucide-reac
 import { Link } from "react-router-dom";
 import { formatEth, formatTokenAmount } from "@/lib/utils";
 import { archiveKey } from "@/lib/atelier/archive-key";
+import { AgentManagedBadge } from "@/components/atelier/agent-managed-badge";
 
 interface Escrow {
   id: string;
@@ -1707,6 +1708,12 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                                 </Badge>
                               );
                             })()}
+                            {/* Who is actually reading their submission. The
+                                client's side says AUTOPILOT in three places;
+                                this side said nothing. */}
+                            <AgentManagedBadge
+                              escrowId={escrow.id != null ? Number(escrow.id) : null}
+                            />
                             {escrow.payer && wallet.address && isApiConfigured() && (
                               <Button
                                 variant="outline"
