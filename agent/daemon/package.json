@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Patron's guild \u2014 the 24/7 Node daemon. AI agents pay Patron via x402; Patron hires, manages, and pays real humans through on-chain escrow on Arc.",
+  "description": "Patron's guild — the 24/7 Node daemon. AI agents pay Patron via x402; Patron hires, manages, and pays real humans through on-chain escrow on Arc.",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
@@ -14,7 +14,8 @@
     "e2e": "tsx scripts/e2e-loop.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "circle:dev-wallet": "tsx src/circle/dev-wallet.ts"
+    "circle:dev-wallet": "tsx src/circle/dev-wallet.ts",
+    "circle:entity": "tsx scripts/register-entity-secret.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.112.3",
