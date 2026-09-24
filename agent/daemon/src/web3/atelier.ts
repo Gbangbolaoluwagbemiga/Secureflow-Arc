@@ -11,7 +11,7 @@
 
 import { createPublicClient, http, zeroAddress, type Abi, type PublicClient } from "viem";
 import atelierAbi from "./AtelierABI.json" with { type: "json" };
-import { arcTestnet, config, logRpcUrl, rpcUrl } from "../config.js";
+import { arcTestnet, config, explorerTx, logRpcUrl, rpcUrl } from "../config.js";
 import { createCircleSigner, type CircleSigner } from "../circle/circleSigner.js";
 
 // Cast to viem's `Abi` type (not a tighter `as const` literal, since this is loaded
@@ -847,5 +847,5 @@ export async function getEscrowApplications(escrowId: bigint) {
 }
 
 export function explorerUrl(txHash: string): string {
-  return `https://testnet.arcscan.app/tx/${txHash}`;
+  return explorerTx(txHash);
 }
