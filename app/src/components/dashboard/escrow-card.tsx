@@ -24,7 +24,7 @@ import type { Escrow } from "@/lib/web3/types";
 import { encodeJobId } from "@/lib/id-codec";
 import { AutopilotControl } from "@/components/atelier/autopilot-control";
 import { useJobManager } from "@/hooks/use-job-manager";
-import { daysUntil, describeDaysLeft } from "@/lib/atelier/deadline";
+import { daysUntil, describeTimeRemaining } from "@/lib/atelier/deadline";
 import { JobDecisionLog } from "@/components/atelier/job-decision-log";
 import { PostDisputeChoice } from "@/components/atelier/post-dispute-choice";
 import { YieldOptIn } from "@/components/atelier/yield-opt-in";
@@ -246,16 +246,20 @@ export function EscrowCard({
                 </p>
               )}
               <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <div className="flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
-                  <span>
-                    {/* The same number the Days Left field shows, from the same
-                        helper. These disagreed by a day — one rounded, the
-                        other ceiled, and neither was reading the deadline. */}
-                    {describeDaysLeft(escrow.deadlineAt) ??
-                      `${Math.round(escrow.duration / (24 * 60 * 60))} days`}
-                  </span>
-                </div>
+                {/* The same number the Days Left field shows, from the same
+                    helper — these disagreed by a day once, and then disagreed
+                    again about whether a finished job still has time left.
+                    Null means the job has settled and there is no clock. */}
+                {(() => {
+                  const remaining = describeTimeRemaining(escrow);
+                  if (!remaining) return null;
+                  return (
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-4 w-4" />
+                      <span>{remaining}</span>
+                    </div>
+                  );
+                })()}
                 <div className="flex items-center gap-1">
                   <DollarSign className="h-4 w-4" />
                   <span>

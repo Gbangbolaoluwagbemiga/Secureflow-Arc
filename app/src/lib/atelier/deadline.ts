@@ -45,3 +45,51 @@ export function describeDaysLeft(deadlineAtMs: number | undefined, now = Date.no
   if (days === 0) return "due today";
   return days === 1 ? "1 day left" : `${days} days left`;
 }
+
+/**
+ * The statuses where the clock has stopped.
+ *
+ * "disputed" is deliberately not one of them: that job is still running, and
+ * its deadline still decides when an emergency refund unlocks.
+ */
+const SETTLED_STATUSES = new Set([
+  "completed",
+  "cancelled",
+  "refunded",
+  "expired",
+]);
+
+/** Is this job over, however it ended? */
+export function isSettled(status: string | undefined | null): boolean {
+  return typeof status === "string" && SETTLED_STATUSES.has(status.toLowerCase());
+}
+
+/**
+ * What belongs next to the clock icon on a card, or null for no clock at all.
+ *
+ * A finished job has no time left in it. A countdown beside a badge that
+ * already says "completed" does not read as leftover detail; it reads as a
+ * deadline somebody still has to meet, on work that was delivered, approved
+ * and paid for. One job on the dashboard was saying "20 days left" three
+ * weeks after it settled.
+ *
+ * The rule lives here rather than at each card, because the header and the
+ * detail field had already drifted apart once: the field knew to stop and the
+ * header did not.
+ */
+export function describeTimeRemaining(
+  escrow: { deadlineAt?: number; duration?: number; status?: string },
+  now = Date.now(),
+): string | null {
+  if (isSettled(escrow.status)) return null;
+
+  const fromDeadline = describeDaysLeft(escrow.deadlineAt, now);
+  if (fromDeadline) return fromDeadline;
+
+  /* No deadline stored. The duration is synthesised, but it has the right
+     order of magnitude, which beats showing nothing. Singular when it is one,
+     because "1 days" is nobody's English. */
+  const days = escrow.duration ? Math.round(escrow.duration / (24 * 60 * 60)) : 0;
+  if (days <= 0) return null;
+  return days === 1 ? "1 day" : `${days} days`;
+}

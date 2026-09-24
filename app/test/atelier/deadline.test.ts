@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { daysUntil, describeDaysLeft } from "@/lib/atelier/deadline";
+import { daysUntil, describeDaysLeft, describeTimeRemaining } from "@/lib/atelier/deadline";
 
 /**
  * ONE ANSWER, FROM THE ONE FIELD THE CHAIN STORES.
@@ -53,5 +53,41 @@ describe("how it reads", () => {
 
   it("stays silent with no deadline", () => {
     expect(describeDaysLeft(undefined, NOW)).toBeNull();
+  });
+});
+
+describe("a job that has finished", () => {
+  const NOW_ = 1_700_000_000_000;
+  const DAY_ = 24 * 60 * 60 * 1000;
+
+  it("stops counting down, however it ended", () => {
+    for (const status of ["completed", "cancelled", "refunded", "expired"]) {
+      expect(
+        describeTimeRemaining({ deadlineAt: NOW_ + 20 * DAY_, status }, NOW_),
+      ).toBeNull();
+    }
+  });
+
+  it("keeps counting while it is still running", () => {
+    expect(
+      describeTimeRemaining({ deadlineAt: NOW_ + 20 * DAY_, status: "active" }, NOW_),
+    ).toBe("20 days left");
+    // A dispute is not the end of a job, and the deadline still decides when
+    // an emergency refund unlocks.
+    expect(
+      describeTimeRemaining({ deadlineAt: NOW_ + 3 * DAY_, status: "disputed" }, NOW_),
+    ).toBe("3 days left");
+  });
+
+  it("does not care how the status was cased", () => {
+    expect(
+      describeTimeRemaining({ deadlineAt: NOW_ + 5 * DAY_, status: "Completed" }, NOW_),
+    ).toBeNull();
+  });
+
+  it("falls back to the duration when no deadline was stored, in English", () => {
+    expect(describeTimeRemaining({ duration: 86400, status: "active" }, NOW_)).toBe("1 day");
+    expect(describeTimeRemaining({ duration: 3 * 86400, status: "active" }, NOW_)).toBe("3 days");
+    expect(describeTimeRemaining({ status: "active" }, NOW_)).toBeNull();
   });
 });

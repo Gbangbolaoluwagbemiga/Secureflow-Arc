@@ -22,6 +22,7 @@ changes, and resubmitted. That whole cycle is below in order.
 | 7 | `resubmit-after-rejection.png` | **The revision loop.** The client's rejection reason is shown to the freelancer, who answers it and attaches new work |
 | 8 | `freelancer-resubmitted.png` | The freelancer's side after resubmitting: milestone `submitted`, response and attachment visible |
 | 9 | `client-review-decision.png` | The client's side of the same moment: Approve, Reject or Dispute, with the freelancer's answer in front of them |
+| 10 | `both-jobs-completed-rated.png` | **The end of it.** Both jobs `completed`, 15.51 USDC released in total, each freelancer rated 5/5 with a written review |
 
 ## Not part of that job
 
@@ -33,8 +34,10 @@ changes, and resubmitted. That whole cycle is below in order.
 ## Notes
 
 `my-jobs-management.png` and `client-review-decision.png` both show
-**0.51 USDC released**. That is the 0.502747 USDC first mainnet payout, on an
-earlier job on the same account, and it is checkable on the explorer.
+**0.51 USDC released**. That is the 0.502747 USDC first mainnet payout, on the
+`mytube` job on the same account, and it is checkable on the explorer. By
+`both-jobs-completed-rated.png` the total is **15.51 USDC** across two
+completed jobs and two different freelancers.
 
 `create-escrow-review.png` also caught the raw viem error toast that was fixed
 in 841850b. Kept as it was taken.
