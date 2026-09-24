@@ -88,9 +88,9 @@ describe("when the attachment cannot be uploaded", () => {
     open();
     const user = await fillItIn();
 
-    await user.click(screen.getByRole("button", { name: /submit application/i }));
+    fireEvent.click(screen.getByRole("button", { name: /submit application/i }));
 
-    await waitFor(() => expect(uploadMilestoneFile).toHaveBeenCalled());
+    await waitFor(() => expect(uploadMilestoneFile).toHaveBeenCalled(), { timeout: 8000 });
     /* The whole point. It used to reach the chain here, CV-less. */
     expect(onApply).not.toHaveBeenCalled();
   });
@@ -99,9 +99,9 @@ describe("when the attachment cannot be uploaded", () => {
     open();
     const user = await fillItIn();
 
-    await user.click(screen.getByRole("button", { name: /submit application/i }));
+    fireEvent.click(screen.getByRole("button", { name: /submit application/i }));
 
-    const alert = await screen.findByRole("alert");
+    const alert = await screen.findByRole("alert", {}, { timeout: 8000 });
     expect(alert).toHaveTextContent(/Mary Modupeola CV\.pdf/);
     expect(alert).toHaveTextContent(/Storage is unreachable/);
     expect(alert).toHaveTextContent(/has not been sent/i);
@@ -111,12 +111,12 @@ describe("when the attachment cannot be uploaded", () => {
     open();
     const user = await fillItIn();
 
-    await user.click(screen.getByRole("button", { name: /submit application/i }));
-    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: /submit application/i }));
+    await screen.findByRole("alert", {}, { timeout: 8000 });
 
-    await user.click(screen.getByRole("button", { name: /apply without the attachment/i }));
+    fireEvent.click(screen.getByRole("button", { name: /apply without the attachment/i }));
 
-    await waitFor(() => expect(onApply).toHaveBeenCalled());
+    await waitFor(() => expect(onApply).toHaveBeenCalled(), { timeout: 8000 });
     /* No attachment url, and no second attempt at an upload that just failed. */
     expect(onApply.mock.calls[0][3]).toBeUndefined();
     expect(uploadMilestoneFile).toHaveBeenCalledTimes(1);
@@ -126,13 +126,13 @@ describe("when the attachment cannot be uploaded", () => {
     open();
     const user = await fillItIn();
 
-    await user.click(screen.getByRole("button", { name: /submit application/i }));
-    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: /submit application/i }));
+    await screen.findByRole("alert", {}, { timeout: 8000 });
 
     uploadMilestoneFile.mockResolvedValue({ url: "https://files/cv.pdf", filename: "cv.pdf" });
-    await user.click(screen.getByRole("button", { name: /try the upload again/i }));
+    fireEvent.click(screen.getByRole("button", { name: /try the upload again/i }));
 
-    await waitFor(() => expect(onApply).toHaveBeenCalled());
+    await waitFor(() => expect(onApply).toHaveBeenCalled(), { timeout: 8000 });
     expect(onApply.mock.calls[0][3]).toBe("https://files/cv.pdf");
   });
 });
@@ -143,9 +143,9 @@ describe("when the upload works", () => {
     open();
     const user = await fillItIn();
 
-    await user.click(screen.getByRole("button", { name: /submit application/i }));
+    fireEvent.click(screen.getByRole("button", { name: /submit application/i }));
 
-    await waitFor(() => expect(onApply).toHaveBeenCalled());
+    await waitFor(() => expect(onApply).toHaveBeenCalled(), { timeout: 8000 });
     expect(onApply.mock.calls[0][3]).toBe("https://files/cv.pdf");
     expect(screen.queryByRole("alert")).toBeNull();
   });

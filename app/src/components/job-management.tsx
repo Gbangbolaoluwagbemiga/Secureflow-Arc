@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useWriteContract, usePublicClient } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useWeb3 } from "@/contexts/web3-context";
 import { useNotifications } from "@/contexts/notification-context";
 import { CONTRACTS } from "@/lib/web3/config";
-import { PlusCircle, MinusCircle, XCircle, AlertTriangle, Info, ListPlus } from "lucide-react";
+import { PlusCircle, MinusCircle, XCircle, AlertTriangle, Info, ListPlus, Users } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -404,6 +405,51 @@ export function JobManagement({
     }
   };
 
+  /*
+   * HOW MANY PEOPLE ARE WAITING ON THIS JOB.
+   *
+   * The applicants have always been on chain and there has never been a way to
+   * reach them. /approvals lists them and is a real page, but nothing links to
+   * it: the nav bar holds five entries by deliberate decision (see nav.ts), and
+   * the only signal a client got was a dot on My Jobs meaning "someone applied"
+   * — which led to the job, and then stopped. Somebody applied to mytube with a
+   * cover letter and a CV and the client had no route to either.
+   *
+   * nav.ts settles where this belongs: the same argument it makes for disputes,
+   * that you reach them "from the job itself, which is the context they need
+   * anyway". So the count lives on the job.
+   *
+   * getApplications is one eth_call returning the applicant addresses.
+   * getApplicationDetails, which carries the cover letters, walks 9,000 blocks
+   * of logs — right for the page, far too heavy for a card that renders per
+   * job.
+   */
+  const [applicantCount, setApplicantCount] = useState(0);
+
+  useEffect(() => {
+    if (!isOpenJob || !isClient) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { ContractService } = await import("@/lib/web3/contract-service");
+        const cs = new ContractService(CONTRACTS.ATELIER_ESCROW);
+        const apps = await cs.getApplications(Number(escrowId));
+        if (!cancelled) setApplicantCount(Array.isArray(apps) ? apps.length : 0);
+      } catch {
+        /* A count that could not be read is not a count of zero, but there is
+           nothing useful to show instead. The row stays hidden and the next
+           render tries again; nothing is lost, since the applications are on
+           chain either way. */
+        if (!cancelled) setApplicantCount(0);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [escrowId, isOpenJob, isClient]);
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <Card className="glass border-primary/20 p-4 mt-4">
@@ -413,6 +459,26 @@ export function JobManagement({
           Budget: {currentTotal.toFixed(4)} USDC
         </span>
       </div>
+
+      {applicantCount > 0 && (
+        <Link
+          to="/approvals"
+          className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-primary/40 bg-primary/10 p-3 transition-colors hover:bg-primary/15"
+        >
+          <span className="flex items-center gap-2 text-sm">
+            <Users className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+            <span>
+              <strong>
+                {applicantCount} {applicantCount === 1 ? "person has" : "people have"}
+              </strong>{" "}
+              applied. Nobody is hired until you choose.
+            </span>
+          </span>
+          <span className="shrink-0 text-sm font-medium text-primary">
+            Review {applicantCount === 1 ? "it" : "them"} →
+          </span>
+        </Link>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {/* ── Edit the stages ──────────────────────────────────────────────
