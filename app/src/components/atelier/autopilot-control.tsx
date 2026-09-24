@@ -214,6 +214,38 @@ export function AutopilotControl({
       await delegate();
 
       /*
+       * Tell the freelancer an agent is now judging their work.
+       *
+       * The daemon sends this when hand-over preferences are saved, and that
+       * call only happens when `wantsCustom` is true — which requires
+       * `!hasFreelancer`. So for a job that HAS a freelancer, the one person
+       * the message is for, the daemon path can never run. It has to be sent
+       * from here.
+       *
+       * Symmetric with taking control back, and for the same reason: both
+       * directions change who reads their work and decides whether they get
+       * paid. Not fatal — the delegation is already on chain, and a
+       * notification that failed to send is not a reason to claim it did not
+       * happen.
+       */
+      if (assignedTo && !/^0x0{40}$/i.test(assignedTo)) {
+        addCrossWalletNotification(
+          {
+            type: "escrow",
+            title: "An agent is now running this job",
+            message:
+              "Autopilot reviews what you submit and releases each milestone " +
+              "against the criteria published on the job. It cannot move the money " +
+              "anywhere else, and it cannot settle a dispute — if you raise one it " +
+              "goes to a human arbiter, exactly as before.",
+            actionUrl: `/my-jobs?tab=working`,
+            data: { escrowId, action: "autopilot_delegated" },
+          },
+          assignedTo,
+        );
+      }
+
+      /*
        * Record the window and criteria only AFTER the delegation is mined.
        *
        * Doing it first would leave settings behind for a job that never got
