@@ -6,6 +6,7 @@ import { CONTRACTS } from "@/lib/web3/config";
 import AtelierABI from "@/lib/web3/AtelierABI.json";
 import useWalletStore from "@/store/wallet.store";
 import { toast } from "@/hooks/use-toast";
+import { toastError } from "@/lib/atelier/errors";
 import { erc20Abi } from "@/lib/web3/abis";
 import {
   cacheOriginalDescriptions,
@@ -301,38 +302,7 @@ export function useCreateEscrow() {
       }
     },
     onError: (error: Error) => {
-      // Format error message to be more readable
-      let errorMessage = error.message || "Failed to create escrow";
-      
-      // Handle common error patterns
-      if (errorMessage.includes("User rejected")) {
-        errorMessage = "Transaction cancelled - You rejected the transaction in your wallet";
-      } else if (errorMessage.includes("insufficient funds")) {
-        errorMessage = "Insufficient funds - Please ensure you have enough USDC and gas";
-      } else if (errorMessage.includes("TokenNotWhitelisted")) {
-        errorMessage = "Token not whitelisted - Please contact admin to whitelist this token";
-      } else if (errorMessage.includes("InvalidAmount")) {
-        errorMessage = "Invalid amount - Please check your input amounts";
-      } else if (errorMessage.includes("Contract Call")) {
-        // Extract readable part from contract call errors
-        const match = errorMessage.match(/Contract Call:.*?Error: (.+?)(?:\n|$)/);
-        if (match) {
-          errorMessage = match[1];
-        } else {
-          errorMessage = "Transaction failed - Please try again or contact support";
-        }
-      }
-      
-      // Remove long hex addresses from error messages
-      errorMessage = errorMessage.replace(/0x[a-fA-F0-9]{40,}/g, (match) => {
-        return match.substring(0, 10) + "..." + match.substring(match.length - 4);
-      });
-      
-      toast({ 
-        title: "Transaction Failed", 
-        description: errorMessage, 
-        variant: "destructive" 
-      });
+      toast(toastError("Could not create this job", error));
     },
   });
 }
@@ -384,7 +354,7 @@ export function useStartWork() {
       toast({ title: "Work started", description: "You have accepted this contract." });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message || "Failed to start work", variant: "destructive" });
+      toast(toastError("Could not start work", error));
     },
   });
 }
@@ -410,7 +380,7 @@ export function useSubmitMilestone() {
       toast({ title: "Milestone submitted", description: "Awaiting client review." });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message || "Failed to submit milestone", variant: "destructive" });
+      toast(toastError("Could not submit this milestone", error));
     },
   });
 }
@@ -436,7 +406,7 @@ export function useApproveMilestone() {
       toast({ title: "Milestone approved", description: "Payment released to freelancer." });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message || "Failed to approve milestone", variant: "destructive" });
+      toast(toastError("Could not approve this milestone", error));
     },
   });
 }
@@ -462,7 +432,7 @@ export function useRejectMilestone() {
       toast({ title: "Milestone rejected", description: "Freelancer has been notified." });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message || "Failed to reject milestone", variant: "destructive" });
+      toast(toastError("Could not request changes", error));
     },
   });
 }
@@ -488,7 +458,7 @@ export function useDisputeMilestone() {
       toast({ title: "Dispute raised", description: "An arbiter will review this dispute." });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message || "Failed to raise dispute", variant: "destructive" });
+      toast(toastError("Could not raise the dispute", error));
     },
   });
 }
@@ -517,10 +487,7 @@ export function useEmergencyRefund() {
       });
     },
     onError: (error: Error) => {
-      let msg = error.message || "Failed to reclaim surplus";
-      if (msg.includes("EmergencyPeriodNotReached"))
-        msg = "Emergency period not reached yet — wait until 30 days after the deadline.";
-      toast({ title: "Reclaim failed", description: msg, variant: "destructive" });
+      toast(toastError("Could not reclaim the surplus", error));
     },
   });
 }
@@ -568,7 +535,7 @@ export function useApplyToJob() {
       toast({ title: "Application submitted", description: "The client has been notified." });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message || "Failed to apply to job", variant: "destructive" });
+      toast(toastError("Could not send your application", error));
     },
   });
 }
@@ -594,7 +561,7 @@ export function useAcceptFreelancer() {
       toast({ title: "Freelancer accepted", description: "The freelancer can now start work." });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message || "Failed to accept freelancer", variant: "destructive" });
+      toast(toastError("Could not accept this freelancer", error));
     },
   });
 }
@@ -617,7 +584,7 @@ export function useSubmitEvidence() {
       toast({ title: "Evidence submitted", description: "Evidence has been recorded on-chain." });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message || "Failed to submit evidence", variant: "destructive" });
+      toast(toastError("Could not submit your evidence", error));
     },
   });
 }
@@ -643,7 +610,7 @@ export function useExtendDeadline() {
       toast({ title: "Deadline extended", description: "The project deadline has been extended." });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message || "Failed to extend deadline", variant: "destructive" });
+      toast(toastError("Could not extend the deadline", error));
     },
   });
 }
@@ -666,7 +633,7 @@ export function useSubmitRating() {
       toast({ title: "Rating submitted", description: "Your feedback has been recorded on-chain." });
     },
     onError: (error: Error) => {
-      toast({ title: "Error", description: error.message || "Failed to submit rating", variant: "destructive" });
+      toast(toastError("Could not submit your rating", error));
     },
   });
 }

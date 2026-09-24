@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { ContractService } from "@/lib/web3/contract-service";
 import { CONTRACTS } from "@/lib/web3/config";
+import { humanizeError } from "@/lib/atelier/errors";
 
 /**
  * THE FREELANCER WAS HIRED AND HAS NOT STARTED.
@@ -82,7 +83,7 @@ export function WaitingOnFreelancer({
     } catch (err: unknown) {
       toast({
         title: "Could not cancel",
-        description: err instanceof Error ? err.message : String(err),
+        description: humanizeError(err),
         variant: "destructive",
       });
     } finally {

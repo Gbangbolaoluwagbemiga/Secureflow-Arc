@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ContractService } from "@/lib/web3/contract-service";
 import { CONTRACTS } from "@/lib/web3/config";
+import { humanizeError } from "@/lib/atelier/errors";
 
 /**
  * "🌱 Escrow yield" — a chip, with the explanation on hover.
@@ -111,7 +112,7 @@ export function YieldOptIn({
                 } catch (err: unknown) {
                   toast({
                     title: "Could not switch it on",
-                    description: err instanceof Error ? err.message : String(err),
+                    description: humanizeError(err),
                     variant: "destructive",
                   });
                 } finally {

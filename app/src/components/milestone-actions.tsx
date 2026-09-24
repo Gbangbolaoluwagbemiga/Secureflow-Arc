@@ -22,6 +22,7 @@ import { CONTRACTS } from "@/lib/web3/config";
 import { AlertTriangle, CheckCircle2, Gavel, Loader2, Play, Send, XCircle } from "lucide-react";
 import type { Milestone } from "@/lib/web3/types";
 import { formatEth, formatTokenAmount } from "@/lib/utils";
+import { toastError } from "@/lib/atelier/errors";
 
 interface MilestoneActionsProps {
   escrowId: string;
@@ -404,11 +405,7 @@ export function MilestoneActions({
         onSuccess();
       }
     } catch (error: any) {
-      toast({
-        title: "Transaction failed",
-        description: error.message || "Failed to submit transaction",
-        variant: "destructive",
-      });
+      toast(toastError("That did not go through", error));
     } finally {
       setIsLoading(false);
     }

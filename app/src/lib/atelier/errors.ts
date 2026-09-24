@@ -59,6 +59,8 @@ const CONTRACT_ERRORS: Readonly<Record<string, string>> = {
     "The platform is paused for maintenance — nothing can move right now.",
   OwnableUnauthorizedAccount:
     "Only the contract owner can do that.",
+  EmergencyPeriodNotReached:
+    "The emergency period has not been reached yet — the surplus can be reclaimed 30 days after the deadline.",
 };
 
 /**
@@ -68,7 +70,7 @@ const CONTRACT_ERRORS: Readonly<Record<string, string>> = {
 const PATTERNS: readonly [RegExp, string][] = [
   [
     /user rejected|user denied|rejected the request|action_rejected|4001/i,
-    "You cancelled the transaction in your wallet.",
+    "You cancelled this in your wallet. No money moved.",
   ],
   [
     /insufficient funds|exceeds balance|InsufficientBalance/i,

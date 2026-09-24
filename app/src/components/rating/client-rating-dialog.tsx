@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ContractService } from "@/lib/web3/contract-service";
 import { CONTRACTS } from "@/lib/web3/config";
 import { useWeb3 } from "@/contexts/web3-context";
+import { toastError } from "@/lib/atelier/errors";
 import {
   createRatingNotification,
   useNotifications,
@@ -76,11 +77,7 @@ export function ClientRatingDialog({
       onOpenChange(false);
       onSuccess?.();
     } catch (err: any) {
-      toast({
-        title: "Rating failed",
-        description: err.message || "Could not submit rating",
-        variant: "destructive",
-      });
+      toast(toastError("Could not submit your rating", err));
     } finally {
       setLoading(false);
     }
