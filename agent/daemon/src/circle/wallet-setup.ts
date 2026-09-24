@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { initiateDeveloperControlledWalletsClient } from "@circle-fin/developer-controlled-wallets";
-import { config } from "../config.js";
+import { arcNetwork, config, explorerAddress } from "../config.js";
 
 /**
  * One-time setup for Atelier's Circle Programmable Wallet (MPC custody).
@@ -52,8 +52,25 @@ async function main() {
   console.log("\n── Add these to daemon/.env ──");
   console.log(`CIRCLE_WALLET_ID=${wallet.id}`);
   console.log(`CIRCLE_WALLET_ADDRESS=${wallet.address}`);
-  console.log("\nNext: fund that address with testnet USDC on Arc (faucet), then start the daemon.");
-  console.log("Set spending policy caps live via the Circle CLI as part of the demo setup.\n");
+  /*
+   * This said "fund it from the faucet" unconditionally, which was true for
+   * the whole of this project's life until the day it was not. On mainnet
+   * there is no faucet: the line sends somebody looking for one, and the
+   * wallet it is telling them to fund spends real money. What to do next
+   * depends on the network, so it says which network it is on.
+   */
+  if (arcNetwork.isTestnet) {
+    console.log("\nNext: fund that address with testnet USDC on Arc (faucet), then start the daemon.");
+  } else {
+    console.log("\n⚠ This wallet is on Arc MAINNET. It spends real USDC.");
+    console.log("\nNext: send real USDC to that address — there is no faucet. USDC is the gas");
+    console.log("token on Arc, so an empty wallet cannot sign anything at all, and the agent");
+    console.log("will look idle rather than unfunded.");
+    console.log(`\n  ${explorerAddress(wallet.address)}`);
+  }
+  console.log("\nSet spending policy caps via the Circle console before it holds anything");
+  console.log("worth capping — the daemon's own DAILY_SPEND_CAP_USDC is a second cage, not");
+  console.log("the first one.\n");
 }
 
 main().catch((e) => {
