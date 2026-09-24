@@ -38,7 +38,30 @@ export function useJobCreatorStatus() {
     try {
       const contractService = new ContractService(CONTRACTS.ATELIER_ESCROW);
       const ids = await contractService.getUserEscrows(wallet.address);
-      setIsJobCreator(Array.isArray(ids) && ids.length > 0);
+      if (!Array.isArray(ids) || ids.length === 0) {
+        setIsJobCreator(false);
+        return;
+      }
+
+      /*
+       * Being ON a job is not the same as having PAID for one.
+       *
+       * getUserEscrows is an index of every escrow this wallet touches, as
+       * either party — the note in use-freelancer-status says so, and this
+       * hook used its length anyway. So the moment a freelancer was hired,
+       * they became a "job creator": My Jobs grew a Hiring tab that could
+       * only ever say "No Escrows Found", because the list behind it filters
+       * on the depositor and they are not it.
+       *
+       * The depositor is the one who funded the escrow. That is the question.
+       */
+      const me = wallet.address.toLowerCase().trim();
+      const escrows = await contractService.getEscrowsBatch(ids);
+      setIsJobCreator(
+        Object.values(escrows).some(
+          (e) => e?.depositor && e.depositor.toLowerCase().trim() === me,
+        ),
+      );
     } catch {
       /* A read that could not reach its source is not the same answer as "you
          have no jobs", but there is nothing better to show than the nav we
