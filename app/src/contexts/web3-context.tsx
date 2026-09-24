@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { useAccount, useDisconnect, useBalance } from "wagmi";
-import { getContract as getViemContract } from "viem";
+import { getContract as getViemContract, formatUnits } from "viem";
 import { useWalletClient, usePublicClient } from "wagmi";
 import { useAppKit } from "@reown/appkit/react";
 
@@ -68,8 +68,14 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         wallet: {
           address: address || null,
           isConnected,
+          /* Formatted with the decimals the balance itself reports, rather
+             than a hardcoded 1e18. The two used to disagree — the chain was
+             declared as 6 decimals and this divided by 1e18 anyway — and the
+             only reason the header read correctly is that the second mistake
+             cancelled the first. Anything trusting the declared value was out
+             by a factor of a trillion. */
           balance: balanceData
-            ? (Number(balanceData.value) / 1e18).toFixed(2)
+            ? Number(formatUnits(balanceData.value, balanceData.decimals)).toFixed(2)
             : "0",
           chainId,
         },
