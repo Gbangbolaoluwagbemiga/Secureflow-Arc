@@ -17,7 +17,7 @@ the product is SecureFlow.*
 
 [![Arc](https://img.shields.io/badge/Arc-Mainnet%20live-4FC8D8?style=flat-square)](https://explorer.arc.io/address/0xbdeb44945979a01584fd7d796a71C707D2F83372)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.28-363636?style=flat-square)](https://soliditylang.org)
-[![Tests](https://img.shields.io/badge/tests-965%20passing-5FD39A?style=flat-square)](#testing)
+[![Tests](https://img.shields.io/badge/tests-966%20passing-5FD39A?style=flat-square)](#testing)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
 
 </div>
@@ -432,10 +432,22 @@ handler offering only the permitted calls proves nothing.
 
 | | |
 |---|---|
-| Subgraph | [`atelier/v0.0.3`](https://api.studio.thegraph.com/query/1759977/atelier/v0.0.3) on Subgraph Studio, indexing Arc |
-| API | `https://atelier-production-be62.up.railway.app` — Railway |
-| Web app | [`atelier-job.vercel.app`](https://atelier-job.vercel.app) — Vercel |
-| Autopilot daemon | [`independent-presence-production-952d`](https://independent-presence-production-952d.up.railway.app/healthz) — Railway, on a persistent volume |
+| Web app | [`secureflow.work`](https://secureflow.work) — Vercel |
+| API | [`secureflow-arc-production.up.railway.app`](https://secureflow-arc-production.up.railway.app/health) — Railway |
+| Autopilot daemon | [`vibrant-bravery-production-4da7`](https://vibrant-bravery-production-4da7.up.railway.app/healthz) — Railway, on a volume at `/app/data` |
+| Telegram | [@The_Atelierbot](https://t.me/The_Atelierbot) — the worker front door |
+| Subgraph | Not deployed for mainnet. The app reads the chain directly and the daemon falls back to `eth_getLogs` |
+
+Both health endpoints report the chain they resolved, not just that they are
+up. A service on the right code against the wrong network answers every call
+and returns an empty marketplace, which is indistinguishable from a quiet day
+unless something says which chain it is on:
+
+```
+$ curl -s https://secureflow-arc-production.up.railway.app/health
+{"ok":true,"groq":true,"supabase":true,
+ "chain":{"contractSaysNetwork":"mainnet","rpcSaysNetwork":"mainnet","agrees":true}}
+```
 
 The daemon cannot go on a serverless host: it holds SQLite on disk, polls every
 fifteen seconds, and keeps a Telegram long-poll open twenty-five seconds at a
@@ -593,7 +605,10 @@ is why the handling is the part that got the tests.
 
 ## Roadmap
 
-- [x] Deploy the subgraph to Subgraph Studio — live at `atelier/v0.0.3`, indexing Arc
+- [x] Deploy the subgraph to Subgraph Studio — `atelier/v0.0.3`, indexing Arc
+      **testnet**. Not redeployed for mainnet: the app and daemon both fall back
+      to reading the chain directly, which is slower but correct, and a subgraph
+      pointed at the wrong network is worse than none
 - [x] Deploy the yield controller carrying the 60/40 split, and attach a venue
 - [ ] Size a job so the freelancer's share is reachable — see Status
 - [ ] Arc mainnet deployment, and attach the v4 adapter to a live pool there

@@ -196,7 +196,7 @@ Continuity-track only.
 | Public GitHub repo | Done |
 | `FEEDBACK.md` | Done |
 | Live subgraph on Subgraph Studio | Done — `atelier/v0.0.3`, indexing Arc |
-| Autopilot daemon hosted | Done — Railway container, volume at `/app/data`, [`/healthz`](https://independent-presence-production-952d.up.railway.app/healthz) |
+| Autopilot daemon hosted | Done — Railway container, volume at `/app/data`, [`/healthz`](https://vibrant-bravery-production-4da7.up.railway.app/healthz) |
 | Uniswap Developer Feedback Form | **Outstanding** — must link to `FEEDBACK.md` |
 | Demo video, 2–4 minutes | **Outstanding** |
 | Arc mainnet deploy by 30 September | **Outstanding** |

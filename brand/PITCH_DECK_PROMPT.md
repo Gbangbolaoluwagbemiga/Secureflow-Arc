@@ -19,7 +19,7 @@ Audience for this deck: **Arc Foundation grant reviewers + early ecosystem inves
 - **Chain:** Arc EVM Testnet (chain ID **5042002**, RPC `https://rpc.drpc.testnet.arc.network`, explorer `https://testnet.arcscan.app`).
 - **Contract address:** `0x7aB0853325529aF7EB5c4745413BF01E98c0020f` (SecureFlow.sol).
 - **Settlement token:** Circle USDC at `0x3600000000000000000000000000000000000000` (6 decimals, native to Arc).
-- **Frontend:** live at [`https://secureflow-arc.vercel.app`](https://secureflow-arc.vercel.app) (Vercel, production deployment).
+- **Frontend:** live at [`https://secureflow.work`](https://secureflow.work) (Vercel, production deployment).
 - **Repo:** [`https://github.com/Gbangbolaoluwagbemiga/Secureflow-Arc`](https://github.com/Gbangbolaoluwagbemiga/Secureflow-Arc) — open-source, Apache-2.0 licensed.
 
 ### Tech stack
@@ -191,7 +191,7 @@ Return the deck as **Markdown with one `## Slide N — Title` heading per slide*
 
 - **Headline:** Not a deck. A live product.
 - **Body:** Bullet **eight** core screens with one-line value props each: **Browse Jobs** (open marketplace with AI cover-letter draft), **Create Escrow Wizard** (3-step with AI milestone writer), **Client Dashboard** (milestone approve/reject/dispute, deadline extension, add/withdraw/cancel job funds), **Freelancer Console** (earnings, badge tier, submit/resubmit with attachments, propose milestone changes, raise disputes), **Analytics Dashboard** (platform + per-user stats, dispute-aware volume recovery), **Disputes Console** (multi-arbiter voting + IPFS evidence viewer), **Messages** (Supabase-backed real-time chat), **Admin Console** (token whitelist, arbiter management, fee config, pause). Mention real on-chain stats from live testnet contract: active escrows, total volume secured (USDC + ETH), completed escrows.
-- **Visual:** 4×2 grid of real screenshots — placeholder boxes labeled `Browse Jobs`, `Create Wizard`, `Client Dashboard`, `Freelancer Console`, `Analytics`, `Disputes`, `Messages`, `Admin`. Designer instruction: replace with actual screenshots from `secureflow-arc.vercel.app`.
+- **Visual:** 4×2 grid of real screenshots — placeholder boxes labeled `Browse Jobs`, `Create Wizard`, `Client Dashboard`, `Freelancer Console`, `Analytics`, `Disputes`, `Messages`, `Admin`. Designer instruction: replace with actual screenshots from `secureflow.work`.
 
 ### Slide 5 — How it works (technical flow)
 
@@ -269,7 +269,7 @@ Return the deck as **Markdown with one `## Slide N — Title` heading per slide*
 
 - **Headline:** Builders, not pitch-deck professionals.
 - **Body:** Placeholder cards for founder(s): name, prior shipping credentials (e.g. "shipped X on Y chain"), GitHub, X/Twitter, email. One-line operating principle: **"We ship working code first and tell stories about it second."** Close with the same one-liner from slide 1 for symmetry: _Trustless milestone escrow for freelance work on Arc EVM._
-- **Visual:** Founder card(s) in a horizontal row + final wordmark + contact CTA. Two QR codes side by side: one for the **live app** (`https://secureflow-arc.vercel.app`) and one for the **GitHub repo** (`https://github.com/Gbangbolaoluwagbemiga/Secureflow-Arc`). Label each QR clearly.
+- **Visual:** Founder card(s) in a horizontal row + final wordmark + contact CTA. Two QR codes side by side: one for the **live app** (`https://secureflow.work`) and one for the **GitHub repo** (`https://github.com/Gbangbolaoluwagbemiga/Secureflow-Arc`). Label each QR clearly.
 
 ---
 

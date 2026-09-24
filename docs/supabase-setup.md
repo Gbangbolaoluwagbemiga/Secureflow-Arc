@@ -118,7 +118,7 @@ Nothing on Vercel changes — the frontend never talks to Supabase directly.
 ## 5. Check it actually worked
 
 ```bash
-curl -s https://atelier-production-be62.up.railway.app/health
+curl -s https://secureflow-arc-production.up.railway.app/health
 ```
 
 Want: `{"ok":true,"groq":true,"supabase":true}`
@@ -131,7 +131,7 @@ Then, with your API secret:
 
 ```bash
 curl -s -H "Authorization: Bearer $API_SECRET" \
-  "https://atelier-production-be62.up.railway.app/v1/notifications?wallet=0xYourAddress"
+  "https://secureflow-arc-production.up.railway.app/v1/notifications?wallet=0xYourAddress"
 ```
 
 Want: `{"notifications":[]}` — an empty list with **no** `degraded` flag.
