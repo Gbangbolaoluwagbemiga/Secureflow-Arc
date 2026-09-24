@@ -60,9 +60,11 @@ const ARC_NETWORKS = {
     /* Found by bisecting eth_getCode. The mainnet broadcast artifact records a
        different contract entirely, so it is not a source for this. */
     deployBlock: "22260326",
-    /* Circle's own identifiers for Arc mainnet, NOT yet confirmed against
-       Circle's API. Set CIRCLE_BLOCKCHAIN and GATEWAY_FACILITATOR_URL
-       explicitly before trusting a managed-wallet or x402 path here. */
+    /* "ARC" is one of exactly two Arc values in the installed Circle SDK's
+       blockchain union, alongside "ARC-TESTNET" — checked against
+       @circle-fin/developer-controlled-wallets rather than assumed. The
+       gateway host is still inferred from the testnet one; override
+       GATEWAY_FACILITATOR_URL if x402 misbehaves on mainnet. */
     circleBlockchain: "ARC",
     gatewayUrl: "https://gateway-api.circle.com",
     isTestnet: false,
@@ -138,6 +140,24 @@ export const arcChain = defineChain({
 
 /** The name two dozen modules already import. */
 export const arcTestnet = arcChain;
+
+/*
+ * EXPLORER LINKS FOLLOW THE NETWORK TOO.
+ *
+ * Seven of these were written out as testnet.arcscan.app by hand — in the
+ * wallet endpoint, in the tx helper, and five times in the Telegram bot, where
+ * they sit under "See it on the block explorer" beside somebody's payment. On
+ * mainnet every one of them sent a freelancer to a chain their money is not
+ * on, to look up a transaction that does not exist there, about their own
+ * wages. Nothing errors; the page is simply empty.
+ */
+export function explorerTx(txHash: string): string {
+  return `${network.explorer}/tx/${txHash}`;
+}
+
+export function explorerAddress(address: string): string {
+  return `${network.explorer}/address/${address}`;
+}
 
 export const config = {
   anthropicApiKey: process.env.ANTHROPIC_API_KEY?.trim() || "",
