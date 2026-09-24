@@ -70,6 +70,8 @@ export function handoverMessage(address: string, escrowId: string, windowMinutes
 
 export interface EscrowSummary {
   depositor: string;
+  /** Zero address while nobody is hired. */
+  beneficiary: string;
   projectTitle: string;
   projectDescription: string;
   /** Net of the platform fee, in USDC base units — 6 decimals, not 18. */

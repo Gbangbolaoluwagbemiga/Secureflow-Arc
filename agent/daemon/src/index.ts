@@ -15,7 +15,7 @@ import { randomUUID } from "node:crypto";
 import { createPublicClient, http as viemHttp, formatEther, verifyMessage } from "viem";
 import { config, arcTestnet, arcChain, arcNetwork, explorerAddress, rpcUrl, logRpcUrl } from "./config.js";
 import { AgentClient, type AgentEvent } from "./agent/AgentClient.js";
-import { notifyWeb } from "./notify/web.js";
+import { notifyAddress, notifyWeb } from "./notify/web.js";
 import { createAtelierGateway } from "./circle/gateway.js";
 import { listWhitelistedTokens } from "./web3/tokens.js";
 import { adoptDelegatedJobs } from "./agent/adoptDelegated.js";
@@ -810,6 +810,56 @@ const server = http.createServer(async (req, res) => {
         applicationWindowMinutes: windowMinutes,
         approvedAt: Date.now(),
       });
+
+      /*
+       * THE PERSON BEING JUDGED SHOULD HEAR IT FROM US.
+       *
+       * Handing a running job to Autopilot changes who decides whether the
+       * freelancer gets paid, and it happened silently: the client signed, the
+       * card grew an AUTOPILOT badge, and the only person whose income depends
+       * on the answer learned nothing. They would find out when an agent
+       * approved or rejected work they thought a human was reading.
+       *
+       * Same argument the dispute_resolutions migration makes about an
+       * arbiter's reasoning: a decision one side can see and the other cannot
+       * is not a decision anyone should have to accept.
+       *
+       * Both doors, because a freelancer hired through Telegram may never open
+       * the web app. Neither can block the hand-over — the client's signature
+       * is already recorded and a notification that failed to send is not a
+       * reason to undo it.
+       */
+      void (async () => {
+        try {
+          const esc = await handover.readEscrow(escrowId);
+          const hired = esc.beneficiary ?? "";
+          if (!hired || /^0x0{40}$/i.test(hired)) return;
+
+          const title = "An agent is now running this job";
+          const body =
+            `The client has handed "${esc.projectTitle}" to Autopilot. It reviews what you ` +
+            `submit and releases each milestone against the published criteria — the same ` +
+            `ones shown on the job. It cannot move the money anywhere else, and if a ` +
+            `dispute is raised it still goes to a human arbiter.`;
+
+          await notifyAddress(hired, "escrow", title, body, escrowId);
+          await telegram.notifyWorkerByAddress(
+            hired,
+            [
+              `🤖 <b>${telegram.esc(title)}</b>`,
+              "",
+              telegram.esc(body),
+              "",
+              `${config.publicAppUrl}/jobs/${escrowId}`,
+            ].join("\n"),
+          );
+        } catch (err) {
+          console.warn(
+            "[handover] could not tell the freelancer an agent took over:",
+            err instanceof Error ? err.message : err,
+          );
+        }
+      })();
 
       /*
        * A job already adopted keeps running under the old brief otherwise. The
