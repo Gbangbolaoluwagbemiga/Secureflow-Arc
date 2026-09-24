@@ -29,8 +29,7 @@ vi.mock("../src/graph/chain-fallback.js", () => ({
   escrowFromChain: (id: string) => escrowFromChain(id),
 }));
 
-vi.mock("../src/config.js", () => ({
-  config: { get graphUrl() { return graphUrl; } },
+vi.mock("../src/config.js", () => ({ arcNetwork: { isTestnet: true, name: "Arc Testnet" }, config: { get graphUrl() { return graphUrl; } },
 }));
 
 let graphUrl = "https://api.studio.thegraph.com/query/atelier";

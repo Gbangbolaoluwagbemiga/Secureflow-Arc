@@ -28,8 +28,7 @@ vi.mock("../src/agent/ApplicantEvidence.js", () => ({
   gatherEvidence: vi.fn(async () => ({ portfolio: null, history: null })),
   renderEvidence: vi.fn(() => ({ shown: "No link given.", record: "No history." })),
 }));
-vi.mock("../src/config.js", () => ({
-  config: { hireScoreThreshold: 55, groqModel: "m", groqFallbackModel: "f", groqApiKey: "k" },
+vi.mock("../src/config.js", () => ({ arcNetwork: { isTestnet: true, name: "Arc Testnet" }, config: { hireScoreThreshold: 55, groqModel: "m", groqFallbackModel: "f", groqApiKey: "k" },
 }));
 
 const { scoreApplications, pickBestApplicant } = await import(

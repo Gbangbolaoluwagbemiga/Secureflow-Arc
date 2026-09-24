@@ -21,8 +21,7 @@ import type { AgentEvent } from "../src/agent/AgentClient.js";
 const getEscrow = vi.fn();
 const getEscrowApplications = vi.fn();
 vi.mock("../src/web3/atelier.js", () => ({ getEscrow, getEscrowApplications }));
-vi.mock("../src/config.js", () => ({
-  config: {
+vi.mock("../src/config.js", () => ({ arcNetwork: { isTestnet: true, name: "Arc Testnet" }, config: {
     apiUrl: "https://api.test",
     apiSecret: "s3cret",
     publicAppUrl: "https://app.test",

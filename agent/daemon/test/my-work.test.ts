@@ -53,7 +53,7 @@ vi.mock("../src/agent/handover.js", () => ({
   criteriaFor: () => ({ criteria: [], source: "none" }),
 }));
 
-vi.mock("../src/config.js", () => ({ config: { applicationWindowMinutes: 3 } }));
+vi.mock("../src/config.js", () => ({ arcNetwork: { isTestnet: true, name: "Arc Testnet" }, config: { applicationWindowMinutes: 3 } }));
 const graphQuery = vi.fn();
 const isGraphConfigured = vi.fn(() => false);
 vi.mock("../src/graph/client.js", () => ({
