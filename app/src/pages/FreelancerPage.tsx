@@ -1459,13 +1459,13 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
   ): { text: string; color: string; bgColor: string } => {
     if (daysLeft > 7) {
       return {
-        text: `${daysLeft} days`,
+        text: daysLeft === 1 ? "1 day" : `${daysLeft} days`,
         color: "text-red-700 dark:text-red-400",
         bgColor: "bg-red-50 dark:bg-red-900/20",
       };
     } else if (daysLeft > 0) {
       return {
-        text: `${daysLeft} days`,
+        text: daysLeft === 1 ? "1 day" : `${daysLeft} days`,
         color: "text-orange-700 dark:text-orange-400",
         bgColor: "bg-orange-50 dark:bg-orange-900/20",
       };
