@@ -303,6 +303,25 @@ export async function recipientsFor(event: AgentEvent): Promise<WebNotification[
   return out;
 }
 
+/**
+ * One notification, to one address, outside the event table.
+ *
+ * recipientsFor() maps agent EVENTS to recipients, which is right for things
+ * the agent does. Being handed a job is not one of those: it is the client
+ * changing who judges the work, and it happens in an HTTP handler with no
+ * AgentEvent behind it. Rather than invent an event nobody emits, this exposes
+ * the same delivery path for a message that already knows its recipient.
+ */
+export async function notifyAddress(
+  to: string,
+  type: WebNotificationType,
+  title: string,
+  message: string,
+  escrowId: string,
+): Promise<boolean> {
+  return post({ to, type, title, message }, escrowId);
+}
+
 /** Post one notification. Resolves either way; never rejects. */
 async function post(n: WebNotification, escrowId: string): Promise<boolean> {
   if (!config.apiUrl) return false;
