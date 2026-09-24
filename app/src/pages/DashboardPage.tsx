@@ -67,6 +67,16 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
     } catch { return new Set(); }
   });
   const [loading, setLoading] = useState(true);
+  /*
+   * "No Escrows Found" is a CLAIM, and it was being made before anything had
+   * been read. setLoading(true) only fires when the previous count was zero,
+   * so a refetch that starts from an empty list — which is what a hand-over
+   * leaves behind — renders the empty card first and the loading screen
+   * after. The client is told they have no jobs, moments after funding one.
+   *
+   * This is true only once a fetch has actually completed.
+   */
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Keep ref in sync with state
@@ -568,6 +578,7 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
     } finally {
       setLoading(false);
       setIsRefreshing(false);
+      setHasLoadedOnce(true);
     }
   };
 
@@ -1235,13 +1246,18 @@ export default function DashboardPage({ embedded = false }: { embedded?: boolean
         </div>
 
         {escrows.length === 0 ? (
-          <Card className="glass border-muted p-12 text-center">
-            <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <h3 className="text-xl font-bold mb-2">No Escrows Found</h3>
-            <p className="text-muted-foreground">
-              You don't have any escrows yet. Create one to get started.
-            </p>
-          </Card>
+          hasLoadedOnce && !isRefreshing ? (
+            <Card className="glass border-muted p-12 text-center">
+              <FileText className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+              <h3 className="text-xl font-bold mb-2">No Escrows Found</h3>
+              <p className="text-muted-foreground">
+                You don't have any escrows yet. Create one to get started.
+              </p>
+            </Card>
+          ) : (
+            /* Nothing has come back yet. Saying so beats asserting emptiness. */
+            <DashboardLoading isConnected={wallet.isConnected} />
+          )
         ) : (
           <div className="space-y-6">
             {escrows

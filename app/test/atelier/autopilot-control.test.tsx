@@ -123,6 +123,46 @@ beforeEach(() => {
   });
 });
 
+const FREELANCER = "0xBA7E939394697E1C3374e2695771DEbbD14D7560";
+
+describe("telling the freelancer who is judging", () => {
+  /*
+   * The daemon sends this when hand-over prefs are saved, and that call is
+   * gated on `!hasFreelancer` — so for a job that HAS one, the only person the
+   * message is for, the daemon path can never run. It has to come from here.
+   */
+  it("notifies the assigned freelancer when an agent takes over", async () => {
+    addCrossWalletNotification.mockClear();
+    hookState.manager = null;
+    hookState.loaded = true;
+    render(<AutopilotControl escrowId={1} isClient assignedTo={FREELANCER} />);
+
+    await userEvent.click(await screen.findByRole("button", { name: /hand to autopilot/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /hand it over/i }));
+
+    await waitFor(() => expect(addCrossWalletNotification).toHaveBeenCalled());
+    const [payload, to] = addCrossWalletNotification.mock.calls[0];
+    expect(to).toBe(FREELANCER);
+    expect(payload.title).toMatch(/agent is now running/i);
+    /* The two things it cannot do are the part worth reading. */
+    expect(payload.message).toMatch(/cannot move the money/i);
+    expect(payload.message).toMatch(/cannot settle a dispute/i);
+  });
+
+  it("says nothing when nobody is hired yet", async () => {
+    addCrossWalletNotification.mockClear();
+    hookState.manager = null;
+    hookState.loaded = true;
+    render(<AutopilotControl escrowId={1} isClient assignedTo={null} />);
+
+    await userEvent.click(await screen.findByRole("button", { name: /hand to autopilot/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /hand it over/i }));
+
+    await waitFor(() => expect(delegate).toHaveBeenCalled());
+    expect(addCrossWalletNotification).not.toHaveBeenCalled();
+  });
+});
+
 describe("who may see it", () => {
   /**
    * The rule this protects: a freelancer must not be able to tell whether their
