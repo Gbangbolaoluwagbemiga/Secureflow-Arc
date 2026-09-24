@@ -43,6 +43,8 @@ beforeEach(() => {
     depositor: "0x1111111111111111111111111111111111111111",
     projectTitle: "Fireball illustration",
     projectDescription: "A vector fireball for a game HUD.",
+    /* 6 decimals, as the escrow contract stores it: 2.50 USDC. */
+    totalAmount: 2500000n,
   });
   generateBrief.mockResolvedValue({
     brief: { criteria: ["SVG + PNG at 1000x1000", "Transparent background"] },
@@ -54,8 +56,16 @@ describe("previewing what Autopilot will judge by", () => {
     const out = await h.previewCriteria("7");
     expect(out.criteria).toEqual(["SVG + PNG at 1000x1000", "Transparent background"]);
     expect(out.title).toBe("Fireball illustration");
-    // Generated from the escrow's own text, not from anything the caller sent.
-    expect(generateBrief).toHaveBeenCalledWith("Fireball illustration\n\nA vector fireball for a game HUD.");
+    /*
+     * Generated from the escrow's own text, not from anything the caller sent
+     * — and now with the escrow's real budget stated, so the generator is not
+     * asked to invent one. It used to be asked, and on a 0.51 USDC job whose
+     * description said "billion-dollar enterprise" it answered $500, blew the
+     * single-commission cap and 500'd the whole preview.
+     */
+    expect(generateBrief).toHaveBeenCalledWith(
+      "Fireball illustration\n\nA vector fireball for a game HUD.\n\nBudget: 2.5 USDC",
+    );
   });
 
   it("returns the SAME criteria when the dialog is reopened", async () => {
