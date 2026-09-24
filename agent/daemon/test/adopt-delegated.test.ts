@@ -52,8 +52,7 @@ vi.mock("../src/store.js", () => ({
   getPollerText, setPollerText, getPollerInt, setPollerInt,
 }));
 vi.mock("../src/agent/BriefGenerator.js", () => ({ generateBrief }));
-vi.mock("../src/config.js", () => ({
-  config: {
+vi.mock("../src/config.js", () => ({ arcNetwork: { isTestnet: true, name: "Arc Testnet" }, config: {
     atelierAddress: "0x00000000000000000000000000000000000A7E11",
     atelierDeployBlock: 0n,
     logRangeLimit: 50n,

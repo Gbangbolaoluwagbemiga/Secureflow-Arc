@@ -26,8 +26,7 @@ const inspectDeliverable = vi.fn();
 
 vi.mock("../src/groq/structured.js", () => ({ groqStructured }));
 vi.mock("../src/agent/VisionReviewer.js", () => ({ inspectDeliverable }));
-vi.mock("../src/config.js", () => ({
-  config: { groqModel: "m", groqFallbackModel: "f", groqApiKey: "k" },
+vi.mock("../src/config.js", () => ({ arcNetwork: { isTestnet: true, name: "Arc Testnet" }, config: { groqModel: "m", groqFallbackModel: "f", groqApiKey: "k" },
 }));
 
 const { reviewWork, buildRevisionRequest, shouldEscalateToHuman } = await import(

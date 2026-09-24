@@ -23,8 +23,7 @@ vi.mock("../src/store.js", () => ({ listTasks: () => [], hiredFor: () => null })
 
 let apiUrl = "https://api.test";
 let apiSecret = "s3cret";
-vi.mock("../src/config.js", () => ({
-  config: {
+vi.mock("../src/config.js", () => ({ arcNetwork: { isTestnet: true, name: "Arc Testnet" }, config: {
     get apiUrl() { return apiUrl; },
     get apiSecret() { return apiSecret; },
     publicAppUrl: "https://app.test",

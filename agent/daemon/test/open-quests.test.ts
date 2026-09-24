@@ -38,7 +38,7 @@ vi.mock("../src/web3/atelier.js", () => ({
 }));
 
 vi.mock("../src/agent/handover.js", () => ({ criteriaFor: () => ({ criteria: [], source: "none" }), previewCriteria: vi.fn() }));
-vi.mock("../src/config.js", () => ({ config: { applicationWindowMinutes: 3 } }));
+vi.mock("../src/config.js", () => ({ arcNetwork: { isTestnet: true, name: "Arc Testnet" }, config: { applicationWindowMinutes: 3 } }));
 vi.mock("../src/graph/client.js", () => ({ graphQuery: vi.fn(), isGraphConfigured: () => false }));
 
 const { openQuests, ownQuests } = await import("../src/workers/service.js");

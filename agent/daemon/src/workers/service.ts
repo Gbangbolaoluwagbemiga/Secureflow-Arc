@@ -87,7 +87,11 @@ export async function join(params: JoinParams): Promise<store.WorkerRow> {
     });
   }
 
-  const wallet = await provisionWorkerWallet();
+  /* Keyed by the channel and its ref — "telegram:12345" — so the same person
+     coming back through the same door lands on the same wallet, whatever this
+     daemon has forgotten in between. */
+  const walletRef = channelRef ? `${params.channel}:${channelRef}` : "";
+  const wallet = await provisionWorkerWallet(walletRef);
   const worker = store.insertWorker({
     id,
     handle,

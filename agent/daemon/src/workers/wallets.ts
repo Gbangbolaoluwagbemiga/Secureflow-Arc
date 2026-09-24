@@ -18,7 +18,7 @@
 
 import { initiateDeveloperControlledWalletsClient } from "@circle-fin/developer-controlled-wallets";
 import { createPublicClient, http, parseUnits, formatUnits, erc20Abi } from "viem";
-import { arcTestnet, config, rpcUrl } from "../config.js";
+import { arcNetwork, arcTestnet, config, rpcUrl } from "../config.js";
 import { createCircleSigner } from "../circle/circleSigner.js";
 
 /**
@@ -30,7 +30,16 @@ import { createCircleSigner } from "../circle/circleSigner.js";
  * trap of holding tokens with no gas to move them. On any other chain this
  * feature would need a separate gas-sourcing story per user.
  */
-const SIGNUP_GAS_USDC = process.env.WORKER_SIGNUP_GAS_USDC?.trim() || "0.05";
+/*
+ * The drip is smaller on mainnet, because it is real.
+ *
+ * 0.05 was chosen on testnet where the money is free. On Arc mainnet that is
+ * five cents of actual USDC per signup, handed to anyone who sends /start —
+ * which is a faucet with no rate limit attached to a public bot. A cent is
+ * still several transactions' worth of gas, which is all this is for.
+ */
+const SIGNUP_GAS_USDC =
+  process.env.WORKER_SIGNUP_GAS_USDC?.trim() || (arcNetwork.isTestnet ? "0.05" : "0.01");
 
 let walletSetId: string | null = null;
 
@@ -71,13 +80,63 @@ export interface ProvisionedWallet {
   address: `0x${string}`;
 }
 
-/** Create an MPC wallet for a worker. Two seconds, and they are never told. */
-export async function provisionWorkerWallet(): Promise<ProvisionedWallet> {
+/**
+ * The wallet for a worker, created once and found again forever after.
+ *
+ * ONE PERSON, ONE ADDRESS — EVEN WHEN THIS DAEMON FORGETS THEM.
+ *
+ * This used to create a wallet unconditionally and hand the id back to be
+ * stored in SQLite, which made that row the only link between a person and
+ * their money. The store lives on the container's disk, so a deploy without a
+ * mounted volume erases it — and it happened in the middle of somebody signing
+ * up: they answered with their name, the container was replaced, and the next
+ * command told them they had never signed up. They ran /start again and got a
+ * SECOND wallet, while the first sat there holding their gas with nothing left
+ * that knew whose it was.
+ *
+ * Circle already offers the fix. refId is theirs for exactly this — "for
+ * associating wallets with entities in your own systems" — so the Telegram id
+ * goes on the wallet itself, and listWallets can find it again. The store
+ * becomes a cache of something recoverable rather than the only copy.
+ *
+ * A mounted volume is still the right answer for everything else the daemon
+ * remembers. This makes the money survive without one.
+ */
+export async function provisionWorkerWallet(ref: string): Promise<ProvisionedWallet> {
+  const walletSetId = await getWalletSetId();
+  const refId = ref.trim();
+
+  if (refId) {
+    try {
+      const found = (await client().listWallets({
+        blockchain: config.circleBlockchain as never,
+        walletSetId,
+        refId,
+      })) as { data?: { wallets?: { id?: string; address?: string }[] } };
+
+      const existing = found?.data?.wallets?.[0];
+      if (existing?.id && existing?.address) {
+        console.log(`[workers] reusing wallet ${existing.address} for ${refId}`);
+        return { walletId: existing.id, address: existing.address as `0x${string}` };
+      }
+    } catch (err) {
+      /* A lookup that failed is not proof there is no wallet — but refusing to
+         create one would lock somebody out over a transient error, and Circle
+         is the authority either way. Creating a duplicate is the lesser harm,
+         and the log says it happened. */
+      console.warn(
+        `[workers] could not check for an existing wallet for ${refId}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+
   const res = (await client().createWallets({
-    walletSetId: await getWalletSetId(),
+    walletSetId,
     blockchains: [config.circleBlockchain as never],
     count: 1,
     accountType: "EOA",
+    ...(refId ? { metadata: [{ refId }] } : {}),
   })) as { data?: { wallets?: { id?: string; address?: string }[] } };
 
   const wallet = res?.data?.wallets?.[0];

@@ -41,7 +41,7 @@ vi.mock("../src/store.js", () => ({
 }));
 
 vi.mock("../src/agent/handover.js", () => ({ criteriaFor: () => ({ criteria: [], source: "none" }) }));
-vi.mock("../src/config.js", () => ({ config: { applicationWindowMinutes: 3 } }));
+vi.mock("../src/config.js", () => ({ arcNetwork: { isTestnet: true, name: "Arc Testnet" }, config: { applicationWindowMinutes: 3 } }));
 vi.mock("../src/graph/client.js", () => ({ graphQuery: (...a: unknown[]) => graphQuery(...a) }));
 
 const { deliveryTarget } = await import("../src/workers/service.js");
