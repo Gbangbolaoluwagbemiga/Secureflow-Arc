@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useJobManager } from "@/hooks/use-job-manager";
 import { useWeb3 } from "@/contexts/web3-context";
+import { useNotifications } from "@/contexts/notification-context";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -155,6 +156,7 @@ export function AutopilotControl({
   const { manager, loaded, busy, delegate, revoke } = useJobManager(escrowId);
   const { wallet } = useWeb3();
   const { toast } = useToast();
+  const { addCrossWalletNotification } = useNotifications();
   const { signMessageAsync } = useSignMessage();
   const [pending, setPending] = useState<"delegate" | "revoke" | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -310,6 +312,36 @@ export function AutopilotControl({
         title: "You are running this job again",
         description: "Autopilot's next action on it will be rejected on-chain.",
       });
+
+      /*
+       * The freelancer is told when an agent takes over. They were not told
+       * when it handed back.
+       *
+       * Both directions change who reads their work and decides whether they
+       * get paid, so both are news to them. The hand-over notifies from the
+       * daemon, because that runs through an API the daemon owns; taking back
+       * control is a contract call straight from this browser, with no server
+       * in the path, so the notification has to originate here.
+       *
+       * Nothing about the job is blocked on this — the revoke is already on
+       * chain by the time we get here, and a notification that failed to send
+       * is not a reason to pretend it did not happen.
+       */
+      if (assignedTo && !/^0x0{40}$/i.test(assignedTo)) {
+        addCrossWalletNotification(
+          {
+            type: "escrow",
+            title: "The client is running this job again",
+            message:
+              "Autopilot is no longer managing this job. The client reviews what " +
+              "you submit and releases each milestone themselves, exactly as before " +
+              "it was handed over.",
+            actionUrl: `/my-jobs?tab=working`,
+            data: { escrowId, action: "autopilot_revoked" },
+          },
+          assignedTo,
+        );
+      }
     } catch (e) {
       toast(toastError("Could not take back control", e));
     } finally {

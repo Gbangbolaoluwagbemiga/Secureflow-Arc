@@ -31,6 +31,14 @@ vi.mock("@/hooks/use-job-manager", () => ({
 }));
 
 const toast = vi.fn();
+/* Taking back control now tells the freelancer, so the component needs the
+   notification context. Captured rather than stubbed blank, because the
+   message it sends is worth asserting on. */
+const addCrossWalletNotification = vi.fn();
+vi.mock("@/contexts/notification-context", () => ({
+  useNotifications: () => ({ addCrossWalletNotification }),
+}));
+
 vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast }),
 }));

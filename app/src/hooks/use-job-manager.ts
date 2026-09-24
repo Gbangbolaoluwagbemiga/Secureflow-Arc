@@ -219,7 +219,34 @@ export function useJobManager(escrowId: number | null): JobManagerState {
       setLoaded(true);
     });
     void refresh();
-    return stop;
+
+    /*
+     * WATCHERS ONLY REACH THIS TAB.
+     *
+     * watchManager is an in-page pub/sub: it tells other instances of this hook
+     * in the same document, which is what makes the client's own card update
+     * the instant they delegate. The freelancer is in a different browser, so
+     * nothing reaches them at all — their "Agent managed" chip stayed on after
+     * the client took the job back, and only a hard refresh cleared it. The
+     * badge was telling them an agent still decided their payment when it did
+     * not.
+     *
+     * There is no push here to subscribe to, so the cheap correct thing is to
+     * re-read when they come back to the tab. One eth_call, only on a
+     * transition to visible, which is exactly when a stale answer starts being
+     * looked at.
+     */
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
   }, [refresh, escrowId]);
 
   const delegate = useCallback(async () => {
