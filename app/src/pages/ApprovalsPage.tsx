@@ -18,23 +18,11 @@ import {
 } from "@/contexts/notification-context";
 import type { Escrow, Application } from "@/lib/web3/types";
 
-/** Pull the [Portfolio/Attachment: name](url) block out of a cover letter. */
-function parseCoverLetter(text: string): { body: string; attachment?: { name: string; url: string } } {
-  const re = /\[Portfolio\/Attachment:\s*([^\]]+)\]\((https?:\/\/[^)]+)\)/i;
-  const match = re.exec(text);
-  if (!match) return { body: text };
-  return {
-    body: text.replace(match[0], "").replace(/\n{3,}/g, "\n\n").trim(),
-    attachment: { name: match[1].trim(), url: match[2].trim() },
-  };
-}
-
-import { Briefcase, MessageSquare, Paperclip } from "lucide-react";
+import { Briefcase, MessageSquare } from "lucide-react";
 import { ApprovalsHeader } from "@/components/approvals/approvals-header";
 import { ApprovalsStats } from "@/components/approvals/approvals-stats";
 import { JobCard } from "@/components/approvals/job-card";
 import { ApprovalsLoading } from "@/components/approvals/approvals-loading";
-import { BadgeDisplay, RatingDisplay } from "@/components/rating/badge-display";
 import { humanizeError } from "@/lib/atelier/errors";
 
 interface JobWithApplications extends Escrow {
@@ -142,7 +130,10 @@ export default function ApprovalsPage() {
                     freelancerAddress: app.freelancer,
                     coverLetter: app.coverLetter || "",
                     proposedTimeline: app.proposedTimeline || 0,
-                    appliedAt: Date.now(),
+                    /* When they applied, from the block their application was
+                       mined in — not when this page happened to load, which is
+                       what Date.now() was reporting under an "Applied:" label. */
+                    appliedAt: app.appliedAt ?? Date.now(),
                     status: "pending" as const,
                     badge: badge as "Beginner" | "Intermediate" | "Advanced" | "Expert" | undefined,
                     averageRating: averageX100 / 100,
@@ -478,119 +469,19 @@ export default function ApprovalsPage() {
         </div>
       )}
 
-      {/* Application Review Modal */}
-      {selectedJob && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setSelectedJob(null);
-              setSelectedFreelancer(null);
-            }
-          }}
-        >
-          <div
-            className="bg-background rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">
-                  Review Applications - {selectedJob.projectTitle}
-                </h3>
-                <button
-                  onClick={() => {
-                    setSelectedJob(null);
-                    setSelectedFreelancer(null);
-                  }}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {selectedJob.applications.length === 0 ? (
-                <div className="text-center py-8">
-                  <MessageSquare className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                  <p className="text-muted-foreground">No applications yet</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {selectedJob.applications.map((application, index) => (
-                    <Card key={index} className="p-4">
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2 flex-wrap">
-                              <p className="font-medium">Freelancer Address:</p>
-                              <p className="text-sm text-muted-foreground font-mono">
-                                {application.freelancerAddress}
-                              </p>
-                              {application.badge && (
-                                <BadgeDisplay badge={application.badge} />
-                              )}
-                              {(application.averageRating !== undefined ||
-                                application.ratingCount !== undefined) && (
-                                <RatingDisplay
-                                  averageRating={application.averageRating}
-                                  ratingCount={application.ratingCount}
-                                />
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => {
-                                setSelectedJobForApproval(selectedJob); // Store job data for approval
-                                setSelectedJob(null); // Close the Application Review Modal
-                                setSelectedFreelancer(application);
-                                setIsApproving(true);
-                              }}
-                              className="px-4 py-2 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 cursor-pointer"
-                            >
-                              Approve
-                            </button>
-                          </div>
-                        </div>
-
-                        <div>
-                          <p className="font-medium">Cover Letter:</p>
-                          {(() => {
-                            const { body, attachment } = parseCoverLetter(application.coverLetter ?? "");
-                            return (
-                              <>
-                                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{body}</p>
-                                {attachment && (
-                                  <a
-                                    href={attachment.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="mt-2 inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
-                                  >
-                                    <Paperclip className="h-3.5 w-3.5 shrink-0" />
-                                    {attachment.name}
-                                  </a>
-                                )}
-                              </>
-                            );
-                          })()}
-                        </div>
-
-                        <div>
-                          <p className="font-medium">Proposed Timeline:</p>
-                          <p className="text-sm text-muted-foreground">
-                            {application.proposedTimeline} days
-                          </p>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {/*
+        * The second copy of this modal is gone.
+       *
+        * JobCard already renders the applications dialog, driven by the same
+        * `selectedJob` state through its `dialogOpen` prop — so selecting a job
+        * opened two: a proper Radix dialog and, underneath it, this hand-rolled
+        * `fixed inset-0` div showing the same applicants. They stacked, the
+        * lower one caught clicks meant for the upper, and the only way to tell
+        * there were two was to open the inspector.
+        *
+        * JobCard's is the one that survives: it traps focus, closes on Escape,
+        * and is reachable by keyboard, none of which a bare div does.
+        */}
 
       {/* Approval/Rejection Confirmation Modal */}
       {(() => {
