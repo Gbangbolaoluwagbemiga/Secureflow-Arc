@@ -11,7 +11,7 @@
 
 import { createPublicClient, http, zeroAddress, type Abi, type PublicClient } from "viem";
 import atelierAbi from "./AtelierABI.json" with { type: "json" };
-import { arcTestnet, config, explorerTx, logRpcUrl, rpcUrl } from "../config.js";
+import { arcChain, config, explorerTx, logRpcUrl, rpcUrl } from "../config.js";
 import { createCircleSigner, type CircleSigner } from "../circle/circleSigner.js";
 
 // Cast to viem's `Abi` type (not a tighter `as const` literal, since this is loaded
@@ -40,7 +40,7 @@ const erc20Abi = [
 let publicClient: PublicClient | null = null;
 export function getPublicClient(): PublicClient {
   if (!publicClient) {
-    publicClient = createPublicClient({ chain: arcTestnet, transport: http(rpcUrl) });
+    publicClient = createPublicClient({ chain: arcChain, transport: http(rpcUrl) });
   }
   return publicClient;
 }
@@ -63,7 +63,7 @@ export function getLogClient(): PublicClient {
     logClient =
       logRpcUrl === rpcUrl
         ? getPublicClient()
-        : createPublicClient({ chain: arcTestnet, transport: http(logRpcUrl) });
+        : createPublicClient({ chain: arcChain, transport: http(logRpcUrl) });
   }
   return logClient;
 }
@@ -133,7 +133,7 @@ export async function setYieldOptIn(
   }
 
   const hash = await signer.walletClient.writeContract({
-    chain: arcTestnet,
+    chain: arcChain,
     account: signer.address,
     address: controller,
     abi: [
@@ -170,7 +170,7 @@ export async function setJobManager(
   signer: CircleSigner,
 ): Promise<`0x${string}`> {
   const hash = await signer.walletClient.writeContract({
-    chain: arcTestnet,
+    chain: arcChain,
     account: signer.address,
     address: config.atelierAddress,
     abi,
@@ -222,7 +222,7 @@ export async function createEscrow(
   // 6-decimal units) via safeTransferFrom — required before createEscrow will accept
   // a non-native token; sending it as msg.value instead reverts with InvalidAmount.
   const approveHash = await signer.walletClient.writeContract({
-    chain: arcTestnet,
+    chain: arcChain,
     account: signer.address,
     address: config.usdcAddress,
     abi: erc20Abi,
@@ -232,7 +232,7 @@ export async function createEscrow(
   await client.waitForTransactionReceipt({ hash: approveHash });
 
   const hash = await signer.walletClient.writeContract({
-    chain: arcTestnet,
+    chain: arcChain,
     account: signer.address,
     address: config.atelierAddress,
     abi,
@@ -283,7 +283,7 @@ async function write(
   as: CircleSigner = createCircleSigner(),
 ): Promise<`0x${string}`> {
   const hash = await as.walletClient.writeContract({
-    chain: arcTestnet,
+    chain: arcChain,
     account: as.address,
     address: config.atelierAddress,
     abi,

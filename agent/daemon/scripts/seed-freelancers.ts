@@ -14,7 +14,7 @@
 import "dotenv/config";
 import { createPublicClient, createWalletClient, http } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
-import { arcTestnet, config, rpcUrl } from "../src/config.js";
+import { arcChain, config, rpcUrl } from "../src/config.js";
 import atelierAbi from "../src/web3/AtelierABI.json" with { type: "json" };
 import type { Abi } from "viem";
 
@@ -26,7 +26,7 @@ if (!escrowId && escrowId !== 0n) {
   process.exit(1);
 }
 
-const publicClient = createPublicClient({ chain: arcTestnet, transport: http(rpcUrl) });
+const publicClient = createPublicClient({ chain: arcChain, transport: http(rpcUrl) });
 
 const applicants = [
   {
@@ -66,11 +66,11 @@ async function main() {
       console.log(`  Fund this address with a little native USDC (gas) on Arc testnet before it can send a tx.\n`);
     }
 
-    const walletClient = createWalletClient({ account, chain: arcTestnet, transport: http(rpcUrl) });
+    const walletClient = createWalletClient({ account, chain: arcChain, transport: http(rpcUrl) });
 
     try {
       const hash = await walletClient.writeContract({
-        chain: arcTestnet,
+        chain: arcChain,
         account,
         address: config.atelierAddress,
         abi,
