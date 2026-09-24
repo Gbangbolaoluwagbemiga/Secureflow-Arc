@@ -14,8 +14,8 @@ import request from "supertest";
  * refusal says it is a refusal, names the origin, and says where to fix it.
  */
 
-const ALLOWED = "https://atelier-job.vercel.app";
-const PREVIEW = "https://atelier-job-git-feature.vercel.app";
+const ALLOWED = "https://secureflow.work";
+const PREVIEW = "https://secureflow-git-feature.vercel.app";
 const STRANGER = "https://not-ours.example.com";
 
 async function appWith(env: Record<string, string | undefined>) {
@@ -72,7 +72,7 @@ describe("with an allow-list configured", () => {
   it("allows preview deployments through the pattern", async () => {
     const app = await appWith({
       FRONTEND_URL: ALLOWED,
-      FRONTEND_URL_PATTERN: "^https://atelier-job.*\\.vercel\\.app$",
+      FRONTEND_URL_PATTERN: "^https://secureflow.*\\.vercel\\.app$",
     });
     const res = await request(app).get("/health").set("Origin", PREVIEW);
     expect(res.headers["access-control-allow-origin"]).toBe(PREVIEW);
@@ -81,7 +81,7 @@ describe("with an allow-list configured", () => {
   it("still refuses a stranger that the pattern does not match", async () => {
     const app = await appWith({
       FRONTEND_URL: ALLOWED,
-      FRONTEND_URL_PATTERN: "^https://atelier-job.*\\.vercel\\.app$",
+      FRONTEND_URL_PATTERN: "^https://secureflow.*\\.vercel\\.app$",
     });
     const res = await request(app).get("/health").set("Origin", STRANGER);
     expect(res.status).toBe(403);
