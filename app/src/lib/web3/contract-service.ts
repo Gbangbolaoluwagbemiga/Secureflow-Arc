@@ -442,8 +442,27 @@ export class ContractService {
     try { return await this.contract.read.feeCollector() as string; } catch { return ""; }
   }
 
-  async getPlatformFeeBP(): Promise<number> {
-    try { return Number(await this.contract.read.platformFeeBP()); } catch { return 0; }
+  /**
+   * The platform fee in basis points, or null if the chain would not say.
+   *
+   * This used to answer 0 on any failure, which reads as "there is no fee" —
+   * a confident wrong answer about money, on a rate-limited RPC. Callers now
+   * get null and can say they do not know instead of quoting a number nobody
+   * checked.
+   */
+  async getPlatformFeeBP(): Promise<number | null> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return Number(await this.contract.read.platformFeeBP());
+      } catch (err) {
+        if (attempt === 2) {
+          console.warn("[contract] platformFeeBP failed after 3 attempts:", err);
+          return null;
+        }
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      }
+    }
+    return null;
   }
 
   async getTotalFeesByToken(tokenAddress: string): Promise<string> {
@@ -1055,7 +1074,8 @@ export class ContractService {
     return write({
       address: this.addr,
       abi: AtelierABI.abi,
-      functionName: "delistToken",
+      // The contract calls it blacklistToken; the UI calls it delisting.
+      functionName: "blacklistToken",
       args: [token as `0x${string}`],
     });
   }

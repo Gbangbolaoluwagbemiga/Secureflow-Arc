@@ -2,9 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { YieldChoice } from "@/components/create/yield-choice";
 import { AlertTriangle, Clock, DollarSign, User } from "lucide-react";
 import { WHITELISTED_TOKENS } from "./project-details-step";
-
-/** 2.5%, as the contract charges it. */
-const PLATFORM_FEE_BP = 250;
+import { usePlatformFeeBP } from "@/hooks/use-platform-fee";
 
 interface Milestone {
   description: string;
@@ -51,6 +49,12 @@ export function ReviewStep({
     0.01;
 
   const budget = Number.parseFloat(formData.totalBudget || "0");
+
+  /* From the contract, not from a constant. The owner can change this, and
+     the last screen before a signature is the worst place to be out of date. */
+  const platformFeeBP = usePlatformFeeBP();
+  const fee = platformFeeBP === null ? null : (budget * platformFeeBP) / 10000;
+
   const balance = Number.parseFloat(walletBalance || "0");
   const hasInsufficientBalance =
     formData.useNativeToken && balance > 0 && budget > balance;
@@ -149,27 +153,30 @@ export function ReviewStep({
               page that added up to the figure they were being shown.
             */}
             <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <span>Platform fee (2.5%)</span>
+              <span>
+                {platformFeeBP === null
+                  ? "Platform fee"
+                  : `Platform fee (${Number((platformFeeBP / 100).toFixed(2))}%)`}
+              </span>
               <span data-testid="fee-line">
-                {formData.yieldOptIn ? (
+                {fee === null ? (
+                  <span className="opacity-50">checking…</span>
+                ) : formData.yieldOptIn ? (
                   <>
-                    <span className="line-through opacity-50">
-                      {(budget * PLATFORM_FEE_BP / 10000).toFixed(2)}
-                    </span>{" "}
+                    <span className="line-through opacity-50">{fee.toFixed(2)}</span>{" "}
                     waived
                   </>
                 ) : (
-                  (budget * PLATFORM_FEE_BP / 10000).toFixed(2)
+                  fee.toFixed(2)
                 )}
               </span>
             </div>
             <div className="flex items-center justify-between font-semibold border-t border-border/40 pt-2 mt-2">
               <span>You approve now</span>
               <span data-testid="approval-total">
-                {(formData.yieldOptIn
-                  ? budget
-                  : budget + budget * PLATFORM_FEE_BP / 10000
-                ).toFixed(4)}
+                {fee === null
+                  ? <span className="opacity-50">checking…</span>
+                  : (formData.yieldOptIn ? budget : budget + fee).toFixed(4)}
               </span>
             </div>
             {hasInsufficientBalance && (
@@ -187,7 +194,7 @@ export function ReviewStep({
           <YieldChoice
             value={formData.yieldOptIn}
             onChange={onYieldChange}
-            fee={budget * PLATFORM_FEE_BP / 10000}
+            fee={fee ?? 0}
             disabled={isSubmitting}
           />
         </div>
