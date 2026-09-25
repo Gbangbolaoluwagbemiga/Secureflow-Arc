@@ -9,6 +9,13 @@ import { fetchMyApplications, type AppliedJob, type ApplicationOutcome } from "@
 import { categoryLabel, withoutMarker } from "@/lib/atelier/categories";
 import { encodeJobId } from "@/lib/id-codec";
 
+/** Escrows on this contract are USDC, which is six decimals on Arc either way. */
+function usdc(raw: string): string {
+  const n = Number(raw || "0") / 1e6;
+  return `$${n.toFixed(2)}`;
+}
+
+
 /**
  * THE LIST A FREELANCER HAD NOWHERE TO LOOK FOR.
  *
@@ -62,10 +69,7 @@ const LOOK: Record<
   },
 };
 
-function usdc(raw: string): string {
-  const n = Number(raw || "0") / 1e6;
-  return `$${n.toFixed(2)}`;
-}
+
 
 export function MyApplications() {
   const { wallet } = useWeb3();

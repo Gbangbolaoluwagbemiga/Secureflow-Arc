@@ -89,19 +89,31 @@ export class ContractService {
    * Three attempts with a widening gap. If they all fail it still returns 1,
    * because callers have no other shape to accept, but the log says so.
    */
-  async getNextEscrowId(): Promise<number> {
+  /**
+   * The escrow counter, or null if the chain would not say.
+   *
+   * Callers that scan escrows mostly cope fine with an optimistic 1, because a
+   * short scan is the same as a slow page. A caller deciding whether somebody
+   * has applied for nothing cannot: for them "1" and "I could not read it" are
+   * different answers and only one of them is safe to print.
+   */
+  async getNextEscrowIdOrNull(): Promise<number | null> {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         return Number(await this.contract.read.nextEscrowId());
       } catch (err) {
         if (attempt === 2) {
           console.warn("[contract] getNextEscrowId failed after 3 attempts:", err);
-          return 1;
+          return null;
         }
         await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
       }
     }
-    return 1;
+    return null;
+  }
+
+  async getNextEscrowId(): Promise<number> {
+    return (await this.getNextEscrowIdOrNull()) ?? 1;
   }
 
   async getEscrow(id: number) {
