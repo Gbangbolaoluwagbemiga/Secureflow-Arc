@@ -1,4 +1,5 @@
 import { encodeJobId } from "@/lib/id-codec";
+import { escrowBadge } from "@/lib/atelier/escrow-status";
 import { DeclineAssignment } from "@/components/atelier/decline-assignment";
 import { ApplicantScores } from "@/components/atelier/applicant-scores";
 import { useState, useEffect } from "react";
@@ -1700,20 +1701,10 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                               hands, and even that resolves.
                             */}
                             {(() => {
-                              const disputed = escrow.milestones.some(
-                                (m) => m.status === "disputed",
-                              );
-                              const needsRevision =
-                                !disputed &&
-                                escrow.milestones.some((m) => m.status === "rejected");
-                              const label = disputed
-                                ? "disputed"
-                                : needsRevision
-                                  ? "revision requested"
-                                  : escrow.status;
+                              const badge = escrowBadge(escrow.milestones, escrow.status);
                               return (
-                                <Badge className={getStatusColor(disputed ? "disputed" : needsRevision ? "rejected" : escrow.status)}>
-                                  {label}
+                                <Badge className={getStatusColor(badge.tone)}>
+                                  {badge.label}
                                 </Badge>
                               );
                             })()}
