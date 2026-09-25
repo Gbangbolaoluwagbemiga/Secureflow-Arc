@@ -259,9 +259,11 @@ export function DisputeEvidence({
                         <p className="text-sm mb-2 text-foreground">{description}</p>
                       )}
 
-                      <div className="flex items-center gap-2 bg-muted/50 p-2 rounded">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <code className="text-xs flex-1 truncate">{cid}</code>
+                      <div className="flex items-center gap-2 bg-muted/50 p-2 rounded min-w-0">
+                        <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        {/* min-w-0, or `truncate` cannot shrink a flex child below
+                            its content and a pasted URL pushes the row off screen. */}
+                        <code className="text-xs flex-1 min-w-0 truncate" title={cid}>{cid}</code>
                         <Button
                           variant="ghost"
                           size="sm"
