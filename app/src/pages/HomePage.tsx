@@ -63,7 +63,7 @@ export default function HomePage() {
           const platformFee = Number(escrowData.platformFee || "0");
           const currentTotal = Number(escrowData.totalAmount || "0");
           const originalTotal =
-            platformFeeBP > 0 && platformFee > 0
+            platformFeeBP !== null && platformFeeBP > 0 && platformFee > 0
               ? (platformFee * 10000) / platformFeeBP
               : currentTotal;
 

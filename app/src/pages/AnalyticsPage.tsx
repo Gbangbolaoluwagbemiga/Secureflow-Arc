@@ -152,7 +152,7 @@ export default function AnalyticsPage() {
           const platformFee = BigInt(escrow.platformFee || 0);
           const currentTotal = BigInt(escrow.totalAmount || 0);
           const amount =
-            platformFeeBP > 0 && platformFee > 0n
+            platformFeeBP !== null && platformFeeBP > 0 && platformFee > 0n
               ? (platformFee * 10000n) / BigInt(platformFeeBP)
               : currentTotal;
           if (escrowToken === USDC_ADDRESS) {

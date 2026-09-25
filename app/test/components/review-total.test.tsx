@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 /**
@@ -20,6 +20,13 @@ import { render, screen } from "@testing-library/react";
  */
 
 vi.mock("wagmi", () => ({ useWriteContract: () => ({ writeContractAsync: vi.fn() }) }));
+
+/* The fee is read from the contract now. Held in a mutable box so a test can
+   change it the way an owner changes it on chain. */
+const feeBP = { value: 250 as number | null };
+vi.mock("@/hooks/use-platform-fee", () => ({
+  usePlatformFeeBP: () => feeBP.value,
+}));
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
 const { ReviewStep } = await import("@/components/create/review-step");
@@ -52,6 +59,8 @@ function review(over: Record<string, unknown> = {}) {
 }
 
 describe("what the client is told they will pay", () => {
+  beforeEach(() => { feeBP.value = 250; });
+
   it("shows budget plus fee, which is what the wallet asks for", () => {
     review();
     // 5.00 + 2.5% = 5.1250 — the exact figure in the approval dialog.
@@ -97,5 +106,39 @@ describe("what the client is told they will pay", () => {
     review();
     expect(screen.getByTestId("fee-line")).toHaveTextContent("0.13");
     expect(screen.getByTestId("fee-line")).not.toHaveTextContent(/waived/i);
+  });
+});
+
+/**
+ * The owner set the fee to 1% on chain. This page went on saying 2.5%, and
+ * quoting a total that did not match what the wallet asked for a moment later.
+ *
+ * Nothing was overcharged — the approval comes from `quoteDeposit`, a contract
+ * call — but a client reading one figure here and another in their wallet has
+ * no way to know which is real, and the honest answer is that the page was the
+ * wrong one.
+ */
+describe("when the owner changes the fee", () => {
+  beforeEach(() => { feeBP.value = 250; });
+
+  it("quotes the fee the contract charges now, not the one it charged before", () => {
+    feeBP.value = 100;
+    review();
+    expect(screen.getByTestId("fee-line")).toHaveTextContent("0.05");
+    expect(screen.getByTestId("approval-total")).toHaveTextContent("5.0500");
+  });
+
+  it("names the rate it is quoting, so the arithmetic can be followed", () => {
+    feeBP.value = 100;
+    review();
+    expect(screen.getByText(/Platform fee \(1%\)/)).toBeInTheDocument();
+  });
+
+  it("says it is checking rather than inventing a number the chain has not given", () => {
+    feeBP.value = null;
+    review();
+    expect(screen.getByTestId("fee-line")).toHaveTextContent("checking");
+    expect(screen.getByTestId("approval-total")).toHaveTextContent("checking");
+    expect(screen.getByTestId("approval-total")).not.toHaveTextContent("5.1250");
   });
 });
