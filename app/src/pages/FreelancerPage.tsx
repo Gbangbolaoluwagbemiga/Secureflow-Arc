@@ -127,6 +127,8 @@ interface Milestone {
   resolvedAt?: number;
   resolvedBy?: string;
   resolutionAmount?: string;
+  /** The arbiter's stated reason, e.g. "Client won". */
+  resolutionReason?: string;
 }
 
 function OverdueFreelancerBanner({
@@ -362,6 +364,11 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                         disputeReason: m.disputeReason || existing?.disputeReason || undefined,
                         resolvedAt: resolvedAtRaw > 0 ? resolvedAtRaw * 1000 : existing?.resolvedAt,
                         resolvedBy: resolvedByRaw || existing?.resolvedBy || undefined,
+                        /* Without these the card falls through to "check your
+                           earnings balance", which is the wrong thing to tell
+                           somebody who just lost. */
+                        resolutionAmount: m.resolutionFreelancerAmount?.toString() ?? existing?.resolutionAmount,
+                        resolutionReason: m.resolutionReason || existing?.resolutionReason || undefined,
                       };
                     })
                   : e.milestones;
@@ -560,6 +567,8 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                   rejectionReason: m.rejectionReason || undefined,
                   resolvedAt: m.resolvedAt && Number(m.resolvedAt) > 0 ? Number(m.resolvedAt) * 1000 : undefined,
                   resolvedBy: m.resolvedBy && m.resolvedBy !== "0x0000000000000000000000000000000000000000" ? m.resolvedBy : undefined,
+                  resolutionAmount: m.resolutionFreelancerAmount?.toString() ?? undefined,
+                  resolutionReason: m.resolutionReason || undefined,
                   proposedAmount: m.proposedAmount?.toString() || undefined,
                   proposedDescription: m.proposedDescription || undefined,
                 };
@@ -2192,13 +2201,22 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                                               );
                                             }
                                           }
-                                          // No amount data available — show neutral message
+                                          /* We could not read the split. Say that,
+                                             rather than pointing somebody at a
+                                             balance that may not have moved. */
                                           return (
                                             <p className="text-sm text-blue-700 dark:text-blue-300">
-                                              Dispute resolved by admin. Check your earnings balance for payment details.
+                                              An arbiter has resolved this dispute. We could not read the
+                                              split from the chain just now, so check the escrow on the
+                                              explorer for the amounts.
                                             </p>
                                           );
                                         })()}
+                                        {milestone.resolutionReason && (
+                                          <p className="mt-2 text-sm text-blue-700 dark:text-blue-300">
+                                            Arbiter's reason: {milestone.resolutionReason}
+                                          </p>
+                                        )}
                                       </div>
                                     )}
 
