@@ -6,15 +6,86 @@ the contract means deploying it twice.
 
 ---
 
-## Before you start: rotate the deploy key
+## One key owns everything on mainnet
 
-`0x3Be7fbBDbC73Fc4731D60EF09c4BA1A94DC58E41` is the deployer, and it is worth
-rotating before it owns anything that matters. It holds ~148 on Arc
-testnet, which is only faucet money, but it will also **own the upgradeable
-proxy** — and the owner can replace the implementation over live escrows.
+`0x3Be7fbBDbC73Fc4731D60EF09c4BA1A94DC58E41` is, on Arc mainnet, all three of:
 
-That is a different risk class from a testnet balance. Generate a fresh key,
-fund it from the faucet, and put that one in
+- **owner of the escrow proxy** `0xbdeb44945979a01584fd7d796a71C707D2F83372`
+- **owner of the yield controller** `0x92a0C47e819b84069eb95776497421850103aa37`
+- **the only authorised arbiter**
+
+That is a single point of failure over other people's wages, whether or not
+anything ever goes wrong with the key itself.
+
+**What the owner can do.** The proxy is UUPS with no timelock, so owner means
+`upgradeToAndCall`: the implementation can be replaced over live jobs. The
+owner can also point `setYieldAdapter` anywhere. Being the sole arbiter is the
+least of it.
+
+**What being the sole arbiter means.** Every dispute on the platform routes to
+one key. If it is lost, or simply unavailable for a week, a disputed escrow
+cannot be resolved by anyone and the money stays locked.
+
+Splitting these roles is the highest-value change available on the contract
+today, and it costs a handful of transactions.
+
+### The sequence
+
+Order matters. Do not revoke the old arbiter until a new owner and new
+arbiters are in place, or disputes become unresolvable by anyone.
+
+```bash
+export ETH_RPC_URL=https://rpc.mainnet.arc.io
+
+# 1. A fresh key. Not on a shared screen, not in a screenshot, not in a
+#    terminal you are recording.
+cast wallet new
+
+# 2. Fund it with a little USDC for gas. acceptOwnership is a transaction.
+
+# 3. Hand ownership over, signed by the OLD key, on both contracts.
+cast send 0xbdeb44945979a01584fd7d796a71C707D2F83372 \
+  'transferOwnership(address)' <NEW_OWNER> --private-key $OLD_KEY
+cast send 0x92a0C47e819b84069eb95776497421850103aa37 \
+  'transferOwnership(address)' <NEW_OWNER> --private-key $OLD_KEY
+
+# 4. Accept it, signed by the NEW key. Ownable2Step needs both halves; that
+#    is the point of it, and ownership does not move until this lands.
+cast send 0xbdeb44945979a01584fd7d796a71C707D2F83372 \
+  'acceptOwnership()' --private-key $NEW_KEY
+cast send 0x92a0C47e819b84069eb95776497421850103aa37 \
+  'acceptOwnership()' --private-key $NEW_KEY
+
+# 5. Arbiters, from the new owner. Two or three, none of them the deployer.
+cast send 0xbdeb44945979a01584fd7d796a71C707D2F83372 \
+  'authorizeArbiter(address)' <ARBITER_1> --private-key $NEW_KEY
+cast send 0xbdeb44945979a01584fd7d796a71C707D2F83372 \
+  'authorizeArbiter(address)' <ARBITER_2> --private-key $NEW_KEY
+
+# 6. Only now, drop the old one.
+cast send 0xbdeb44945979a01584fd7d796a71C707D2F83372 \
+  'revokeArbiter(address)' 0x3Be7fbBDbC73Fc4731D60EF09c4BA1A94DC58E41 \
+  --private-key $NEW_KEY
+
+# 7. Check it, signed by nobody.
+cast call 0xbdeb44945979a01584fd7d796a71C707D2F83372 'owner()(address)'
+cast call 0x92a0C47e819b84069eb95776497421850103aa37 'owner()(address)'
+cast call 0xbdeb44945979a01584fd7d796a71C707D2F83372 'getArbiters()(address[])'
+```
+
+### After rotating
+
+The Admin panel gates on `owner()`, so you will need to connect the new key to
+see it. Nothing else in the app reads the owner address.
+
+---
+
+## Testnet: rotate the deploy key before deploying
+
+`0x3Be7fbBDbC73Fc4731D60EF09c4BA1A94DC58E41` is also the testnet deployer and
+owner. Deploying testnet from a key that owns mainnet is worth avoiding on its
+own: a key used in more places is a key with more ways to go wrong. Generate a
+fresh one, fund it from the faucet, and put that in
 `app/contracts/solidity/.env` before deploying.
 
 ```bash
