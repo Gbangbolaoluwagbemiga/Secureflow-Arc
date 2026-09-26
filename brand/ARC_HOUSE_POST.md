@@ -65,4 +65,12 @@ Every escrow, application, approval, dispute and payout is public at those addre
 
 **Please break it**
 
-This is the part I actually want from this post. Post a job, apply for one, raise a dispute on purpose, try the bot with no wallet at all and see how far you get. If something is confusing, slow, or shows a number that does not match your wallet, tell me here or open an issue on the repo. A dozen things got fixed this week only because somebody who was not me used it.
+This is mainnet, not a testnet. The money in those escrows is real, and that is exactly why I want other people putting it through its paces rather than me.
+
+Start small. A one USDC job with a single milestone costs almost nothing and exercises the whole path: funding, applying, submitting, approving, payout. Then try the parts nobody enjoys. Send a milestone back and have it resubmitted. Raise a dispute and let an arbiter settle it. Cancel a job that already has applicants. Open the Telegram bot with no wallet at all and see how far you get before anything confuses you.
+
+**There is a $500 bounty running for bugs.** It is aimed at anything that touches money or trust: funds that go to the wrong person, a number on screen that does not match what your wallet is asked to sign, a way to move money the contract should not permit, or an agent doing something it is supposed to be unable to do. Smaller breakages are still very welcome and still get fixed, they just are not the $500.
+
+If something is unclear while you are in the app, the assistant in the bottom right will answer questions about whatever you are looking at. For anything else, reach me on X at https://x.com/secureflow_xyz, reply in this thread, or open an issue on the repo.
+
+A dozen things got fixed this week only because somebody who was not me used it. That is the whole reason for this post.
