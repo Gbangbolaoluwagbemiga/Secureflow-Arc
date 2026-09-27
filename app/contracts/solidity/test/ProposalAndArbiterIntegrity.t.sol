@@ -189,4 +189,27 @@ contract ProposalAndArbiterIntegrityTest is JobManagerBase {
         vm.expectRevert(SecureFlow.SelfDealing.selector);
         sf.resolveDispute(id, 1, 0, M2, "I refund myself");
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 4. The overdue path must still be resolvable
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * raiseOverdueDispute sets esc.status and touches no milestone, so a guard
+     * that demands m.status == Disputed strands every job that stalled rather
+     * than being argued over. That is the one dispute route where nobody
+     * submitted anything to argue about.
+     */
+    function test_overdueDisputeIsStillResolvable() public {
+        uint256 id = _job();
+
+        vm.warp(block.timestamp + 31 days);
+        vm.prank(client);
+        sf.raiseOverdueDispute(id, "freelancer went quiet");
+
+        uint256 before = usdc.balanceOf(client);
+        vm.prank(arbiter);
+        sf.resolveDispute(id, 0, 0, M1, "nothing was delivered");
+        assertEq(usdc.balanceOf(client) - before, M1, "an overdue dispute must be resolvable");
+    }
 }

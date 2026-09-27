@@ -426,7 +426,7 @@ contract SecureFlow is
      * @dev Bump this in the same commit as any storage-layout change.
      */
     function version() external pure virtual returns (string memory) {
-        return "3.10.0-scope-not-price";
+        return "3.10.1-overdue-fix";
     }
 
     /// @dev Only the owner may ship a new implementation. See the note above.
@@ -741,8 +741,14 @@ contract SecureFlow is
          * milestone 2 could pass index 0, already approved and already paid,
          * and pay it a second time out of money belonging to the rest of the
          * job.
+         *
+         * The test is "not already settled", not "is disputed", because
+         * raiseOverdueDispute sets only esc.status and touches no milestone at
+         * all. Demanding Disputed here strands exactly the jobs that stalled
+         * rather than being argued over, which is the case with nothing
+         * submitted to argue about.
          */
-        if (m.status != MilestoneStatus.Disputed) revert InvalidMilestone();
+        if (m.status == MilestoneStatus.Approved) revert InvalidMilestone();
         if (freelancerAmount + clientAmount != m.amount) revert InvalidAmount();
 
         // reopenJob and withdrawJobFunds read disputeVoteCounts > 0 as "this
