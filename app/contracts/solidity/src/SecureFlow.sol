@@ -426,7 +426,7 @@ contract SecureFlow is
      * @dev Bump this in the same commit as any storage-layout change.
      */
     function version() external pure virtual returns (string memory) {
-        return "3.9.1-fee-follows-the-escrow";
+        return "3.10.0-scope-not-price";
     }
 
     /// @dev Only the owner may ship a new implementation. See the note above.
