@@ -184,6 +184,31 @@ contract YieldDistributionTest is JobManagerBase {
         assertEq(usdc.balanceOf(feeCollector), before, "paid out of thin air");
     }
 
+    /**
+     * A call that paid nobody must not spend the escrow's one settlement.
+     *
+     * yieldSettled was set before the earned == 0 check, so a job that finished
+     * with nothing earned was marked settled by a call that moved no money, and
+     * the guard at the top of distributeYield fired on every call after it.
+     *
+     * Note what this does NOT claim: yield arriving after the position is
+     * unwound is unrecoverable for a separate reason, since there is no
+     * deployed balance left to attribute a share of. The flag is simply a
+     * record of a payment, so it belongs where the payment happens.
+     */
+    function test_aPayoutOfNothingDoesNotSpendTheSettlement() public {
+        uint256 id = _earningJob();
+        _submit(id, 0);
+        vm.prank(client);
+        sf.approveMilestone(id, 0);
+        _finish(id);
+
+        yield_.distributeYield(id); // earns nothing, so settles nothing
+
+        // Must not revert AlreadySettled: nothing was ever distributed.
+        yield_.distributeYield(id);
+    }
+
     /// Anyone may trigger it — the people owed should not depend on us remembering.
     function test_anybodyCanTriggerThePayout() public {
         uint256 id = _earningJob();

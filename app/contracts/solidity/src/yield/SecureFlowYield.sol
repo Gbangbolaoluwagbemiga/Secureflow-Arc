@@ -460,14 +460,30 @@ contract SecureFlowYield is ISecureFlowYield, Ownable2Step, ReentrancyGuard {
             uint256 pooled = deployedAssets[token];
             uint256 held = adapter.totalAssets();
             if (held > pooled && pooled > 0) {
-                claim += ((held - pooled) * deployed) / pooled;
+                /*
+                 * escrowDeployed can exceed this escrow's real share of the
+                 * pool. ensureLiquid unwinds against deployedAssets to pay a
+                 * milestone and has no escrowId to debit, so the per-escrow
+                 * figure stays where it was while the pool shrinks under it.
+                 *
+                 * Attributing the gain by a number larger than the pool would
+                 * pay this escrow out of everybody else's earnings, so the
+                 * share is capped at the pool. The result is an escrow that
+                 * can be paid less than its arithmetic share, never more.
+                 */
+                uint256 attributable = deployed > pooled ? pooled : deployed;
+                claim += ((held - pooled) * attributable) / pooled;
             }
         }
 
         try adapter.withdraw(claim) returns (uint256 recovered) {
             uint256 booked = recovered > deployed ? deployed : recovered;
+            // Same staleness, other direction: never debit the pool for more
+            // than it holds, or this reverts and strands the unwind.
+            uint256 pool = deployedAssets[token];
+            if (booked > pool) booked = pool;
             escrowDeployed[escrowId] = deployed - booked;
-            deployedAssets[token] -= booked;
+            deployedAssets[token] = pool - booked;
             /*
              * Anything above the principal is this escrow's earnings, and it is
              * already here — _send below forwards only the principal. Banking it
@@ -529,13 +545,23 @@ contract SecureFlowYield is ISecureFlowYield, Ownable2Step, ReentrancyGuard {
             esc.status == ISecureFlowEscrows.EscrowStatus.Disputed
         ) revert JobNotFinished();
 
-        yieldSettled[escrowId] = true;
-
         uint256 earned = escrowYield[escrowId];
         if (earned == 0) {
+            /*
+             * Nothing moved, so nothing is settled.
+             *
+             * Marking it settled here burned the escrow's one claim on a call
+             * that paid nobody: a job that finished before its venue ever
+             * earned could never come back for the earnings, because the guard
+             * at the top of this function had already fired. The flag is a
+             * record of a payment having been made, so it is set where the
+             * payment is made.
+             */
             emit YieldDistributed(escrowId, 0, 0, 0);
             return;
         }
+
+        yieldSettled[escrowId] = true;
         escrowYield[escrowId] = 0;
 
         address token = esc.token;
