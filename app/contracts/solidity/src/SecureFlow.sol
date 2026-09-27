@@ -722,12 +722,27 @@ contract SecureFlow is
         if (esc.status != EscrowStatus.Disputed) revert InvalidEscrowStatus();
         if (bytes(reason).length == 0) revert InvalidConfig(); // Reason is required
 
+        /*
+         * An arbiter must not rule on a job they are a party to. Nothing
+         * stopped the escrow's own freelancer, once authorised, from calling
+         * this with the full milestone to themselves.
+         */
+        if (msg.sender == esc.beneficiary || msg.sender == esc.depositor) revert SelfDealing();
+
         // The panel a client named rules this job, while anyone on it still
         // can. See _panelGate: enforcing it unconditionally would lock escrows
         // whose panel holds no protocol authority.
         if (!_panelGate(esc, msg.sender)) revert Unauthorized();
 
         Milestone storage m = _getMilestone(escrowId, milestoneIndex);
+        /*
+         * The ESCROW being disputed is not the same as THIS milestone being
+         * disputed. Without this, an arbiter resolving a live dispute over
+         * milestone 2 could pass index 0, already approved and already paid,
+         * and pay it a second time out of money belonging to the rest of the
+         * job.
+         */
+        if (m.status != MilestoneStatus.Disputed) revert InvalidMilestone();
         if (freelancerAmount + clientAmount != m.amount) revert InvalidAmount();
 
         // reopenJob and withdrawJobFunds read disputeVoteCounts > 0 as "this
@@ -1424,7 +1439,21 @@ contract SecureFlow is
 
         Milestone storage m = _getMilestone(escrowId, milestoneIndex);
         if (m.status != MilestoneStatus.NotStarted) revert MilestoneAlreadyProcessed();
-        if (proposedAmount == 0) revert InvalidAmount();
+        /*
+         * Scope, not price.
+         *
+         * This used to accept any amount, and approveMilestoneProposal wrote it
+         * straight onto the milestone without moving a token or touching
+         * esc.totalAmount. The sum of the milestones then no longer matched the
+         * money, paidAmount could never equal totalAmount, and the escrow could
+         * never reach Released: funds stuck until the emergency window, on a job
+         * where both sides did something the UI offered them.
+         *
+         * Changing a price means moving money, and setMilestones already does
+         * that properly. The parameter stays for ABI compatibility and must
+         * equal what is already there.
+         */
+        if (proposedAmount != m.amount) revert InvalidAmount();
 
         m.proposedAmount = proposedAmount;
         m.proposedDescription = proposedDescription;
@@ -1440,11 +1469,14 @@ contract SecureFlow is
         Escrow storage esc = _requireEscrow(escrowId);
         if (msg.sender != esc.depositor) revert Unauthorized();
 
+        if (esc.status != EscrowStatus.Pending && esc.status != EscrowStatus.InProgress)
+            revert InvalidEscrowStatus();
+
         Milestone storage m = _getMilestone(escrowId, milestoneIndex);
         if (m.status != MilestoneStatus.ProposalPending) revert NoPendingProposal();
 
-        // Update milestone with proposed values
-        m.amount = m.proposedAmount;
+        // Scope only. m.amount is deliberately untouched — see
+        // proposeMilestoneChange for why writing it here loses money.
         m.description = m.proposedDescription;
         m.status = MilestoneStatus.NotStarted;
 
