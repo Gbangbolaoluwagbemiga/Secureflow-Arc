@@ -425,7 +425,7 @@ handler offering only the permitted calls proves nothing.
 |---|---|
 | Network | Arc mainnet · chain `5042` |
 | Proxy (**the contract**) | [`0xbdeb44945979a01584fd7d796a71C707D2F83372`](https://explorer.arc.io/address/0xbdeb44945979a01584fd7d796a71C707D2F83372) |
-| Implementation | [`0xFCDF43ECc661C48B5eF55B67363d96021c9803DF`](https://explorer.arc.io/address/0xFCDF43ECc661C48B5eF55B67363d96021c9803DF) · `3.9.1-fee-follows-the-escrow` |
+| Implementation | [`0xdB80F03692e45dd0be64E54FBD3d824Fdb64e9f7`](https://explorer.arc.io/address/0xdB80F03692e45dd0be64E54FBD3d824Fdb64e9f7) · `3.10.0-scope-not-price` |
 | Yield controller | [`0x92a0C47e819b84069eb95776497421850103aa37`](https://explorer.arc.io/address/0x92a0C47e819b84069eb95776497421850103aa37) |
 | Yield adapter | **None attached.** `yieldAdapter(USDC)` is the zero address, so no escrow earns anything. The fee waiver works; the earnings split pays nothing until a venue is wired |
 | USDC | `0x3600000000000000000000000000000000000000` — the native gas token, reached at its ERC-20 predeploy |
