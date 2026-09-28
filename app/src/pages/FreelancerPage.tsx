@@ -2163,11 +2163,13 @@ export default function FreelancerPage({ embedded = false }: { embedded?: boolea
                                           </Badge>
                                         </div>
                                         {(() => {
-                                          // Read freelancer amount: prefer milestone prop, fall back to localStorage
-                                          const lsFA = localStorage.getItem(`resolution_fa_${escrow.id}_${index}`);
+                                          /* The chain or nothing. A localStorage
+                                             fallback only ever holds a value in
+                                             the browser that resolved the
+                                             dispute, never the losing party's. */
                                           const freelancerAmt = milestone.resolutionAmount !== undefined
                                             ? Number(milestone.resolutionAmount)
-                                            : lsFA !== null ? Number(lsFA) : null;
+                                            : null;
                                           const milestoneAmt = Number(milestone.amount);
 
                                           if (freelancerAmt !== null) {

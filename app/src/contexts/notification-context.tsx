@@ -681,12 +681,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         if (reason) {
           localStorage.setItem(`resolution_${escrowId}_${milestoneIndex}`, reason);
         }
-        if (freelancerAmount) {
-          localStorage.setItem(`resolution_fa_${escrowId}_${milestoneIndex}`, freelancerAmount.toString());
-        }
-        if (clientAmount) {
-          localStorage.setItem(`resolution_ca_${escrowId}_${milestoneIndex}`, clientAmount.toString());
-        }
+        /* The amounts are deliberately not cached here. They live on the
+           milestone, every reader can fetch them, and a copy in one browser
+           is worse than no copy: it shows the arbiter their own numbers and
+           shows everybody else a zero. */
       }
       
       // Notify both client and freelancer with resolution details

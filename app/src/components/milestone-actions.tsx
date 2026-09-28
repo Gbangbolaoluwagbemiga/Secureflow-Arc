@@ -535,9 +535,15 @@ export function MilestoneActions({
           </Button>
         )}
 
-        {/* Dispute Milestone - Only payer for submitted milestones (disabled if disputed) */}
+        {/* Dispute Milestone - Only payer for submitted milestones (disabled if disputed).
+            Hidden while an agent holds the job, for the same reason Approve and
+            Reject are: the client handed the decision over, and offering them a
+            button the contract will refuse is worse than offering nothing.
+            Approve and Reject got this gate and Dispute was missed. */}
         {milestone.status === "submitted" &&
           isPayer &&
+          !managedByAgent &&
+          !managerLoading &&
           !isProjectDisputed && (
             <Button
               onClick={() => openDialog("dispute")}
@@ -628,15 +634,21 @@ export function MilestoneActions({
                 milestone.resolutionReason ||
                 null;
 
-              // Resolution amounts: prefer on-milestone props, fall back to localStorage
-              const lsFA = localStorage.getItem(`resolution_fa_${idStr}_${idxStr}`);
-              const lsCA = localStorage.getItem(`resolution_ca_${idStr}_${idxStr}`);
+              /*
+               * Who was paid what comes off the milestone, or it is not shown.
+               *
+               * This used to fall back to localStorage, which can only ever
+               * hold a value in the browser that resolved the dispute. The
+               * losing party opened the same screen and read a zero written by
+               * nobody. A financial outcome is not a UI preference; the chain
+               * has these amounts and is the only thing entitled to state them.
+               */
               const freelancerAmount = milestone.resolutionAmount
                 ? Number(milestone.resolutionAmount)
-                : lsFA ? Number(lsFA) : 0;
+                : 0;
               const clientAmount = milestone.resolutionClientAmount
                 ? Number(milestone.resolutionClientAmount)
-                : lsCA ? Number(lsCA) : 0;
+                : 0;
               
               // Get the original dispute reason
               const disputeReason = milestone.disputeReason;

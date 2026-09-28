@@ -99,6 +99,33 @@ gaslessRouter.post("/apply", async (req, res) => {
       return;
     }
 
+    /*
+     * The relayer pays for this, so it only pays for our own contract.
+     *
+     * `to` arrived straight from the caller and was forwarded unchecked. The
+     * EIP-712 signature proves the request came from `from`, which stops
+     * somebody spending another person's nonce, but it does nothing about
+     * where the call lands: anybody could sign their own request naming any
+     * address on Arc and have this wallet fund it. The gate on this route is a
+     * bearer token that ships in the frontend bundle, so "anybody" is the
+     * accurate word.
+     *
+     * Sponsoring gas is a favour to our users on our contract, not a public
+     * relay.
+     */
+    const escrowAddress = process.env.CONTRACT_ADDRESS?.trim();
+    if (!escrowAddress) {
+      console.error("[gasless] CONTRACT_ADDRESS is unset; refusing to relay");
+      res.status(503).json({ error: "Relayer is not configured" });
+      return;
+    }
+    if (String(to).toLowerCase() !== escrowAddress.toLowerCase()) {
+      res.status(403).json({
+        error: "This relayer only sponsors calls to the SecureFlow escrow contract",
+      });
+      return;
+    }
+
     const { account, walletClient, publicClient, forwarderAddress } = getRelayerConfig();
 
     // --- Build EIP-712 domain ---
