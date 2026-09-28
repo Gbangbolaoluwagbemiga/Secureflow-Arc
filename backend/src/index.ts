@@ -3,6 +3,7 @@ import cors from "cors";
 import express from "express";
 import rateLimit from "express-rate-limit";
 import { requireApiSecret } from "./middleware/auth.js";
+import { authRouter } from "./routes/auth.js";
 import { aiRouter } from "./routes/ai.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { uploadRouter } from "./routes/upload.js";
@@ -214,6 +215,9 @@ app.get("/health", async (_req, res) => {
     },
   });
 });
+
+/* Signing in cannot sit behind the gate it opens. */
+app.use("/v1/auth", authRouter);
 
 const auth = requireApiSecret(apiSecret);
 
