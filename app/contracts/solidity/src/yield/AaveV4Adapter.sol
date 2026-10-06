@@ -41,6 +41,13 @@ interface IAaveSpoke {
  * which is exactly what {IYieldAdapter-totalAssets} means. The Spoke PULLS the
  * asset from the caller, so this approves before supplying rather than sending.
  *
+ * A Spoke is an entry point, not a treasury. Supplied assets settle into the
+ * Hub behind it and the Spoke itself holds nothing: measured on Arc mainnet on
+ * 6 October 2026, the Main and Forex Spokes each held 0 USDC while the Core Hub
+ * held 75,735,275. `maxWithdrawable` therefore has to read the Hub. Reading the
+ * Spoke returns zero forever, which would look like a reserve that can never
+ * pay out and quietly keep every deployment at zero.
+ *
  * WHAT MAKES IT SAFE TO POINT LIVE ESCROW AT
  *
  *   1. Only the vault may move money. `deposit` and `withdraw` are onlyVault,
@@ -72,6 +79,9 @@ contract AaveV4Adapter is IYieldAdapter {
     /// @notice The Aave V4 Spoke this adapter supplies through.
     IAaveSpoke public immutable spoke;
 
+    /// @notice The Hub holding that Spoke's liquidity. Read for withdrawability.
+    address public immutable hub;
+
     /// @notice Which reserve on that Spoke. Immutable so it cannot be repointed.
     uint256 public immutable reserveId;
 
@@ -88,13 +98,14 @@ contract AaveV4Adapter is IYieldAdapter {
         _;
     }
 
-    constructor(address _vault, address _token, address _spoke, uint256 _reserveId) {
-        if (_vault == address(0) || _token == address(0) || _spoke == address(0)) {
+    constructor(address _vault, address _token, address _spoke, address _hub, uint256 _reserveId) {
+        if (_vault == address(0) || _token == address(0) || _spoke == address(0) || _hub == address(0)) {
             revert NotConfigured();
         }
         vault = _vault;
         token = _token;
         spoke = IAaveSpoke(_spoke);
+        hub = _hub;
         reserveId = _reserveId;
     }
 
@@ -151,13 +162,16 @@ contract AaveV4Adapter is IYieldAdapter {
     /**
      * @notice What could actually be withdrawn this block.
      * @dev The position is worthless as a promise if the reserve has lent it
-     *      out. Bounded by the liquidity sitting in the Spoke, so the vault
-     *      sizes deployments against what it can really get back rather than
-     *      against a number that is only true when nobody is borrowing.
+     *      out. Bounded by the unborrowed liquidity sitting in the Hub, so the
+     *      vault sizes deployments against what it can really get back rather
+     *      than against a number that is only true when nobody is borrowing.
+     *
+     *      The Hub, not the Spoke: the Spoke never holds the asset, so reading
+     *      it would peg this at zero forever. See the note on Aave's shape above.
      */
     function maxWithdrawable() external view returns (uint256) {
         uint256 position = spoke.getUserSuppliedAssets(reserveId, address(this));
-        uint256 liquid = IERC20(token).balanceOf(address(spoke));
+        uint256 liquid = IERC20(token).balanceOf(hub);
         return position < liquid ? position : liquid;
     }
 }
