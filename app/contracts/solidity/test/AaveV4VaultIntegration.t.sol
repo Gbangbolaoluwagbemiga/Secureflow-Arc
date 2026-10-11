@@ -35,6 +35,10 @@ contract AaveV4VaultIntegrationTest is JobManagerBase {
     /// Ceiling = 900 - (600 largest unpaid + 90 buffer) = 210.
     uint256 internal constant EXPECTED_DEPLOYED = 210e6;
 
+    /// Other suppliers' money already in the reserve. A real one is never empty,
+    /// and an empty one is now correctly refused, so the fixture seeds it.
+    uint256 internal constant SEED = 50_000_000e6;
+
     function setUp() public override {
         super.setUp();
 
@@ -50,6 +54,8 @@ contract AaveV4VaultIntegrationTest is JobManagerBase {
 
         sf.setYieldController(address(yield_));
         yield_.setYieldAdapter(address(usdc), address(adapter));
+
+        usdc.mint(address(hub), SEED);
     }
 
     /// A funded job, worker hired and started, opted in, capital deployed.
@@ -80,7 +86,7 @@ contract AaveV4VaultIntegrationTest is JobManagerBase {
     function test_idleEscrowReachesTheHubThroughTheAdapter() public {
         uint256 id = _earningJob();
 
-        assertEq(usdc.balanceOf(address(hub)), EXPECTED_DEPLOYED, "it should be in the hub");
+        assertEq(usdc.balanceOf(address(hub)), SEED + EXPECTED_DEPLOYED, "it should be in the hub");
         assertEq(usdc.balanceOf(address(spoke)), 0, "never the spoke");
         assertEq(adapter.totalAssets(), EXPECTED_DEPLOYED);
         assertEq(yield_.deployedAssets(address(usdc)), EXPECTED_DEPLOYED);
@@ -163,26 +169,20 @@ contract AaveV4VaultIntegrationTest is JobManagerBase {
     }
 
     /**
-     * A REMAINDER IS LEFT IN THE VENUE AFTER THE JOB ENDS.
+     * A PARTIAL UNWIND NO LONGER STRANDS A REMAINDER.
      *
      * {SecureFlowYield-ensureLiquid} unwinds against the pool and has no
-     * escrowId to debit, so `escrowDeployed` for this job stays at its old
-     * figure while the real position shrinks underneath it. The closing
-     * `onObligationChanged` then asks the venue for that stale figure.
+     * escrowId to debit, so `escrowDeployed` goes stale while the real position
+     * shrinks under it. The closing claim used to ask the venue for that stale
+     * figure; Aave treats an over-ask as a full withdrawal and returns the
+     * smaller real balance, {AaveV4Adapter} correctly refuses a short
+     * withdrawal, and the vault swallowed the revert because a freelancer had
+     * already been paid. The leftover then sat in the venue forever, since no
+     * later escrow's unwind ever asked for it either.
      *
-     * Aave treats a request above the position as a full withdrawal, so it
-     * returns the smaller real balance; {AaveV4Adapter} sees less than it asked
-     * for, raises ShortWithdrawal exactly as {IYieldAdapter} requires, and the
-     * vault swallows the revert because this runs after someone has been paid.
-     * The remainder stays deployed.
-     *
-     * Nobody is short-changed: the money is still tracked in `deployedAssets`
-     * and the next escrow's unwind can reach it. But this job's position does
-     * not close, and its yield is never attributed. The same staleness is
-     * already documented two lines below where `claim` is built, where it is
-     * capped for ATTRIBUTION but not for the withdrawal request itself.
+     * The claim is now capped at the live pool, so the position closes.
      */
-    function test_aPartialUnwindLeavesARemainderStrandedInTheVenue() public {
+    function test_aPartialUnwindClosesThePositionInsteadOfStrandingIt() public {
         uint256 id = _earningJob();
         _fullyUtilise();
 
@@ -190,41 +190,62 @@ contract AaveV4VaultIntegrationTest is JobManagerBase {
         vm.prank(client);
         sf.approveMilestone(id, 0);
 
-        usdc.mint(address(hub), EXPECTED_DEPLOYED);
+        usdc.mint(address(hub), SEED); // borrowers repay
 
         _submit(id, 1);
         vm.prank(client);
         sf.approveMilestone(id, 1);
 
-        uint256 stranded = adapter.totalAssets();
-        assertGt(stranded, 0, "if this is zero the staleness has been fixed - rewrite this test");
-        assertEq(
-            yield_.deployedAssets(address(usdc)),
-            stranded,
-            "the remainder is still accounted for, just not recovered"
-        );
+        assertEq(adapter.totalAssets(), 0, "a remainder was left behind in the venue");
+        assertEq(yield_.deployedAssets(address(usdc)), 0, "the books still think we are deployed");
     }
 
-    /* ─────────── what the vault does NOT currently check ─────────── */
+    /**
+     * The same thing from the pool's side: a second escrow runs after the first
+     * has finished, and neither leaves anything behind.
+     */
+    function test_twoEscrowsInSequenceBothCloseCleanly() public {
+        uint256 a = _earningJob();
+        _fullyUtilise();
+
+        _submit(a, 0);
+        vm.prank(client);
+        sf.approveMilestone(a, 0);
+
+        usdc.mint(address(hub), SEED);
+
+        _submit(a, 1);
+        vm.prank(client);
+        sf.approveMilestone(a, 1);
+
+        assertEq(adapter.totalAssets(), 0, "escrow A left something behind");
+
+        uint256 b = _earningJob();
+        assertEq(yield_.deployedAssets(address(usdc)), EXPECTED_DEPLOYED, "B did not deploy");
+
+        _submit(b, 0);
+        vm.prank(client);
+        sf.approveMilestone(b, 0);
+        _submit(b, 1);
+        vm.prank(client);
+        sf.approveMilestone(b, 1);
+
+        assertEq(adapter.totalAssets(), 0, "escrow B left something behind");
+        assertEq(yield_.deployedAssets(address(usdc)), 0, "books and venue disagree at rest");
+    }
 
     /**
-     * DOCUMENTS A GAP RATHER THAN A GUARANTEE.
+     * THE GUARANTEE THAT REPLACED A GAP.
      *
-     * {IYieldAdapter-maxWithdrawable} says "the escrow reads this before it
-     * promises anything". It does not. Nothing in {SecureFlowYield} calls it,
-     * so a reserve that is visibly at 100% utilisation — unable to return a
-     * cent — is still a reserve this vault will deposit fresh escrow into.
+     * {SecureFlowYield-investableAmount} now asks the venue how much free
+     * liquidity it has before sending it anything, so a reserve lent out to its
+     * last cent gets nothing — however good the rate looks while it is there.
      *
-     * Nobody is short-changed when that happens: the cash buffer still covers
-     * every claim, which the tests above prove. The cost is that capital goes
-     * somewhere it cannot come back from, in exchange for a yield that only
-     * exists because the reserve is drained. For escrow whose principal is
-     * someone else's wages, that is a trade worth refusing.
-     *
-     * If `investableAmount` is ever made to consult the venue's liquidity,
-     * this test should start failing and be rewritten as the guarantee.
+     * This test was written the other way round first, asserting that the vault
+     * deployed anyway, because that was the behaviour. It is the same scenario
+     * with the expectation inverted.
      */
-    function test_todayTheVaultWillDeployIntoAReserveItCannotWithdrawFrom() public {
+    function test_theVaultRefusesToDeployIntoAReserveItCannotWithdrawFrom() public {
         uint256 id = _createOpenJob();
 
         vm.prank(client);
@@ -236,88 +257,62 @@ contract AaveV4VaultIntegrationTest is JobManagerBase {
         vm.prank(worker);
         sf.startWork(id);
 
-        // The venue is dead before a cent is sent to it.
-        usdc.mint(address(hub), 1_000e6);
+        // Borrowers take the reserve to zero before a cent is sent to it.
         _fullyUtilise();
-        assertEq(adapter.maxWithdrawable(), 0, "precondition: venue cannot pay out");
+        assertEq(adapter.availableLiquidity(), 0, "precondition: venue has no free liquidity");
+        assertGt(yield_.investableCeiling(id), 0, "precondition: the escrow itself is willing");
 
+        yield_.investIdle(id);
+
+        assertEq(yield_.investableAmount(id), 0, "a dry venue must be offered nothing");
+        assertEq(yield_.deployedAssets(address(usdc)), 0, "escrow principal went into a dead reserve");
+        assertEq(usdc.balanceOf(address(sf)), BUDGET + (BUDGET * 250) / 10000, "cash should be untouched");
+    }
+
+    function test_deploymentResumesOnceTheReserveHasDepthAgain() public {
+        uint256 id = _createOpenJob();
+        vm.prank(client);
+        yield_.setYieldOptIn(id, true);
+        _apply(id, worker);
+        vm.prank(client);
+        sf.acceptFreelancer(id, worker);
+        vm.prank(worker);
+        sf.startWork(id);
+
+        _fullyUtilise();
+        yield_.investIdle(id);
+        assertEq(yield_.deployedAssets(address(usdc)), 0);
+
+        usdc.mint(address(hub), SEED); // borrowers repay
         yield_.investIdle(id);
 
         assertEq(
             yield_.deployedAssets(address(usdc)),
             EXPECTED_DEPLOYED,
-            "current behaviour: it deploys anyway, because nothing asks the venue"
+            "illiquidity should pause deployment, not end it"
         );
-        assertEq(adapter.maxWithdrawable(), EXPECTED_DEPLOYED, "only our own fresh deposit is there");
     }
 
-    /**
-     * DOES THE NEXT ESCROW PICK THE REMAINDER UP?
-     *
-     * The stranded remainder is still counted in `deployedAssets`, which is a
-     * pool-wide figure, so the question is whether a later escrow's unwind can
-     * reach it — and if it can, whose money it is when it comes back.
-     *
-     * This test answers that empirically rather than by reading the code.
-     */
-    function test_whatTheNextEscrowDoesWithAStrandedRemainder() public {
-        /* ── escrow A strands a remainder ── */
-        uint256 a = _earningJob();
+    function test_aShallowReserveIsDeployedIntoOnlyAsDeepAsItGoes() public {
+        uint256 id = _createOpenJob();
+        vm.prank(client);
+        yield_.setYieldOptIn(id, true);
+        _apply(id, worker);
+        vm.prank(client);
+        sf.acceptFreelancer(id, worker);
+        vm.prank(worker);
+        sf.startWork(id);
+
+        // Drain to a sliver: less than the ceiling, more than nothing.
         _fullyUtilise();
+        usdc.mint(address(hub), 25e6);
 
-        _submit(a, 0);
-        vm.prank(client);
-        sf.approveMilestone(a, 0);
+        yield_.investIdle(id);
 
-        usdc.mint(address(hub), EXPECTED_DEPLOYED);
-
-        _submit(a, 1);
-        vm.prank(client);
-        sf.approveMilestone(a, 1);
-
-        uint256 stranded = adapter.totalAssets();
-        assertGt(stranded, 0, "precondition: escrow A left something behind");
-        emit log_named_decimal_uint("stranded by A", stranded, 6);
-
-        /* ── escrow B runs normally afterwards ── */
-        uint256 b = _earningJob();
-
-        uint256 pooledAfterB = yield_.deployedAssets(address(usdc));
-        uint256 heldAfterB = adapter.totalAssets();
-        emit log_named_decimal_uint("pool after B deploys", pooledAfterB, 6);
-        emit log_named_decimal_uint("venue holds after B", heldAfterB, 6);
-
-        _submit(b, 0);
-        vm.prank(client);
-        sf.approveMilestone(b, 0);
-
-        _submit(b, 1);
-        vm.prank(client);
-        sf.approveMilestone(b, 1);
-
-        uint256 leftInVenue = adapter.totalAssets();
-        uint256 leftInBooks = yield_.deployedAssets(address(usdc));
-        emit log_named_decimal_uint("venue holds at the end", leftInVenue, 6);
-        emit log_named_decimal_uint("books say deployed", leftInBooks, 6);
-
-        /*
-         * THE ANSWER IS NO. It is not swept, and it accumulates.
-         *
-         * B deployed 210 and recovered exactly 210, leaving A's 22.5 untouched.
-         * `onObligationChanged` unwinds against the escrow being closed, so a
-         * remainder belonging to an escrow that has already finished is never
-         * what any later unwind asks for. Each stranding adds to the last.
-         *
-         * The books are not wrong, which is the saving grace: `deployedAssets`
-         * and the venue agree exactly, so nothing is lost or double counted.
-         * The capital is simply parked in the venue with no caller that will
-         * ever ask for it, and the yield on it is never attributed to anyone.
-         *
-         * Fixing the stale claim at SecureFlowYield.sol:459 stops it happening
-         * in the first place. A sweep for remainders already stranded would be
-         * a separate, second thing.
-         */
-        assertEq(leftInVenue, stranded, "a later escrow should not have touched it");
-        assertEq(leftInBooks, stranded, "but the books still account for it exactly");
+        assertEq(
+            yield_.deployedAssets(address(usdc)),
+            25e6,
+            "should take the venue's depth as the cap, not the escrow's ceiling"
+        );
     }
 }

@@ -79,5 +79,11 @@ contract MockYieldAdapter is IYieldAdapter {
         return principal < liquidCap ? principal : liquidCap;
     }
 
+    /// Venue depth, independent of our position. `liquidCap` drives both so a
+    /// test can make the venue dry before anything has been deposited into it.
+    function availableLiquidity() external view returns (uint256) {
+        return liquidCap;
+    }
+
     receive() external payable {}
 }

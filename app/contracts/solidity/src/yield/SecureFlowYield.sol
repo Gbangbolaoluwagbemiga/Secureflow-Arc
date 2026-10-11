@@ -344,12 +344,35 @@ contract SecureFlowYield is ISecureFlowYield, Ownable2Step, ReentrancyGuard {
         return remaining <= reserve ? 0 : remaining - reserve;
     }
 
-    /** @notice Headroom: the ceiling minus what is already out there. */
+    /**
+     * @notice Headroom: the ceiling minus what is already out there, bounded by
+     *         what the venue could actually give back.
+     *
+     * WHY THE VENUE GETS A VETO
+     *
+     * The ceiling above asks "how much of this escrow is safe to lend". That is
+     * a question about our obligations and it is answered without reference to
+     * whether the lender can pay. A reserve lent out to its last cent still
+     * accepts deposits; it simply cannot honour a withdrawal, and it pays its
+     * best rate at exactly that moment, because the rate rises with utilisation.
+     * Chasing it is how escrow capital ends up somewhere it cannot come back
+     * from, in exchange for a yield that exists precisely because it is stuck.
+     *
+     * This is not theoretical on Arc. On 11 October 2026 Morpho's cirBTC/USDC
+     * market held $194.9M supplied against $185k withdrawable, 99.9% utilised,
+     * and paid its highest rate yet while there. Aave's USDC reserve paid less
+     * and had $36.1M. The lower rate is the one an escrow can actually spend.
+     *
+     * {IYieldAdapter-availableLiquidity} is the venue's own honest answer, and it
+     * is allowed to be smaller than the position. Taking the minimum means a
+     * dry venue is a venue we stop feeding, without any special case for it.
+     */
     function investableAmount(uint256 escrowId) public view returns (uint256) {
         if (!yieldOptIn[escrowId]) return 0;
 
         address token = ISecureFlowEscrows(escrow).getEscrow(escrowId).token;
-        if (address(yieldAdapter[token]) == address(0)) return 0;
+        IYieldAdapter adapter = yieldAdapter[token];
+        if (address(adapter) == address(0)) return 0;
 
         uint256 ceiling = investableCeiling(escrowId);
         uint256 already = escrowDeployed[escrowId];
@@ -357,7 +380,17 @@ contract SecureFlowYield is ISecureFlowYield, Ownable2Step, ReentrancyGuard {
 
         uint256 room = ceiling - already;
         uint256 cash = _cash(token, escrow);
-        return room > cash ? cash : room;
+        if (cash < room) room = cash;
+
+        /* A venue that cannot answer is treated as one that cannot pay. The
+           call is a view on somebody else's contract, so it is allowed to
+           revert, and "stay in cash" is never the wrong answer. */
+        try adapter.availableLiquidity() returns (uint256 liquid) {
+            if (liquid < room) room = liquid;
+        } catch {
+            return 0;
+        }
+        return room;
     }
 
     /**
@@ -455,7 +488,24 @@ contract SecureFlowYield is ISecureFlowYield, Ownable2Step, ReentrancyGuard {
          * one that deployed early. Doing better needs principal-seconds, and
          * the error only matters when deployment times differ wildly.
          */
-        uint256 claim = excess;
+        /*
+         * Never ask the venue for more than the pool actually holds.
+         *
+         * `excess` is computed from `escrowDeployed[escrowId]`, which goes
+         * stale: ensureLiquid unwinds against the pool to pay a milestone and
+         * has no escrowId to debit, so the per-escrow figure stays where it was
+         * while the pool shrinks under it. Asking for the stale figure makes
+         * the venue return the smaller real balance, which a correct adapter
+         * reports as a short withdrawal and reverts on, and this function
+         * swallows the revert because a payment has already gone out. The
+         * remainder then sits in the venue forever: no later escrow's unwind
+         * ever asks for it, because they unwind against their own figures.
+         *
+         * The same staleness is already capped below when attributing the
+         * gain. It needs capping here too, on the amount actually requested.
+         */
+        uint256 poolNow = deployedAssets[token];
+        uint256 claim = excess > poolNow ? poolNow : excess;
         if (safe == 0) {
             uint256 pooled = deployedAssets[token];
             uint256 held = adapter.totalAssets();

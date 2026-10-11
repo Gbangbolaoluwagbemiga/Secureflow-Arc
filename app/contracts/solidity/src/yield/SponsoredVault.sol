@@ -142,6 +142,11 @@ contract SponsoredVault is IYieldAdapter {
         return _held();
     }
 
+    /// @dev Custody is never the limiting factor on a deposit.
+    function availableLiquidity() external pure returns (uint256) {
+        return type(uint256).max;
+    }
+
     function _held() internal view returns (uint256) {
         return token == address(0) ? address(this).balance : IERC20(token).balanceOf(address(this));
     }

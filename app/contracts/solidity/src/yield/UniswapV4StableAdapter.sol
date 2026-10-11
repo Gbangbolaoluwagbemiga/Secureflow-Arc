@@ -305,6 +305,15 @@ contract UniswapV4StableAdapter is IYieldAdapter, IUnlockCallback, Ownable2Step 
         return IERC20(asset).balanceOf(address(this)) + _assetsForLiquidity(liquidity);
     }
 
+    /**
+     * @inheritdoc IYieldAdapter
+     * @dev A pool always accepts liquidity, so depth is not the constraint
+     *      here; being unconfigured is. Zero until then.
+     */
+    function availableLiquidity() external view override returns (uint256) {
+        return configured ? type(uint256).max : 0;
+    }
+
     /* ── v4 unlock callback ───────────────────────────────────────────────── */
 
     /**

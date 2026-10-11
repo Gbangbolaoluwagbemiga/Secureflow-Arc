@@ -174,4 +174,15 @@ contract AaveV4Adapter is IYieldAdapter {
         uint256 liquid = IERC20(token).balanceOf(hub);
         return position < liquid ? position : liquid;
     }
+
+    /**
+     * @notice The reserve's unborrowed liquidity, whoever it belongs to.
+     * @dev Read live on Arc mainnet on 11 October 2026, the Hub's USDC balance
+     *      ($36,107,877.90) matched Aave's own internal `Asset.liquidity`
+     *      figure exactly, so this is the protocol's own accounting rather
+     *      than an approximation of it.
+     */
+    function availableLiquidity() external view returns (uint256) {
+        return IERC20(token).balanceOf(hub);
+    }
 }

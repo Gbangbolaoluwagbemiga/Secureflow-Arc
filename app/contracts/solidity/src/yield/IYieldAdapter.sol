@@ -64,6 +64,30 @@ interface IYieldAdapter {
      * @dev The escrow reads this before it promises anything. It is allowed to
      *      be lower than totalAssets — an illiquid moment is a real state and
      *      the honest answer is a smaller number, not an optimistic one.
+     *
+     *      Bounded by what we hold: with no position this is zero. That makes
+     *      it the wrong question to ask before a FIRST deposit, which is what
+     *      {availableLiquidity} is for.
      */
     function maxWithdrawable() external view returns (uint256);
+
+    /**
+     * @notice The venue's own free liquidity, independent of what we hold.
+     *
+     * WHY THIS IS SEPARATE FROM {maxWithdrawable}
+     *
+     * {maxWithdrawable} answers "how much of MY position can I get back", so it
+     * is zero before the first deposit and would make the escrow refuse to ever
+     * start. This answers "could this venue give money back to anyone", which
+     * is the question worth asking BEFORE handing it any.
+     *
+     * A lending reserve borrowed to its last cent still accepts deposits and
+     * pays its best rate while doing so, because the rate rises with
+     * utilisation. That is the trap this exists to see: capital put somewhere
+     * it cannot come back from, earning well precisely because it is stuck.
+     *
+     * A venue with no such constraint — plain custody, say — may return
+     * `type(uint256).max`, meaning "I am never the limiting factor".
+     */
+    function availableLiquidity() external view returns (uint256);
 }
