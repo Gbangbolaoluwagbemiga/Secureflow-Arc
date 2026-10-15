@@ -82,7 +82,7 @@ createAppKit({
   metadata: {
     name: "SecureFlow",
     description: "Milestone-based freelancer escrow on Arc",
-    url: typeof window !== "undefined" ? window.location.origin : "https://secureflow.app",
+    url: typeof window !== "undefined" ? window.location.origin : "https://secureflow.work",
     icons: ["/favicon.ico"],
   },
   features: {
