@@ -373,7 +373,7 @@ Open **http://localhost:5173**.
 
 | Suite | Count | What it covers |
 |---|--:|---|
-| Contract | **186** | Delegation, upgrade safety, productive escrow, the yield waterfall, self-dealing, whole-journey E2E |
+| Contract | **238** | Delegation, upgrade safety, productive escrow, the yield waterfall, self-dealing, whole-journey E2E |
 | Frontend | **450** | Actor semantics, nav, error humanising, worker session, brief reconciliation, job-card badges, the yield terms, declining a job, and what the board does when a read fails |
 | Backend | **71** | Route handlers, which browsers may call them, what they do when the database is unreachable, and that two spellings of an address are one person |
 | Daemon | **210** | Who the agent tells, who it hires, which jobs it picks up, whether it pays — and the difference between "nothing" and "could not find out" |
@@ -427,7 +427,9 @@ handler offering only the permitted calls proves nothing.
 | Proxy (**the contract**) | [`0xbdeb44945979a01584fd7d796a71C707D2F83372`](https://explorer.arc.io/address/0xbdeb44945979a01584fd7d796a71C707D2F83372) |
 | Implementation | [`0x3A8527E43beC82415bF8A1C1aa0b072F7b49c24f`](https://explorer.arc.io/address/0x3A8527E43beC82415bF8A1C1aa0b072F7b49c24f) · `3.10.1-overdue-fix` |
 | Yield controller | [`0x92a0C47e819b84069eb95776497421850103aa37`](https://explorer.arc.io/address/0x92a0C47e819b84069eb95776497421850103aa37) |
-| Yield adapter | **None attached.** `yieldAdapter(USDC)` is the zero address, so no escrow earns anything. The fee waiver works; the earnings split pays nothing until a venue is wired |
+| Yield adapter | [`0x65317ec4060c195f94C22CfD62C40742a21301Fe`](https://explorer.arc.io/address/0x65317ec4060c195f94C22CfD62C40742a21301Fe) · `AaveV4Adapter`, attached 2026-10-15. Idle escrow can earn for the first time |
+| Aave V4 Core Hub | [`0x17288dfc86205301064577b98B02b81017e6F79C`](https://explorer.arc.io/address/0x17288dfc86205301064577b98B02b81017e6F79C) — holds the liquidity |
+| Aave V4 Main Spoke | [`0xB843bdC3a87A05E77E07Df9FE48928b3A34b134d`](https://explorer.arc.io/address/0xB843bdC3a87A05E77E07Df9FE48928b3A34b134d) — the entry point, `reserveId` 0 is USDC |
 | USDC | `0x3600000000000000000000000000000000000000` — the native gas token, reached at its ERC-20 predeploy |
 
 The implementation is read from the proxy's ERC1967 slot, not from this table. Verify
@@ -589,11 +591,49 @@ that asset back, so providing two-sided liquidity would mean swapping half the
 principal — and a swap can lose money. The range sits entirely to one side of
 the price, and `configurePool` rejects a range that straddles it.
 
-**No venue is attached to the live escrow, on purpose.** Pointing an escrow at a
-yield venue is a decision about somebody else's capital and should be a
-deliberate transaction, not a side effect of a deploy. Uniswap v4 also cannot
-run on Arc *testnet*: PoolManager takes its lock with `TSTORE`, so it needs a
-cancun chain. That is Arc mainnet, which opens 2026-09-16.
+**A venue is attached, and it is Aave rather than Morpho.** Idle escrow can
+earn on Arc mainnet as of 2026-10-15. Choosing where took two weeks of reading
+the chain rather than the marketing, and the reasoning is worth keeping.
+
+Arc launched with Morpho as its day-one lending layer, and Circle's Earn Kit
+routes to Morpho vaults. The obvious move was to follow. Measured on mainnet on
+the day of the decision:
+
+| | Aave V4 USDC | Morpho cirBTC/USDC |
+|---|---|---|
+| Supply rate | 1.34% | 1.92% |
+| Withdrawable | $35.0M | $185k |
+| Utilisation | 43.4% | 99.9% |
+
+Morpho pays more, and that 0.6% **is** the liquidity it does not have: an
+adaptive curve raises the rate precisely because the reserve is lent out. A
+vault holding $89.7M that can return nothing is not a yield opportunity for an
+escrow, it is a trap with a good APY. All 32 Morpho V2 vaults on Arc also
+expose exactly one adapter, so a curated vault gives the same liquidity profile
+as the single market beneath it — curation buys nothing here yet.
+
+Escrow principal is a freelancer's unpaid wages and must come back the instant
+a client approves a milestone. The lower rate is the only one this contract can
+spend.
+
+**The vault now asks the venue before it sends anything.** `investableCeiling`
+answers "how much of this escrow is safe to lend", which is a question about our
+own obligations and says nothing about whether the lender can pay.
+`investableAmount` takes the minimum of that, the escrow's cash, and
+`IYieldAdapter.availableLiquidity` — the venue's own answer. A reserve lent to
+its last cent is offered nothing, and one that reverts on the question is
+treated as one that cannot pay.
+
+That needed a method distinct from `maxWithdrawable`, which is bounded by what
+we already hold and is therefore zero before a first deposit. Gating on it meant
+the vault could never start. The live adapter shows both at once:
+`maxWithdrawable()` is 0 and `availableLiquidity()` is $35M.
+
+**Uniswap v4 remains written but unused.** It cannot run on Arc *testnet*:
+PoolManager takes its lock with `TSTORE`, so it needs a cancun chain. On Arc
+mainnet it is moot for a different reason — a stable pair needs two USD-pegged
+assets and Arc has one, so a single-sided USDC position against EURC would carry
+FX exposure. Lending has none.
 
 **The hire loop no longer needs the subgraph.** It used to be gated on one, so
 with `GRAPH_URL` unset nothing was ever scored or hired and the daemon looked
@@ -633,7 +673,9 @@ is why the handling is the part that got the tests.
       pointed at the wrong network is worse than none
 - [x] Deploy the yield controller carrying the 60/40 split, and attach a venue
 - [ ] Size a job so the freelancer's share is reachable — see Status
-- [ ] Arc mainnet deployment, and attach the v4 adapter to a live pool there
+- [x] Arc mainnet deployment, and attach a yield venue — `AaveV4Adapter` live 2026-10-15.
+      The v4 adapter is not the one: Arc has a single USD asset, so a stable pair
+      has no second leg
 - [x] Host the Autopilot daemon on an always-on container with a persistent volume
 - [x] Broaden the daemon's test suite past the four modules that move money — 12 modules, 179 tests
 - [x] Notifications raised by the agent, not only by a browser that happens to be open
