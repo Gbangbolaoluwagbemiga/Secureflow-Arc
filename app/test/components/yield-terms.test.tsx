@@ -38,11 +38,17 @@ vi.mock("@/lib/web3/contract-service", () => ({
 const { YieldOptIn } = await import("@/components/atelier/yield-opt-in");
 const { YieldChoice } = await import("@/components/create/yield-choice");
 
+/*
+ * Actually earning, as the name says. This carried `deployed: 0n` while the
+ * chip ignored that field; now the chip reads it to decide whether it may claim
+ * the money is working, so a fixture called EARNING has to have some out there.
+ * The idle case has its own tests in yield-badge-honesty.test.tsx.
+ */
 const EARNING = {
   available: true,
   optedIn: true,
   choiceMade: true,
-  deployed: 0n,
+  deployed: 210_000_000n,
   freelancerShareBP: 6000,
 };
 

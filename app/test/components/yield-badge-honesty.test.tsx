@@ -12,6 +12,12 @@ import { render, screen, waitFor } from "@testing-library/react";
  * `available` was already computed correctly from the adapter. It gated the
  * opt-in offer and not the badge, so the one surface that made a claim was the
  * one not checking it.
+ *
+ * Attaching AaveV4Adapter on 2026-10-15 made `available` true everywhere and
+ * brought the same lie back one layer up: an opted-in job with a venue wired
+ * still deploys nothing until work starts, and a single-milestone job never
+ * deploys anything at all, because the largest unpaid claim is the whole
+ * budget. The chip now reads `deployed`, which is the only number that knows.
  */
 
 const getYieldStatus = vi.fn();
@@ -56,5 +62,36 @@ describe("the Escrow yield chip", () => {
 
     await waitFor(() => expect(getYieldStatus).toHaveBeenCalled());
     expect(container.textContent ?? "").not.toMatch(/escrow yield/i);
+  });
+
+  it("does not claim to be earning when nothing is deployed", async () => {
+    /* fireball on mainnet: opted in, adapter wired, no freelancer, one
+       milestone — so investableCeiling is 0 and always would be. */
+    getYieldStatus.mockResolvedValue({ ...base, available: true, deployed: 0n });
+
+    render(<YieldOptIn escrowId={1} isClient status="active" />);
+
+    const chip = await screen.findByTestId("yield-status");
+    expect(chip.getAttribute("data-earning")).toBe("false");
+    expect(chip.getAttribute("aria-label")).toMatch(/nothing is invested yet/i);
+  });
+
+  it("does not breathe at the client while the escrow sits still", async () => {
+    getYieldStatus.mockResolvedValue({ ...base, available: true, deployed: 0n });
+
+    render(<YieldOptIn escrowId={1} isClient status="active" />);
+
+    const chip = await screen.findByTestId("yield-status");
+    expect(chip.querySelector(".yield-live")).toBeNull();
+  });
+
+  it("says plainly that it is earning once money is actually out", async () => {
+    getYieldStatus.mockResolvedValue({ ...base, available: true, deployed: 210_000_000n });
+
+    render(<YieldOptIn escrowId={1} isClient status="active" />);
+
+    const chip = await screen.findByTestId("yield-status");
+    expect(chip.getAttribute("data-earning")).toBe("true");
+    expect(chip.querySelector(".yield-live")).not.toBeNull();
   });
 });
